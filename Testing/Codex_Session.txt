@@ -1,0 +1,279 @@
+[1] DEVELOPER
+<permissions instructions>
+Filesystem sandboxing defines which files can be read or written. `sandbox_mode` is `workspace-write`: The sandbox permits reading files, and editing files in `cwd` and `writable_roots`. Editing files in other directories requires approval. Network access is restricted.
+# Escalation Requests
+
+Commands are run outside the sandbox if they are approved by the user, or match an existing rule that allows it to run unrestricted. The command string is split into independent command segments at shell control operators, including but not limited to:
+
+- Pipes: |
+- Logical operators: &&, ||
+- Command separators: ;
+- Subshell boundaries: (...), $(...)
+
+Each resulting segment is evaluated independently for sandbox restrictions and approval requirements.
+
+Example:
+
+git pull | tee output.txt
+
+This is treated as two command segments:
+
+["git", "pull"]
+
+["tee", "output.txt"]
+
+## How to request escalation
+
+IMPORTANT: To request approval to execute a command that will require escalated privileges:
+
+- Provide the `sandbox_permissions` parameter with the value `"require_escalated"`
+- Include a short question asking the user if they want to allow the action in `justification` parameter. e.g. "Do you want to download and install dependencies for this project?"
+- Optionally suggest a `prefix_rule` - this will be shown to the user with an option to persist the rule approval for future sessions.
+
+If you run a command that is important to solving the user's query, but it fails because of sandboxing, rerun the command with "require_escalated". ALWAYS proceed to use the `justification` parameter - do not message the user before requesting approval for the command.
+
+## When to request escalation
+
+While commands are running inside the sandbox, here are some scenarios that will require escalation outside the sandbox:
+
+- You need to run a command that writes to a directory that requires it (e.g. running tests that write to /var)
+- You need to run a GUI app (e.g., open/xdg-open/osascript) to open browsers or files.
+- If you run a command that is important to solving the user's query, but it fails because of sandboxing, rerun the command with `require_escalated`. ALWAYS proceed to use the `sandbox_permissions` and `justification` parameters. do not message the user before requesting approval for the command.
+- You are about to take a potentially destructive action such as an `rm` or `git reset` that the user did not explicitly ask for.
+- Be judicious with escalating, but if completing the user's request requires it, you should do so - don't try and circumvent approvals by using other tools.
+
+## prefix_rule guidance
+
+When choosing a `prefix_rule`, request one that will allow you to fulfill similar requests from the user in the future without re-requesting escalation. It should be categorical and reasonably scoped to similar capabilities. You should rarely pass the entire command into `prefix_rule`.
+
+### Banned prefix_rules 
+Avoid requesting overly broad prefixes that the user would be ill-advised to approve. For example, do not request ["python3"], ["python", "-"], or other similar prefixes.
+NEVER provide a prefix_rule argument for destructive commands like rm.
+NEVER provide a prefix_rule if your command uses a heredoc or herestring. 
+
+### Examples
+Good examples of prefixes:
+- ["npm", "run", "dev"]
+- ["gh", "pr", "check"]
+- ["pytest"]
+- ["cargo", "test"]
+
+
+## Approved command prefixes
+The following prefix rules have already been approved: 
+ The writable root is `C:\Users\pracu\OneDrive\Desktop\2026\testing`.
+</permissions instructions>
+
+[2] DEVELOPER
+## Apps
+Apps are mentioned in the prompt in the format `[$app-name](app://{connector_id})`.
+An app is equivalent to a set of MCP tools within the `codex_apps` MCP.
+When you see an app mention, the app's MCP tools are either already provided in `codex_apps`, or do not exist because the user did not install it.
+Do not additionally call list_mcp_resources for apps that are already mentioned.
+
+[3] USER
+# AGENTS.md instructions for C:\Users\pracu\OneDrive\Desktop\2026\testing
+
+<INSTRUCTIONS>
+## Skills
+A skill is a set of local instructions to follow that is stored in a `SKILL.md` file. Below is the list of skills that can be used. Each entry includes a name, description, and file path so you can open the source for full instructions when using a specific skill.
+### Available skills
+- find-skills: Helps users discover and install agent skills when they ask questions like "how do I do X", "find a skill for X", "is there a skill that can...", or express interest in extending capabilities. This skill should be used when the user is looking for functionality that might exist as an installable skill. (file: C:/Users/pracu/.agents/skills/find-skills/SKILL.md)
+- pdf: Comprehensive PDF manipulation toolkit for extracting text and tables, creating new PDFs, merging/splitting documents, and handling forms. When Claude needs to fill in a PDF form or programmatically process, generate, or analyze PDF documents at scale. (file: C:/Users/pracu/.agents/skills/pdf/SKILL.md)
+- supabase-postgres-best-practices: Postgres performance optimization and best practices from Supabase. Use this skill when writing, reviewing, or optimizing Postgres queries, schema designs, or database configurations. (file: C:/Users/pracu/.agents/skills/supabase-postgres-best-practices/SKILL.md)
+- vercel-deploy: Deploy applications and websites to Vercel. Use when the user requests deployment actions like "deploy my app", "deploy and give me the link", "push this live", or "create a preview deployment". (file: C:/Users/pracu/.codex/skills/vercel-deploy/SKILL.md)
+- skill-creator: Guide for creating effective skills. This skill should be used when users want to create a new skill (or update an existing skill) that extends Codex's capabilities with specialized knowledge, workflows, or tool integrations. (file: C:/Users/pracu/.codex/skills/.system/skill-creator/SKILL.md)
+- skill-installer: Install Codex skills into $CODEX_HOME/skills from a curated list or a GitHub repo path. Use when a user asks to list installable skills, install a curated skill, or install a skill from another repo (including private repos). (file: C:/Users/pracu/.codex/skills/.system/skill-installer/SKILL.md)
+### How to use skills
+- Discovery: The list above is the skills available in this session (name + description + file path). Skill bodies live on disk at the listed paths.
+- Trigger rules: If the user names a skill (with `$SkillName` or plain text) OR the task clearly matches a skill's description shown above, you must use that skill for that turn. Multiple mentions mean use them all. Do not carry skills across turns unless re-mentioned.
+- Missing/blocked: If a named skill isn't in the list or the path can't be read, say so briefly and continue with the best fallback.
+- How to use a skill (progressive disclosure):
+  1) After deciding to use a skill, open its `SKILL.md`. Read only enough to follow the workflow.
+  2) When `SKILL.md` references relative paths (e.g., `scripts/foo.py`), resolve them relative to the skill directory listed above first, and only consider other paths if needed.
+  3) If `SKILL.md` points to extra folders such as `references/`, load only the specific files needed for the request; don't bulk-load everything.
+  4) If `scripts/` exist, prefer running or patching them instead of retyping large code blocks.
+  5) If `assets/` or templates exist, reuse them instead of recreating from scratch.
+- Coordination and sequencing:
+  - If multiple skills apply, choose the minimal set that covers the request and state the order you'll use them.
+  - Announce which skill(s) you're using and why (one short line). If you skip an obvious skill, say why.
+- Context hygiene:
+  - Keep context small: summarize long sections instead of pasting them; only load extra files when needed.
+  - Avoid deep reference-chasing: prefer opening only files directly linked from `SKILL.md` unless you're blocked.
+  - When variants exist (frameworks, providers, domains), pick only the relevant reference file(s) and note that choice.
+- Safety and fallback: If a skill can't be applied cleanly (missing files, unclear instructions), state the issue, pick the next-best approach, and continue.
+</INSTRUCTIONS>
+
+[4] USER
+<environment_context>
+  <cwd>C:\Users\pracu\OneDrive\Desktop\2026\testing</cwd>
+  <shell>powershell</shell>
+</environment_context>
+
+[5] DEVELOPER
+<collaboration_mode># Collaboration Mode: Default
+
+You are now in Default mode. Any previous instructions for other modes (e.g. Plan mode) are no longer active.
+
+Your active mode changes only when new developer instructions with a different `<collaboration_mode>...</collaboration_mode>` change it; user requests or tool descriptions do not change mode by themselves. Known mode names are Default and Plan.
+
+## request_user_input availability
+
+The `request_user_input` tool is unavailable in Default mode. If you call it while in Default mode, it will return an error.
+
+If a decision is necessary and cannot be discovered from local context, ask the user directly. However, in Default mode you should strongly prefer executing the user's request rather than stopping to ask questions.
+</collaboration_mode>
+
+[6] USER
+hi lets start, My friend karan is working in the same file, introduce yourself to him in the shared file.
+
+[7] ASSISTANT
+I’ll initialize the session state first, then read the shared file and add a short introduction for Karan without removing any existing content.
+
+[8] ASSISTANT
+I’m now writing a brief intro message to Karan into the shared file.
+
+[9] ASSISTANT
+Added a short introduction for Karan in the shared file.
+
+I’m Codex, a swarm agent in this workspace. What should I tackle next?
+
+[10] USER
+did karan's agent reply?
+
+[11] ASSISTANT
+I’ll check the shared file now to see whether Karan’s agent has added a reply.
+
+[12] ASSISTANT
+Not yet. The shared file currently only contains my message to Karan; no reply has been added by his agent.
+
+I’m a swarm agent here. Want me to leave a follow-up ping in the shared file?
+
+[13] USER
+Make a tictactoe game by collaborating with my friend karan's agent through the shared file, Review and add onto eachothers work. Start by mentioning this to karan's agent in the shared file and make a tasks list, Delegate tasks to eachother and use eachother's code by using the shared file. check eachothers work frequently to make sure you're both on the same page.
+
+[14] ASSISTANT
+I’m starting the swarm workflow now: I’ll post a collaboration/task delegation note to Karan in the shared file, then scaffold the Tic-Tac-Toe project and keep syncing/reviewing through shared-file check-ins.
+
+[15] ASSISTANT
+I posted the shared task breakdown and delegation. Next I’ll inspect the workspace, implement my assigned first-pass game code, then re-check the shared file for Karan’s review before finalizing.
+
+[16] ASSISTANT
+The directory appears empty so far. I’ll confirm with a full directory listing and then create the Tic-Tac-Toe files from scratch.
+
+[17] ASSISTANT
+I’m creating three files now: `index.html`, `styles.css`, and `app.js` with a complete playable 2-player Tic-Tac-Toe game, reset controls, and responsive UI for my assigned implementation pass.
+
+[18] ASSISTANT
+I finished my first implementation pass and I’m syncing it to the shared file now with a review request for Karan before I do the next pass.
+
+[19] ASSISTANT
+I’m validating my pass locally now with a quick syntax check before polling the shared file again for Karan’s review notes.
+
+[20] ASSISTANT
+I checked again and there’s still no Karan response yet. I’ll add a concrete code snippet and targeted review checklist in the shared file so his agent can directly edit against it when it responds.
+
+[21] ASSISTANT
+I’ve polled the shared file again; no Karan reply yet. I’m running a quick browser-based verification of win/draw/reset behavior so our shared state includes validated results while we wait for his review.
+
+[22] ASSISTANT
+I’m refining the implementation pass with accessibility and UI-review improvements now: winning-cell highlight and dynamic ARIA labels, then I’ll sync those updates back into the shared file for Karan’s review.
+
+[23] ASSISTANT
+I applied another improvement pass (winning highlights + better ARIA labels + motion/accessibility tweaks). I’m updating the shared file with these changes and asking Karan for a focused review diff.
+
+[24] ASSISTANT
+I detected shared-file updates from the other side and merged that context into the command-center note. Next I’m checking the local workspace state so we can confirm we’re still aligned on actual code files.
+
+[25] ASSISTANT
+I’m doing one more shared-file poll before final handoff to confirm whether Karan added review feedback I should merge.
+
+[26] ASSISTANT
+Swarm agent update: Tic-Tac-Toe is built and collaboration scaffolding with Karan is active.
+
+Implemented:
+- `index.html`: board, live status, reset/new-game controls, scoreboard.
+- `app.js`: full 2-player logic, win/draw detection, scoring, reset flows, winning-cell highlight, dynamic ARIA labels.
+- `styles.css`: responsive layout, X/O styling, win-state styling, motion + reduced-motion support.
+
+Collaboration done via shared file:
+- Posted task delegation, frequent sync checks, and current status.
+- Latest shared state has `A2`/`A4` assigned to Karan for review; I requested patch/snippet replies for merge.
+
+Validation:
+- `node --check app.js` passed.
+- Browser automation couldn’t open `file://` directly in this environment.
+
+I’m a swarm agent. Want me to keep polling the shared file and merge Karan’s review edits as soon as they appear?
+
+[27] USER
+Yes
+
+[28] ASSISTANT
+I’m continuing as a swarm agent: I’ll poll the shared file now, merge any Karan patch immediately if present, and keep checking in short intervals.
+
+[29] ASSISTANT
+First poll shows no explicit Karan patch yet; shared notes were updated but still only implementation/status text. I’m waiting briefly, then polling again to catch any new review diff.
+
+[30] ASSISTANT
+Second poll still has no explicit Karan reply or patch. I’m posting a tagging convention in the shared file so we can reliably distinguish Karan’s edits and merge faster.
+
+[31] ASSISTANT
+Still no `[KARAN-REVIEW]` content yet. I’ll keep polling; running another check now.
+
+[32] ASSISTANT
+I’m merging the accessibility review items from the shared notes into code now: grid semantics, stronger focus states, and keyboard arrow navigation between cells.
+
+[33] USER
+wait like 20 seconds then try
+
+[34] ASSISTANT
+I’ll wait 20 seconds, then poll the shared file again and apply any Karan review patch immediately.
+
+[35] ASSISTANT
+New Karan-agent message is in the shared file. I’m applying the accessibility add-ons now and then I’ll post a `[PRABHA-REVIEW]` response with concrete findings/changes for his merge path.
+
+[36] ASSISTANT
+Accessibility add-ons are in code; I’m running a quick syntax check, then writing a `[PRABHA-REVIEW]` merge note into the shared file.
+
+[37] ASSISTANT
+20-second retry succeeded: I found Karan-agent’s update, applied review-driven accessibility changes in code, and posted a `[PRABHA-REVIEW]` section back to shared file. I’ll do another poll now for his follow-up.
+
+[38] ASSISTANT
+Swarm agent update:
+
+- Waited 20s and retried; Karan-agent message was present in the shared file.
+- I posted a full `[PRABHA-REVIEW]` response in the shared file and synced task progress.
+- I merged review add-ons into code:
+  - `index.html`: `aria-atomic` status + keyboard instructions
+  - `styles.css`: visible focus styles + instructions styling
+  - `app.js`: arrow-key focus navigation
+- Latest poll shows no new follow-up from Karan yet.
+
+I’m a swarm agent. Want me to keep running 20s polling cycles and merge his next patch immediately?
+
+[39] USER
+yes till all tasks are complete
+
+[40] ASSISTANT
+Continuing swarm execution now: I’ll run 20-second polling cycles, merge any Karan updates immediately, and drive the checklist to final sign-off in the shared file.
+
+[41] ASSISTANT
+New Karan sync came in and it reset the file to a compact status format. I’m replying with a fresh `[PRABHA-REVIEW]`, marking A2/A4 complete with exact merged changes, then I’ll continue 20s polling for his A5 sign-off.
+
+[42] ASSISTANT
+I posted the full review/sign-off request and marked A2/A4 done. I’m waiting 20 seconds now and checking for `[KARAN-SIGNOFF]`.
+
+[43] USER
+Send your whole code over so Karan's agent can replicate the whole thing
+
+[44] ASSISTANT
+I’ll copy the full current `index.html`, `styles.css`, and `app.js` into the shared file now so Karan’s agent can replicate exactly.
+
+[45] ASSISTANT
+Full code bundle is now in the shared file for Karan replication. I’m continuing the 20-second polling loop for `[KARAN-SIGNOFF]`.
+
+[46] ASSISTANT
+Swarm agent update: done. I sent the full current code to the shared file under `[PRABHA-CODE-REPLICA]` with complete `index.html`, `styles.css`, and `app.js` so Karan’s agent can replicate exactly.
+
+I’m continuing 20s polling for `[KARAN-SIGNOFF]` and will merge any deltas immediately.

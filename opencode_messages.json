@@ -1,0 +1,122 @@
+[
+  {
+    "p_time": 1771828525110,
+    "m_time": 1771828521918,
+    "part_data": "{\"type\":\"step-finish\",\"reason\":\"stop\",\"cost\":0,\"tokens\":{\"total\":15099,\"input\":0,\"output\":35,\"reasoning\":0,\"cache\":{\"read\":15064,\"write\":0}}}",
+    "message_data": "{\"role\":\"assistant\",\"time\":{\"created\":1771828521918,\"completed\":1771828525115},\"parentID\":\"msg_c893554cf001gfdFvAQzSt3cEX\",\"modelID\":\"minimax-m2.5-free\",\"providerID\":\"opencode\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"C:\\\\Users\\\\pracu\\\\OneDrive\\\\Desktop\\\\2026\\\\testing\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":15099,\"input\":0,\"output\":35,\"reasoning\":0,\"cache\":{\"read\":15064,\"write\":0}},\"finish\":\"stop\"}"
+  },
+  {
+    "p_time": 1771828525044,
+    "m_time": 1771828521918,
+    "part_data": "{\"type\":\"text\",\"text\":\"Telemetry is working! Let me know what you'd like to do next.\",\"time\":{\"start\":1771828525045,\"end\":1771828525045}}",
+    "message_data": "{\"role\":\"assistant\",\"time\":{\"created\":1771828521918,\"completed\":1771828525115},\"parentID\":\"msg_c893554cf001gfdFvAQzSt3cEX\",\"modelID\":\"minimax-m2.5-free\",\"providerID\":\"opencode\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"C:\\\\Users\\\\pracu\\\\OneDrive\\\\Desktop\\\\2026\\\\testing\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":15099,\"input\":0,\"output\":35,\"reasoning\":0,\"cache\":{\"read\":15064,\"write\":0}},\"finish\":\"stop\"}"
+  },
+  {
+    "p_time": 1771828524256,
+    "m_time": 1771828521918,
+    "part_data": "{\"type\":\"reasoning\",\"text\":\"Good, the test was successful. Now let me wait for the user's next instruction.\",\"metadata\":{\"anthropic\":{\"signature\":\"8e599c148c91aae61242b9cfa10e0a81f808bd2d6b6d960a731ebe537c5c3d79\"}},\"time\":{\"start\":1771828524256,\"end\":1771828525041}}",
+    "message_data": "{\"role\":\"assistant\",\"time\":{\"created\":1771828521918,\"completed\":1771828525115},\"parentID\":\"msg_c893554cf001gfdFvAQzSt3cEX\",\"modelID\":\"minimax-m2.5-free\",\"providerID\":\"opencode\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"C:\\\\Users\\\\pracu\\\\OneDrive\\\\Desktop\\\\2026\\\\testing\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":15099,\"input\":0,\"output\":35,\"reasoning\":0,\"cache\":{\"read\":15064,\"write\":0}},\"finish\":\"stop\"}"
+  },
+  {
+    "p_time": 1771828524255,
+    "m_time": 1771828521918,
+    "part_data": "{\"type\":\"step-start\"}",
+    "message_data": "{\"role\":\"assistant\",\"time\":{\"created\":1771828521918,\"completed\":1771828525115},\"parentID\":\"msg_c893554cf001gfdFvAQzSt3cEX\",\"modelID\":\"minimax-m2.5-free\",\"providerID\":\"opencode\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"C:\\\\Users\\\\pracu\\\\OneDrive\\\\Desktop\\\\2026\\\\testing\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":15099,\"input\":0,\"output\":35,\"reasoning\":0,\"cache\":{\"read\":15064,\"write\":0}},\"finish\":\"stop\"}"
+  },
+  {
+    "p_time": 1771828521908,
+    "m_time": 1771828499680,
+    "part_data": "{\"type\":\"step-finish\",\"reason\":\"tool-calls\",\"cost\":0,\"tokens\":{\"total\":15045,\"input\":104,\"output\":80,\"reasoning\":0,\"cache\":{\"read\":510,\"write\":14351}}}",
+    "message_data": "{\"role\":\"assistant\",\"time\":{\"created\":1771828499680,\"completed\":1771828521913},\"parentID\":\"msg_c893554cf001gfdFvAQzSt3cEX\",\"modelID\":\"minimax-m2.5-free\",\"providerID\":\"opencode\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"C:\\\\Users\\\\pracu\\\\OneDrive\\\\Desktop\\\\2026\\\\testing\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":15045,\"input\":104,\"output\":80,\"reasoning\":0,\"cache\":{\"read\":510,\"write\":14351}},\"finish\":\"tool-calls\"}"
+  },
+  {
+    "p_time": 1771828521375,
+    "m_time": 1771828499680,
+    "part_data": "{\"type\":\"tool\",\"callID\":\"call_function_xw72qdef2xd7_1\",\"tool\":\"bash\",\"state\":{\"status\":\"completed\",\"input\":{\"command\":\"echo \\\"Telemetry test successful!\\\"\",\"description\":\"Test echo for telemetry\"},\"output\":\"Telemetry test successful!\\n\",\"title\":\"Test echo for telemetry\",\"metadata\":{\"output\":\"Telemetry test successful!\\n\",\"exit\":0,\"description\":\"Test echo for telemetry\",\"truncated\":false},\"time\":{\"start\":1771828521794,\"end\":1771828521907}}}",
+    "message_data": "{\"role\":\"assistant\",\"time\":{\"created\":1771828499680,\"completed\":1771828521913},\"parentID\":\"msg_c893554cf001gfdFvAQzSt3cEX\",\"modelID\":\"minimax-m2.5-free\",\"providerID\":\"opencode\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"C:\\\\Users\\\\pracu\\\\OneDrive\\\\Desktop\\\\2026\\\\testing\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":15045,\"input\":104,\"output\":80,\"reasoning\":0,\"cache\":{\"read\":510,\"write\":14351}},\"finish\":\"tool-calls\"}"
+  },
+  {
+    "p_time": 1771828520564,
+    "m_time": 1771828499680,
+    "part_data": "{\"type\":\"text\",\"text\":\"Hi! 👋 Testing the telemetry with a random tool call.\",\"time\":{\"start\":1771828521373,\"end\":1771828521373}}",
+    "message_data": "{\"role\":\"assistant\",\"time\":{\"created\":1771828499680,\"completed\":1771828521913},\"parentID\":\"msg_c893554cf001gfdFvAQzSt3cEX\",\"modelID\":\"minimax-m2.5-free\",\"providerID\":\"opencode\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"C:\\\\Users\\\\pracu\\\\OneDrive\\\\Desktop\\\\2026\\\\testing\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":15045,\"input\":104,\"output\":80,\"reasoning\":0,\"cache\":{\"read\":510,\"write\":14351}},\"finish\":\"tool-calls\"}"
+  },
+  {
+    "p_time": 1771828519647,
+    "m_time": 1771828499680,
+    "part_data": "{\"type\":\"reasoning\",\"text\":\"The user wants me to say hi and make a random tool call to test the telemetry. Let me do that.\",\"metadata\":{\"anthropic\":{\"signature\":\"3d84767aa6d7d7b6af4f0f7d3d23ec7e1f96b6bd2b95dd07e48e550164ef6ede\"}},\"time\":{\"start\":1771828519647,\"end\":1771828520562}}",
+    "message_data": "{\"role\":\"assistant\",\"time\":{\"created\":1771828499680,\"completed\":1771828521913},\"parentID\":\"msg_c893554cf001gfdFvAQzSt3cEX\",\"modelID\":\"minimax-m2.5-free\",\"providerID\":\"opencode\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"C:\\\\Users\\\\pracu\\\\OneDrive\\\\Desktop\\\\2026\\\\testing\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":15045,\"input\":104,\"output\":80,\"reasoning\":0,\"cache\":{\"read\":510,\"write\":14351}},\"finish\":\"tool-calls\"}"
+  },
+  {
+    "p_time": 1771828519645,
+    "m_time": 1771828499680,
+    "part_data": "{\"type\":\"step-start\"}",
+    "message_data": "{\"role\":\"assistant\",\"time\":{\"created\":1771828499680,\"completed\":1771828521913},\"parentID\":\"msg_c893554cf001gfdFvAQzSt3cEX\",\"modelID\":\"minimax-m2.5-free\",\"providerID\":\"opencode\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"C:\\\\Users\\\\pracu\\\\OneDrive\\\\Desktop\\\\2026\\\\testing\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":15045,\"input\":104,\"output\":80,\"reasoning\":0,\"cache\":{\"read\":510,\"write\":14351}},\"finish\":\"tool-calls\"}"
+  },
+  {
+    "p_time": 1771828499676,
+    "m_time": 1771828499674,
+    "part_data": "{\"type\":\"text\",\"text\":\"Just say hi and make any random tool call, os I can test the telemetry\"}",
+    "message_data": "{\"role\":\"user\",\"time\":{\"created\":1771828499674},\"summary\":{\"diffs\":[]},\"agent\":\"build\",\"model\":{\"providerID\":\"opencode\",\"modelID\":\"minimax-m2.5-free\"}}"
+  },
+  {
+    "p_time": 1771827936046,
+    "m_time": 1771827932238,
+    "part_data": "{\"type\":\"step-finish\",\"reason\":\"stop\",\"cost\":0,\"tokens\":{\"total\":15345,\"input\":119,\"output\":79,\"reasoning\":0,\"cache\":{\"read\":14768,\"write\":379}}}",
+    "message_data": "{\"role\":\"assistant\",\"time\":{\"created\":1771827932238,\"completed\":1771827936053},\"parentID\":\"msg_c892bd153001nWc9h7S2ejEgt0\",\"modelID\":\"minimax-m2.5-free\",\"providerID\":\"opencode\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"C:\\\\Users\\\\pracu\\\\OneDrive\\\\Desktop\\\\2026\\\\testing\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":15345,\"input\":119,\"output\":79,\"reasoning\":0,\"cache\":{\"read\":14768,\"write\":379}},\"finish\":\"stop\"}"
+  },
+  {
+    "p_time": 1771827935039,
+    "m_time": 1771827932238,
+    "part_data": "{\"type\":\"text\",\"text\":\"Agentalk initialized successfully. \\n\\n**Completed:**\\n- Telemetry script started (running in background)\\n- Workspace file ready at `opencode_workspace.md`\\n- Team state synchronized - you're the only agent in the room currently\\n\\nYou're now ready to collaborate. What would you like to work on?\",\"time\":{\"start\":1771827936043,\"end\":1771827936043}}",
+    "message_data": "{\"role\":\"assistant\",\"time\":{\"created\":1771827932238,\"completed\":1771827936053},\"parentID\":\"msg_c892bd153001nWc9h7S2ejEgt0\",\"modelID\":\"minimax-m2.5-free\",\"providerID\":\"opencode\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"C:\\\\Users\\\\pracu\\\\OneDrive\\\\Desktop\\\\2026\\\\testing\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":15345,\"input\":119,\"output\":79,\"reasoning\":0,\"cache\":{\"read\":14768,\"write\":379}},\"finish\":\"stop\"}"
+  },
+  {
+    "p_time": 1771827934336,
+    "m_time": 1771827932238,
+    "part_data": "{\"type\":\"reasoning\",\"text\":\"I've successfully initialized Agentalk. Let me summarize what was done for the user.\",\"metadata\":{\"anthropic\":{\"signature\":\"f78113ccea4307fd4a6e39f674af5a5419fc73cc5bc6c3cb16a0832e34ab9a83\"}},\"time\":{\"start\":1771827934336,\"end\":1771827935037}}",
+    "message_data": "{\"role\":\"assistant\",\"time\":{\"created\":1771827932238,\"completed\":1771827936053},\"parentID\":\"msg_c892bd153001nWc9h7S2ejEgt0\",\"modelID\":\"minimax-m2.5-free\",\"providerID\":\"opencode\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"C:\\\\Users\\\\pracu\\\\OneDrive\\\\Desktop\\\\2026\\\\testing\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":15345,\"input\":119,\"output\":79,\"reasoning\":0,\"cache\":{\"read\":14768,\"write\":379}},\"finish\":\"stop\"}"
+  },
+  {
+    "p_time": 1771827934335,
+    "m_time": 1771827932238,
+    "part_data": "{\"type\":\"step-start\"}",
+    "message_data": "{\"role\":\"assistant\",\"time\":{\"created\":1771827932238,\"completed\":1771827936053},\"parentID\":\"msg_c892bd153001nWc9h7S2ejEgt0\",\"modelID\":\"minimax-m2.5-free\",\"providerID\":\"opencode\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"C:\\\\Users\\\\pracu\\\\OneDrive\\\\Desktop\\\\2026\\\\testing\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":15345,\"input\":119,\"output\":79,\"reasoning\":0,\"cache\":{\"read\":14768,\"write\":379}},\"finish\":\"stop\"}"
+  },
+  {
+    "p_time": 1771827932222,
+    "m_time": 1771827924908,
+    "part_data": "{\"type\":\"step-finish\",\"reason\":\"tool-calls\",\"cost\":0,\"tokens\":{\"total\":15246,\"input\":218,\"output\":206,\"reasoning\":0,\"cache\":{\"read\":14569,\"write\":253}}}",
+    "message_data": "{\"role\":\"assistant\",\"time\":{\"created\":1771827924908,\"completed\":1771827932229},\"parentID\":\"msg_c892bd153001nWc9h7S2ejEgt0\",\"modelID\":\"minimax-m2.5-free\",\"providerID\":\"opencode\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"C:\\\\Users\\\\pracu\\\\OneDrive\\\\Desktop\\\\2026\\\\testing\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":15246,\"input\":218,\"output\":206,\"reasoning\":0,\"cache\":{\"read\":14569,\"write\":253}},\"finish\":\"tool-calls\"}"
+  },
+  {
+    "p_time": 1771827929558,
+    "m_time": 1771827924908,
+    "part_data": "{\"type\":\"tool\",\"callID\":\"call_function_sm8truypn7ir_1\",\"tool\":\"agentalk_update_my_state\",\"state\":{\"status\":\"completed\",\"input\":{\"content\":{\"agentProfile\":\"OpenCode - General-purpose coding assistant for file operations, code editing, and debugging\",\"currentObjective\":\"Standing by for next task\",\"architectureFootprint\":[],\"implementationPlan\":[],\"notesForTeam\":\"Agent initialized and ready. Telemetry running. Awaiting tasks.\",\"pastWorkSummary\":[]},\"expectedStateHash\":\"uwo0ttx5lk\"},\"output\":\"Successfully updated your state.\",\"title\":\"\",\"metadata\":{\"truncated\":false},\"time\":{\"start\":1771827930372,\"end\":1771827932219},\"attachments\":[]}}",
+    "message_data": "{\"role\":\"assistant\",\"time\":{\"created\":1771827924908,\"completed\":1771827932229},\"parentID\":\"msg_c892bd153001nWc9h7S2ejEgt0\",\"modelID\":\"minimax-m2.5-free\",\"providerID\":\"opencode\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"C:\\\\Users\\\\pracu\\\\OneDrive\\\\Desktop\\\\2026\\\\testing\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":15246,\"input\":218,\"output\":206,\"reasoning\":0,\"cache\":{\"read\":14569,\"write\":253}},\"finish\":\"tool-calls\"}"
+  },
+  {
+    "p_time": 1771827927231,
+    "m_time": 1771827924908,
+    "part_data": "{\"type\":\"reasoning\",\"text\":\"I've read the team state. It seems I'm the only agent in the room currently. The state shows my own profile. Now I can proceed with updating my state to declare I'm ready for tasks.\\n\\nSince I'm just initialized and standing by, I should update my state to reflect that I'm active and ready. The current state shows I'm \\\"Standing by for next task\\\" which is appropriate. I'll provide a notesForTeam update to indicate I'm initialized and ready.\",\"metadata\":{\"anthropic\":{\"signature\":\"4f068c1c488b485db04803cd9eb5392045b450d8fba78d79af1e363608322dc9\"}},\"time\":{\"start\":1771827927231,\"end\":1771827929240}}",
+    "message_data": "{\"role\":\"assistant\",\"time\":{\"created\":1771827924908,\"completed\":1771827932229},\"parentID\":\"msg_c892bd153001nWc9h7S2ejEgt0\",\"modelID\":\"minimax-m2.5-free\",\"providerID\":\"opencode\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"C:\\\\Users\\\\pracu\\\\OneDrive\\\\Desktop\\\\2026\\\\testing\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":15246,\"input\":218,\"output\":206,\"reasoning\":0,\"cache\":{\"read\":14569,\"write\":253}},\"finish\":\"tool-calls\"}"
+  },
+  {
+    "p_time": 1771827927229,
+    "m_time": 1771827924908,
+    "part_data": "{\"type\":\"step-start\"}",
+    "message_data": "{\"role\":\"assistant\",\"time\":{\"created\":1771827924908,\"completed\":1771827932229},\"parentID\":\"msg_c892bd153001nWc9h7S2ejEgt0\",\"modelID\":\"minimax-m2.5-free\",\"providerID\":\"opencode\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"C:\\\\Users\\\\pracu\\\\OneDrive\\\\Desktop\\\\2026\\\\testing\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":15246,\"input\":218,\"output\":206,\"reasoning\":0,\"cache\":{\"read\":14569,\"write\":253}},\"finish\":\"tool-calls\"}"
+  },
+  {
+    "p_time": 1771827924889,
+    "m_time": 1771827919073,
+    "part_data": "{\"type\":\"step-finish\",\"reason\":\"tool-calls\",\"cost\":0,\"tokens\":{\"total\":14921,\"input\":237,\"output\":49,\"reasoning\":0,\"cache\":{\"read\":14456,\"write\":179}}}",
+    "message_data": "{\"role\":\"assistant\",\"time\":{\"created\":1771827919073,\"completed\":1771827924902},\"parentID\":\"msg_c892bd153001nWc9h7S2ejEgt0\",\"modelID\":\"minimax-m2.5-free\",\"providerID\":\"opencode\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"C:\\\\Users\\\\pracu\\\\OneDrive\\\\Desktop\\\\2026\\\\testing\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":14921,\"input\":237,\"output\":49,\"reasoning\":0,\"cache\":{\"read\":14456,\"write\":179}},\"finish\":\"tool-calls\"}"
+  },
+  {
+    "p_time": 1771827922239,
+    "m_time": 1771827919073,
+    "part_data": "{\"type\":\"tool\",\"callID\":\"call_function_8a7theclvv4s_1\",\"tool\":\"agentalk_read_team_state\",\"state\":{\"status\":\"completed\",\"input\":{},\"output\":\"## [agentalk_YTdW2l6KYiGhtGN25jv5XQ]\\n\\n**AGENT_PROFILE:** OpenCode - General-purpose coding assistant for file operations, code editing, and debugging\\n\\n**CURRENT_OBJECTIVE:** Standing by for next task\\n\\n**ARCHITECTURE_FOOTPRINT:**\\nNone\\n\\n**IMPLEMENTATION_PLAN:**\\nNone\\n\\n**NOTES_FOR_TEAM:**\\n- Agentalk initialized and telemetry running\\n\\nYour current stateHash for this room is: uwo0ttx5lk\",\"title\":\"\",\"metadata\":{\"truncated\":false},\"time\":{\"start\":1771827922243,\"end\":1771827924887},\"attachments\":[]}}",
+    "message_data": "{\"role\":\"assistant\",\"time\":{\"created\":1771827919073,\"completed\":1771827924902},\"parentID\":\"msg_c892bd153001nWc9h7S2ejEgt0\",\"modelID\":\"minimax-m2.5-free\",\"providerID\":\"opencode\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"C:\\\\Users\\\\pracu\\\\OneDrive\\\\Desktop\\\\2026\\\\testing\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":14921,\"input\":237,\"output\":49,\"reasoning\":0,\"cache\":{\"read\":14456,\"write\":179}},\"finish\":\"tool-calls\"}"
+  }
+]

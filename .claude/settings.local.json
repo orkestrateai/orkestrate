@@ -1,0 +1,6 @@
+{
+  "enabledMcpjsonServers": [
+    "agentalk"
+  ],
+  "enableAllProjectMcpServers": true
+}
