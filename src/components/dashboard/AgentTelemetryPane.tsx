@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
-import { Bot, ChevronLeft, ChevronRight, Activity, Send } from "lucide-react";
+import React from 'react';
+import { Bot, ChevronLeft, ChevronRight, Activity } from "lucide-react";
 import { CodexRenderer } from './CodexRenderer';
-import { createSupabaseBrowserClient } from "@/utils/supabase/client";
 
 interface AgentTelemetryPaneProps {
     chatFeed: any[];
@@ -10,7 +9,6 @@ interface AgentTelemetryPaneProps {
     selectedAgentId: string | null;
     setSelectedAgentId: (id: string | null) => void;
     terminalRef: React.RefObject<HTMLDivElement | null>;
-    activeRoomId: string | null;
 }
 
 export function AgentTelemetryPane({
@@ -19,8 +17,7 @@ export function AgentTelemetryPane({
     activeAgentsList,
     selectedAgentId,
     setSelectedAgentId,
-    terminalRef,
-    activeRoomId
+    terminalRef
 }: AgentTelemetryPaneProps) {
 
     // Filter raw logs for the selected agent
@@ -31,42 +28,6 @@ export function AgentTelemetryPane({
     // Determine if the selected agent is a Codex agent
     const selectedAgent = activeAgentsList.find((a: any) => a.id === selectedAgentId);
     const isCodexAgent = selectedAgent?.name?.toLowerCase().includes('codex');
-
-    // Two-Way Communication Detection
-    const isTwoWayEnabled = selectedAgentLogs.some(log => log.message === '#two_way_ready');
-
-
-    const [supabase] = useState(() => createSupabaseBrowserClient());
-    const [inputMessage, setInputMessage] = useState("");
-
-    const handleSendMessage = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!inputMessage.trim() || !selectedAgentId || !isTwoWayEnabled || !selectedAgent) return;
-
-        try {
-            const res = await fetch('/api/telemetry/commands', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    targetAgent: {
-                        clientId: selectedAgent.clientId,
-                        agent: selectedAgent.agent
-                    },
-                    roomId: activeRoomId || 'default',
-                    message: inputMessage
-                })
-            });
-
-            if (!res.ok) {
-                console.error('Failed to send command:', await res.text());
-                return;
-            }
-
-            setInputMessage("");
-        } catch (err) {
-            console.error('Error sending command:', err);
-        }
-    };
 
     return (
         <div className="flex flex-col h-full bg-black/40 relative z-10 overflow-hidden">
@@ -88,7 +49,6 @@ export function AgentTelemetryPane({
             </header>
 
             {/* Content Area */}
-            {/* If master view, simple scrolling area. If detail view, flex column with scrollable logs + fixed input */}
             <div className={`flex-1 overflow-hidden flex flex-col ${!selectedAgentId ? 'p-6' : ''}`}>
                 {!selectedAgentId ? (
                     // MASTER VIEW — Agent cards list
@@ -141,7 +101,7 @@ export function AgentTelemetryPane({
                         )}
                     </div>
                 ) : (
-                    // DETAIL VIEW — Splits into scrollable logs and fixed input footer
+                    // DETAIL VIEW — Scrollable logs
                     <div className="flex flex-col h-full bg-black/20">
                         {/* Scrollable Logs Area */}
                         <div className="flex-1 overflow-y-auto p-6 scroll-smooth custom-scrollbar">
@@ -150,33 +110,6 @@ export function AgentTelemetryPane({
                             ) : (
                                 <RawTelemetryView logs={selectedAgentLogs} terminalRef={terminalRef} />
                             )}
-                        </div>
-
-                        {/* Remote Input Footer */}
-                        <div className="p-4 border-t border-white/[0.06] bg-black/60 backdrop-blur-md">
-                            <form onSubmit={handleSendMessage} className="flex items-center gap-2 max-w-4xl mx-auto">
-                                <input
-                                    type="text"
-                                    value={inputMessage}
-                                    onChange={(e) => setInputMessage(e.target.value)}
-                                    placeholder={
-                                        selectedAgent?.status === 'online'
-                                            ? isTwoWayEnabled
-                                                ? `Send command to ${selectedAgent?.name}...`
-                                                : "Input disabled. Ask the respective owner to enable two-way communication."
-                                            : `Agent is ${selectedAgent?.status}. Input disabled.`
-                                    }
-                                    disabled={selectedAgent?.status !== 'online' || !isTwoWayEnabled || selectedAgent?.agent === 'unknown'}
-                                    className="flex-1 bg-white/[0.03] border border-white/[0.06] rounded-md px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary/50 transition-colors placeholder:text-muted-foreground/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                />
-                                <button
-                                    type="submit"
-                                    disabled={!inputMessage.trim() || selectedAgent?.status !== 'online' || !isTwoWayEnabled || selectedAgent?.agent === 'unknown'}
-                                    className="bg-primary/90 text-primary-foreground px-4 py-2.5 rounded-md text-sm font-medium hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
-                                >
-                                    <Send className="w-4 h-4" />
-                                </button>
-                            </form>
                         </div>
                     </div>
                 )}

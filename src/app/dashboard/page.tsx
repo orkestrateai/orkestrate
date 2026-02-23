@@ -556,7 +556,6 @@ export default function Dashboard() {
                             selectedAgentId={selectedAgentId}
                             setSelectedAgentId={setSelectedAgentId}
                             terminalRef={terminalRef}
-                            activeRoomId={activeRoom?.id || null}
                         />
                     </div>
 
