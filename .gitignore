@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# agent-local / ephemeral files
+opencode_*.json
+.claude/
+inject*.ps1
+bun.lock

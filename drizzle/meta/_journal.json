@@ -1,27 +1,48 @@
 {
-  "version": "7",
-  "dialect": "postgresql",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1771675519653,
-      "tag": "0000_nice_madame_web",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1771690475417,
-      "tag": "0001_swift_ozymandias",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1771700991743,
-      "tag": "0002_thin_captain_america",
-      "breakpoints": true
-    }
-  ]
+    "version":  "7",
+    "dialect":  "postgresql",
+    "entries":  [
+                    {
+                        "idx":  0,
+                        "version":  "7",
+                        "when":  1771675519653,
+                        "tag":  "0000_nice_madame_web",
+                        "breakpoints":  true
+                    },
+                    {
+                        "idx":  1,
+                        "version":  "7",
+                        "when":  1771690475417,
+                        "tag":  "0001_swift_ozymandias",
+                        "breakpoints":  true
+                    },
+                    {
+                        "idx":  2,
+                        "version":  "7",
+                        "when":  1771700991743,
+                        "tag":  "0002_thin_captain_america",
+                        "breakpoints":  true
+                    },
+                    {
+                        "idx":  3,
+                        "version":  "7",
+                        "when":  1771863638484,
+                        "tag":  "0003_agent_state_uniqueness",
+                        "breakpoints":  true
+                    },
+                    {
+                        "idx":  4,
+                        "version":  "7",
+                        "when":  1771863638485,
+                        "tag":  "0004_rooms_and_preferences",
+                        "breakpoints":  true
+                    },
+                    {
+                        "idx":  5,
+                        "version":  "7",
+                        "when":  1771863638486,
+                        "tag":  "0005_telemetry_hardening",
+                        "breakpoints":  true
+                    }
+                ]
 }

@@ -1,4 +1,4 @@
-﻿WITH ranked AS (
+WITH ranked AS (
   SELECT id,
          ROW_NUMBER() OVER (
            PARTITION BY user_id, project_id, client_id

@@ -2,25 +2,50 @@ console.log('[Agentalk] Two-way mode is disabled on this branch. Running one-way
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const https = require('https');
 const http = require('http');
 
-// Parse arguments: node telemetry.js --agent=codex --client=agent-123 --host=example.com
 function getArg(prefix, fallback = '') {
-    const arg = process.argv.find(a => a.startsWith(prefix));
+    const arg = process.argv.find((a) => a.startsWith(prefix));
     return arg ? arg.split('=')[1] : fallback;
 }
 
 const agentType = getArg('--agent=', 'generic');
 const clientId = getArg('--client=', 'unknown-agent');
 const host = getArg('--host=', 'agentalk.vercel.app');
-const roomId = getArg('--room=', 'default');
+const roomId = getArg('--room=', 'unassigned');
 
-// ────────────────────────────────────────────────────────────
-// PID FILE: Kill previous orphaned instances on startup
-// ────────────────────────────────────────────────────────────
+function resolveEndpoint(hostValue) {
+    const normalized = hostValue.includes('://')
+        ? hostValue
+        : (hostValue.includes('localhost') || hostValue.includes('127.0.0.1')
+            ? `http://${hostValue}`
+            : `https://${hostValue}`);
+    const url = new URL(normalized);
+    const protocol = url.protocol === 'http:' ? 'http:' : 'https:';
+    const port = url.port
+        ? Number(url.port)
+        : (protocol === 'http:' ? 80 : 443);
+
+    return {
+        protocol,
+        hostname: url.hostname,
+        port,
+        isLocal: protocol === 'http:',
+    };
+}
+
+const endpoint = resolveEndpoint(host);
+const INGEST_PATH = `/api/telemetry/ingest?clientId=${encodeURIComponent(clientId)}&agent=${encodeURIComponent(agentType)}&roomId=${encodeURIComponent(roomId)}`;
+const INGEST_URL = `${endpoint.protocol}//${endpoint.hostname}:${endpoint.port}${INGEST_PATH}`;
+
+// Keep one telemetry process per client/room/host tuple.
+// If agent id changes unexpectedly, this still guarantees only one active streamer.
 const PID_DIR = path.join(os.tmpdir(), 'agentalk');
-const PID_FILE = path.join(PID_DIR, `telemetry-${agentType}.pid`);
+const pidIdentity = `${clientId}|${roomId}|${endpoint.hostname}:${endpoint.port}`;
+const pidKey = crypto.createHash('sha1').update(pidIdentity).digest('hex').slice(0, 12);
+const PID_FILE = path.join(PID_DIR, `telemetry-${pidKey}.pid`);
 
 function killPreviousInstance() {
     try {
@@ -28,16 +53,15 @@ function killPreviousInstance() {
         const oldPid = parseInt(fs.readFileSync(PID_FILE, 'utf-8').trim(), 10);
         if (isNaN(oldPid) || oldPid === process.pid) return;
 
-        // Check if the old process is still alive
         try {
-            process.kill(oldPid, 0); // Signal 0 = existence check, doesn't actually kill
+            process.kill(oldPid, 0);
             console.log(`[Telemetry] Killing previous orphaned telemetry process (PID ${oldPid})`);
             process.kill(oldPid, 'SIGTERM');
         } catch (e) {
-            // Process doesn't exist anymore, that's fine
+            // Process does not exist.
         }
     } catch (e) {
-        // PID file issues are non-fatal
+        // Ignore pid file read errors.
     }
 }
 
@@ -46,7 +70,7 @@ function writePidFile() {
         if (!fs.existsSync(PID_DIR)) fs.mkdirSync(PID_DIR, { recursive: true });
         fs.writeFileSync(PID_FILE, String(process.pid));
     } catch (e) {
-        // Non-fatal
+        // Ignore pid file write errors.
     }
 }
 
@@ -54,86 +78,106 @@ function cleanupPidFile() {
     try {
         if (fs.existsSync(PID_FILE)) fs.unlinkSync(PID_FILE);
     } catch (e) {
-        // Non-fatal
+        // Ignore pid file cleanup errors.
     }
 }
 
-// Kill any previous orphaned instance before we start
 killPreviousInstance();
 writePidFile();
 
 console.log(`[Telemetry] Starting telemetry for ${clientId} (${agentType}) [PID: ${process.pid}]`);
 
-// ────────────────────────────────────────────────────────────
-// HTTP TRANSPORT
-// ────────────────────────────────────────────────────────────
-function sendLog(message, eventName = 'log') {
-    const payload = JSON.stringify({ message, event: eventName });
-
-    const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
-    const requestModule = isLocalhost ? http : https;
-    const port = isLocalhost ? parseInt(host.split(':')[1] || '3000', 10) : 443;
-    const hostname = isLocalhost ? host.split(':')[0] : host;
-
-    const options = {
-        hostname: hostname,
-        port: port,
-        path: `/api/telemetry/ingest?clientId=${encodeURIComponent(clientId)}&agent=${encodeURIComponent(agentType)}&roomId=${encodeURIComponent(roomId)}`,
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(payload)
-        }
-    };
-
-    const req = requestModule.request(options, (res) => {
-        res.on('data', () => { });
-    });
-
-    req.on('error', (e) => {
-        console.error(`[Telemetry] Failed to send log: ${e.message}`);
-    });
-
-    req.write(payload);
-    req.end();
+let lastTransportErrorAt = 0;
+function logTransportError(message) {
+    const now = Date.now();
+    if (now - lastTransportErrorAt < 5000) return;
+    lastTransportErrorAt = now;
+    console.error(message);
 }
 
-// Synchronous version for exit handlers (uses sync HTTP which is ugly but necessary)
-function sendLogSync(message, eventName = 'log') {
-    try {
-        // We can't do async HTTP in 'exit' handlers, so we use a child_process trick
-        const { execSync } = require('child_process');
-        const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
-        const protocol = isLocalhost ? 'http' : 'https';
-        const port = isLocalhost ? (host.split(':')[1] || '3000') : '443';
-        const hostname = isLocalhost ? host.split(':')[0] : host;
-        const url = `${protocol}://${hostname}:${port}/api/telemetry/ingest?clientId=${encodeURIComponent(clientId)}&agent=${encodeURIComponent(agentType)}&roomId=${encodeURIComponent(roomId)}`;
-        const body = JSON.stringify({ message, event: eventName });
+function postPayload(payload) {
+    return new Promise((resolve) => {
+        const requestModule = endpoint.isLocal ? http : https;
+        const req = requestModule.request({
+            hostname: endpoint.hostname,
+            port: endpoint.port,
+            path: INGEST_PATH,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(payload),
+            },
+        }, (res) => {
+            if (res.statusCode && res.statusCode >= 400) {
+                logTransportError(`[Telemetry] Ingest returned HTTP ${res.statusCode}`);
+            }
+            res.on('data', () => { });
+            res.on('end', resolve);
+        });
 
-        // Use curl/Invoke-WebRequest depending on platform
-        if (process.platform === 'win32') {
-            execSync(`powershell -Command "Invoke-WebRequest -Uri '${url}' -Method POST -Body '${body.replace(/'/g, "''")}' -ContentType 'application/json' -UseBasicParsing" 2>$null`, { timeout: 3000, stdio: 'ignore' });
-        } else {
-            execSync(`curl -s -X POST "${url}" -H "Content-Type: application/json" -d '${body.replace(/'/g, "'\\''")}'`, { timeout: 3000, stdio: 'ignore' });
-        }
-    } catch (e) {
-        // Best-effort, don't crash on exit
+        req.on('error', (e) => {
+            logTransportError(`[Telemetry] Failed to send log: ${e.message}`);
+            resolve();
+        });
+
+        req.write(payload);
+        req.end();
+    });
+}
+
+const MAX_QUEUE_SIZE = 5000;
+const SEND_CONCURRENCY = 4;
+const sendQueue = [];
+let inFlight = 0;
+let droppedLogs = 0;
+
+function pumpQueue() {
+    while (inFlight < SEND_CONCURRENCY && sendQueue.length > 0) {
+        const payload = sendQueue.shift();
+        inFlight += 1;
+
+        postPayload(payload).finally(() => {
+            inFlight -= 1;
+            if (sendQueue.length === 0 && droppedLogs > 0) {
+                console.warn(`[Telemetry] Dropped ${droppedLogs} logs due to queue pressure.`);
+                droppedLogs = 0;
+            }
+            pumpQueue();
+        });
     }
 }
 
-// ────────────────────────────────────────────────────────────
-// HEARTBEAT: Send periodic pings so dashboard knows we're alive
-// ────────────────────────────────────────────────────────────
-const HEARTBEAT_INTERVAL = 15000; // 15 seconds
+function sendLog(message, eventName = 'log') {
+    const payload = JSON.stringify({ message, event: eventName });
+    if (sendQueue.length >= MAX_QUEUE_SIZE) {
+        sendQueue.shift();
+        droppedLogs += 1;
+    }
+    sendQueue.push(payload);
+    pumpQueue();
+}
+
+function sendLogSync(message, eventName = 'log') {
+    try {
+        const { execSync } = require('child_process');
+        const body = JSON.stringify({ message, event: eventName });
+
+        if (process.platform === 'win32') {
+            execSync(`powershell -Command "Invoke-WebRequest -Uri '${INGEST_URL}' -Method POST -Body '${body.replace(/'/g, "''")}' -ContentType 'application/json' -UseBasicParsing" 2>$null`, { timeout: 3000, stdio: 'ignore' });
+        } else {
+            execSync(`curl -s -X POST "${INGEST_URL}" -H "Content-Type: application/json" -d '${body.replace(/'/g, "'\\''")}'`, { timeout: 3000, stdio: 'ignore' });
+        }
+    } catch (e) {
+        // Best effort only.
+    }
+}
+
+const HEARTBEAT_INTERVAL = 15000;
 setInterval(() => {
     sendLog(JSON.stringify({ type: 'heartbeat', payload: { pid: process.pid, uptime: process.uptime() } }));
 }, HEARTBEAT_INTERVAL);
 
-// ────────────────────────────────────────────────────────────
-// GRACEFUL SHUTDOWN: Send disconnect + cleanup PID file
-// ────────────────────────────────────────────────────────────
 let hasDisconnected = false;
-
 function gracefulShutdown(signal) {
     if (hasDisconnected) return;
     hasDisconnected = true;
@@ -147,10 +191,20 @@ process.on('SIGINT', () => { gracefulShutdown('SIGINT'); process.exit(0); });
 process.on('SIGTERM', () => { gracefulShutdown('SIGTERM'); process.exit(0); });
 process.on('exit', () => { gracefulShutdown('exit'); });
 
-// ────────────────────────────────────────────────────────────
-// FILE TAILING (Codex / Claude Code)
-// ────────────────────────────────────────────────────────────
-function tailNewestFile(baseDir, extension, logPrefix) {
+function shouldDropNoisyEvent(text) {
+    try {
+        const evt = JSON.parse(text);
+        const t = evt.type;
+        const pt = evt.payload?.type;
+        if (t === 'turn_context') return true;
+        if (t === 'event_msg' && (pt === 'token_count' || pt === 'agent_message' || pt === 'user_message')) return true;
+    } catch (e) {
+        // Non-JSON log line.
+    }
+    return false;
+}
+
+function findNewestFile(baseDir, extension) {
     let newestFile = '';
     let newestTime = 0;
 
@@ -170,24 +224,42 @@ function tailNewestFile(baseDir, extension, logPrefix) {
     }
 
     searchDir(baseDir);
+    return newestFile;
+}
 
-    if (!newestFile) {
-        console.error(`[Telemetry] No ${logPrefix} session logs found in ${baseDir}`);
-        return;
-    }
-
-    console.log(`[Telemetry] Tailing ${logPrefix} log file: ${newestFile}`);
-    sendLog(`Started tailing ${logPrefix} log: ${newestFile}`, 'system');
-
-    // Start from the beginning of the file to replay the full session history
+function startFileTailer(baseDir, extension, logPrefix) {
+    let activeFile = '';
     let fileSize = 0;
+    let watcher = null;
+    let warnedNoFile = false;
 
-    fs.watchFile(newestFile, { interval: 500 }, (curr, prev) => {
-        if (curr.size > fileSize) {
-            const stream = fs.createReadStream(newestFile, {
+    function attachFile(filePath) {
+        if (watcher && activeFile) {
+            fs.unwatchFile(activeFile, watcher);
+        }
+
+        activeFile = filePath;
+        fileSize = 0;
+
+        console.log(`[Telemetry] Tailing ${logPrefix} log file: ${activeFile}`);
+        sendLog(`Started tailing ${logPrefix} log: ${activeFile}`, 'system');
+
+        watcher = (curr) => {
+            if (curr.size < fileSize) {
+                fileSize = 0;
+            }
+            if (curr.size <= fileSize) {
+                return;
+            }
+
+            const start = fileSize;
+            const end = curr.size;
+            fileSize = end;
+
+            const stream = fs.createReadStream(activeFile, {
                 encoding: 'utf-8',
-                start: fileSize,
-                end: curr.size
+                start,
+                end,
             });
 
             let buffer = '';
@@ -198,32 +270,40 @@ function tailNewestFile(baseDir, extension, logPrefix) {
 
                 for (const line of lines) {
                     const text = line.trim();
-                    if (text) {
-                        // Filter out noisy events that waste bandwidth
-                        try {
-                            const evt = JSON.parse(text);
-                            const t = evt.type;
-                            const pt = evt.payload?.type;
-                            // Skip: turn_context (repeats after every tool), token_count (fires constantly), 
-                            // agent_message / user_message (duplicates of response_item)
-                            if (t === 'turn_context') continue;
-                            if (t === 'event_msg' && (pt === 'token_count' || pt === 'agent_message' || pt === 'user_message')) continue;
-                        } catch (e) {
-                            // Not JSON, send as-is
-                        }
-                        sendLog(text);
-                    }
+                    if (!text) continue;
+                    if (shouldDropNoisyEvent(text)) continue;
+                    sendLog(text);
                 }
             });
 
-            fileSize = curr.size;
+            stream.on('error', (e) => {
+                logTransportError(`[Telemetry] Failed reading tailed file: ${e.message}`);
+            });
+        };
+
+        fs.watchFile(activeFile, { interval: 500 }, watcher);
+    }
+
+    function scanForLatestFile() {
+        const newestFile = findNewestFile(baseDir, extension);
+        if (!newestFile) {
+            if (!warnedNoFile) {
+                warnedNoFile = true;
+                console.error(`[Telemetry] No ${logPrefix} session logs found in ${baseDir}`);
+            }
+            return;
         }
-    });
+
+        warnedNoFile = false;
+        if (newestFile !== activeFile) {
+            attachFile(newestFile);
+        }
+    }
+
+    scanForLatestFile();
+    setInterval(scanForLatestFile, 3000);
 }
 
-// ────────────────────────────────────────────────────────────
-// SQLITE POLLING (OpenCode)
-// ────────────────────────────────────────────────────────────
 function startOpenCodeTailing() {
     let DatabaseSync;
     try {
@@ -250,60 +330,56 @@ function startOpenCodeTailing() {
             db = new DatabaseSync(dbPath, { open: true });
 
             const rows = db.prepare('SELECT data, time_created FROM part WHERE time_created > ? ORDER BY time_created ASC').all(lastTimeCreated);
-
             for (const row of rows) {
                 if (row.time_created > lastTimeCreated) {
                     lastTimeCreated = row.time_created;
                 }
 
-                if (row.data) {
-                    try {
-                        const parsed = JSON.parse(row.data);
-                        const formattedLog = {
-                            timestamp: new Date((parsed.time && parsed.time.start) || row.time_created || Date.now()).toISOString(),
-                            type: parsed.type || 'unknown_event',
-                            payload: parsed
-                        };
-                        sendLog(JSON.stringify(formattedLog));
-                    } catch (e) {
-                        sendLog(row.data.trim().replace(/\r?\n/g, ' '));
-                    }
+                if (!row.data) continue;
+                try {
+                    const parsed = JSON.parse(row.data);
+                    const formattedLog = {
+                        timestamp: new Date((parsed.time && parsed.time.start) || row.time_created || Date.now()).toISOString(),
+                        type: parsed.type || 'unknown_event',
+                        payload: parsed,
+                    };
+                    sendLog(JSON.stringify(formattedLog));
+                } catch (e) {
+                    sendLog(row.data.trim().replace(/\r?\n/g, ' '));
                 }
             }
 
             db.close();
         } catch (e) {
             if (db) {
-                try { db.close(); } catch (ce) { }
+                try { db.close(); } catch (closeErr) { }
             }
         }
     }, 500);
 }
 
-// ────────────────────────────────────────────────────────────
-// STARTUP
-// ────────────────────────────────────────────────────────────
+sendLog(JSON.stringify({ type: 'connect', payload: { pid: process.pid, agent: agentType, client: clientId, roomId } }), 'system');
 
-// Broadcast connection
-sendLog(JSON.stringify({ type: 'connect', payload: { pid: process.pid, agent: agentType, client: clientId } }), 'system');
+// Use prefix matching since MCP passes canonical IDs like 'codex-a5f2', 'claude-b3c1', etc.
+const agentFamily = agentType.split('-')[0].toLowerCase();
 
-if (agentType === 'codex') {
+if (agentFamily === 'codex') {
     const dir = path.join(os.homedir(), '.codex', 'sessions');
-    tailNewestFile(dir, '.jsonl', 'Codex');
-} else if (agentType === 'claude-code' || agentType === 'claude') {
+    startFileTailer(dir, '.jsonl', 'Codex');
+} else if (agentFamily === 'claude') {
     const dir = path.join(os.homedir(), '.claude');
-    tailNewestFile(dir, '.jsonl', 'Claude Code');
-} else if (agentType === 'opencode') {
+    startFileTailer(dir, '.jsonl', 'Claude Code');
+} else if (agentFamily === 'opencode') {
     startOpenCodeTailing();
 } else {
-    console.log('[Telemetry] Generic agent type, standing by for stdin...');
+    console.log(`[Telemetry] Agent family '${agentFamily}' (from '${agentType}'), standing by for stdin...`);
 }
 
-// Handle generic fallback (piped stdin)
 process.stdin.on('data', (data) => {
     const text = data.toString().trim();
     if (text) {
         sendLog(text);
     }
 });
+
 

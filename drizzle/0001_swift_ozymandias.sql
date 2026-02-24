@@ -1,6 +1,6 @@
 CREATE TABLE "room_events" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"room_id" uuid NOT NULL,
+	"room_id" text NOT NULL,
 	"user_id" uuid,
 	"event_type" text NOT NULL,
 	"payload" jsonb NOT NULL,

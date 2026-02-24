@@ -1,24 +1,41 @@
-import React from 'react';
-import { FileText, Users, ChevronRight, Hash } from "lucide-react";
+﻿import React from 'react';
+import { FileText, Users, ChevronRight, Hash, EyeOff } from "lucide-react";
+
+type SelectedAgentState = {
+    stateClientId: string;
+    agentId: string;
+    displayName: string;
+    status: 'online' | 'offline' | 'disconnected';
+    lastPingAt: string | Date;
+    stateMarkdown: string;
+};
 
 interface WorkspaceContentPaneProps {
     activeRoom: any;
-    activeAgentCount: number;
+    onlineAgentCount: number;
+    totalAgentCount: number;
     lastUpdated: Date | null;
-    content: string;
+    overviewMarkdown: string;
+    selectedAgentState: SelectedAgentState | null;
+    onClearSelectedAgent: () => void;
 }
 
 export function WorkspaceContentPane({
     activeRoom,
-    activeAgentCount,
+    onlineAgentCount,
+    totalAgentCount,
     lastUpdated,
-    content,
+    overviewMarkdown,
+    selectedAgentState,
+    onClearSelectedAgent,
 }: WorkspaceContentPaneProps) {
+    const content = selectedAgentState?.stateMarkdown || overviewMarkdown;
+    const viewTitle = selectedAgentState ? `Agent State: ${selectedAgentState.agentId}` : 'Room Overview';
+
     return (
         <div className="flex flex-col h-full bg-black/20 relative z-0">
             {activeRoom ? (
                 <>
-                    {/* Toolbar Header */}
                     <header className="h-[56px] flex-shrink-0 border-b border-white/[0.06] px-6 flex items-center justify-between bg-black/40 z-20 backdrop-blur-md">
                         <div className="flex items-center gap-4">
                             <h1 className="text-sm font-medium text-foreground flex items-center gap-2">
@@ -28,7 +45,13 @@ export function WorkspaceContentPane({
                             <span className="text-white/[0.1]">|</span>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium bg-black/50 px-3 py-1.5 rounded-md border border-white/[0.05]">
                                 <Users className="w-3.5 h-3.5" />
-                                <span className="hidden xl:inline">Active Agents:</span> <span className="text-foreground ml-1">{activeAgentCount}</span>
+                                <span className="hidden xl:inline">Online:</span>
+                                <span className="text-foreground ml-1">{onlineAgentCount}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium bg-black/50 px-3 py-1.5 rounded-md border border-white/[0.05]">
+                                <Users className="w-3.5 h-3.5" />
+                                <span className="hidden xl:inline">Total:</span>
+                                <span className="text-foreground ml-1">{totalAgentCount}</span>
                             </div>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium bg-black/50 px-3 py-1.5 rounded-md border border-white/[0.05]">
                                 <Hash className="w-3.5 h-3.5" />
@@ -38,6 +61,15 @@ export function WorkspaceContentPane({
                         </div>
 
                         <div className="flex items-center gap-3">
+                            {selectedAgentState ? (
+                                <button
+                                    onClick={onClearSelectedAgent}
+                                    className="inline-flex items-center gap-2 text-xs text-muted-foreground border border-white/[0.08] rounded-md px-2.5 py-1.5 hover:bg-white/[0.04] hover:text-foreground transition-colors"
+                                >
+                                    <EyeOff className="w-3.5 h-3.5" />
+                                    Room Overview
+                                </button>
+                            ) : null}
                             {lastUpdated && (
                                 <span className="text-xs text-muted-foreground flex items-center gap-2">
                                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/80 animate-pulse"></div>
@@ -47,20 +79,18 @@ export function WorkspaceContentPane({
                         </div>
                     </header>
 
-                    {/* Document Editor Area */}
                     <div className="flex-1 overflow-y-auto w-full p-4 lg:p-8 relative">
                         <div className="max-w-3xl mx-auto w-full h-[90%] min-h-[500px] rounded-xl border border-white/[0.08] bg-black/40 shadow-2xl overflow-hidden flex flex-col relative z-10 backdrop-blur-md">
-                            {/* Fake Editor Tabs/Header */}
                             <div className="h-10 border-b border-white/[0.06] bg-black/60 flex items-center px-4 gap-2 shrink-0">
                                 <div className="flex gap-1.5">
                                     <div className="w-2.5 h-2.5 rounded-full bg-white/[0.15]"></div>
                                     <div className="w-2.5 h-2.5 rounded-full bg-white/[0.15]"></div>
                                     <div className="w-2.5 h-2.5 rounded-full bg-white/[0.15]"></div>
                                 </div>
-                                <div className="ml-4 flex items-center gap-2 text-[11px] font-mono text-muted-foreground bg-white/[0.03] border border-white/[0.05] px-2.5 py-1 rounded-md">
+                                <div className="ml-4 flex items-center gap-2 text-[11px] font-mono text-muted-foreground bg-white/[0.03] border border-white/[0.05] px-2.5 py-1 rounded-md min-w-0">
                                     <span className="text-muted-foreground hidden sm:inline">workspace</span>
                                     <ChevronRight className="w-3.5 h-3.5 opacity-40 hidden sm:inline" />
-                                    <span className="text-gray-300">room-{activeRoom.id}.md</span>
+                                    <span className="text-gray-300 truncate">{viewTitle}</span>
                                 </div>
                             </div>
 
@@ -68,7 +98,9 @@ export function WorkspaceContentPane({
                                 {!content ? (
                                     <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-70">
                                         <FileText className="w-10 h-10 text-muted-foreground/50" />
-                                        <p className="text-muted-foreground text-sm max-w-xs">The workspace is empty. Connect an agent to begin drafting.</p>
+                                        <p className="text-muted-foreground text-sm max-w-xs">
+                                            The workspace is empty. Connect an agent to begin drafting.
+                                        </p>
                                     </div>
                                 ) : (
                                     <div className="whitespace-pre-wrap">{content}</div>

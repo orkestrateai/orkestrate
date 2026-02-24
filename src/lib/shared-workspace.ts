@@ -1,6 +1,73 @@
 import { db } from '@/db';
 import { agentStates } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
+import { getDisplayAgentIdFromScopedClientId, splitScopedClientId } from './agent-identity';
+
+const ONLINE_THRESHOLD_MS = 60 * 1000;
+
+export type AgentStateContent = {
+  agentProfile: string;
+  currentObjective: string;
+  architectureFootprint: string[];
+  implementationPlan: string[];
+  notesForTeam: string;
+  pastWorkSummary?: string[];
+};
+
+export type DashboardAgentStatus = 'online' | 'offline' | 'disconnected';
+
+export type DashboardAgentState = {
+  stateClientId: string;
+  clientBaseId: string;
+  agentId: string;
+  displayName: string;
+  status: DashboardAgentStatus;
+  lastPingAt: Date;
+  stateHash: string;
+  stateContent: AgentStateContent;
+  stateMarkdown: string;
+  agentProfile: string;
+  currentObjective: string;
+};
+
+function normalizeStateContent(stateObj: any): AgentStateContent {
+  return {
+    agentProfile: typeof stateObj?.agentProfile === 'string' ? stateObj.agentProfile : 'Idle',
+    currentObjective: typeof stateObj?.currentObjective === 'string' ? stateObj.currentObjective : 'Waiting for tasks',
+    architectureFootprint: Array.isArray(stateObj?.architectureFootprint) ? stateObj.architectureFootprint : [],
+    implementationPlan: Array.isArray(stateObj?.implementationPlan) ? stateObj.implementationPlan : [],
+    notesForTeam: typeof stateObj?.notesForTeam === 'string' ? stateObj.notesForTeam : 'None',
+    pastWorkSummary: Array.isArray(stateObj?.pastWorkSummary) ? stateObj.pastWorkSummary : [],
+  };
+}
+
+export function formatSingleAgentStateMarkdown(agentDisplayId: string, stateObj: AgentStateContent): string {
+  const footprintMd = stateObj.architectureFootprint.length > 0
+    ? stateObj.architectureFootprint.map((f: string) => `- ${f}`).join('\n')
+    : 'None';
+
+  const planMd = stateObj.implementationPlan.length > 0
+    ? stateObj.implementationPlan.map((p: string) => `- [ ] ${p}`).join('\n')
+    : 'None';
+
+  let md = `## [${agentDisplayId}]\n\n`;
+  md += `**AGENT_PROFILE:** ${stateObj.agentProfile}\n\n`;
+  md += `**CURRENT_OBJECTIVE:** ${stateObj.currentObjective}\n\n`;
+  md += `**ARCHITECTURE_FOOTPRINT:**\n${footprintMd}\n\n`;
+  md += `**IMPLEMENTATION_PLAN:**\n${planMd}\n\n`;
+  md += `**NOTES_FOR_TEAM:**\n- ${stateObj.notesForTeam || 'None'}`;
+
+  if (stateObj.pastWorkSummary && stateObj.pastWorkSummary.length > 0) {
+    md += `\n\n**PAST_WORK_SUMMARY:**\n${stateObj.pastWorkSummary.map((w: string) => `- ${w}`).join('\n')}`;
+  }
+
+  return md;
+}
+
+export function formatRoomOverviewMarkdown(agents: Array<{ agentDisplayId: string; stateContent: AgentStateContent }>): string {
+  if (!agents.length) return '';
+  return agents.map((agent) => formatSingleAgentStateMarkdown(agent.agentDisplayId, agent.stateContent)).join('\n\n---\n\n');
+}
 
 /**
  * Upsert an agent's heartbeat session for a specific user and project.
@@ -88,7 +155,7 @@ export async function upsertAgentState(
  * Formats the combined JSON back into Markdown for reading.
  */
 export async function getTeamStateForProject(userId: string, projectId: string): Promise<{ content: string; stateHash: string }> {
-  const sixtySecondsAgo = new Date(Date.now() - 60 * 1000);
+  const sixtySecondsAgo = new Date(Date.now() - ONLINE_THRESHOLD_MS);
 
   const activeSessions = await db.query.agentStates.findMany({
     where: and(
@@ -104,37 +171,112 @@ export async function getTeamStateForProject(userId: string, projectId: string):
 
   const combinedHash = activeAgents.map(a => a.stateHash).join('-');
 
-  // Convert JSON to markdown for the unified team read
-  const formattedContent = activeAgents.map(agent => {
-    const stateObj = agent.stateContent as any;
-    if (!stateObj) return `## [${agent.clientId}]\nEmpty State`;
-
-    const footprintMd = stateObj.architectureFootprint && stateObj.architectureFootprint.length > 0
-      ? stateObj.architectureFootprint.map((f: string) => `- ${f}`).join('\n')
-      : 'None';
-
-    const planMd = stateObj.implementationPlan && stateObj.implementationPlan.length > 0
-      ? stateObj.implementationPlan.map((p: string) => `- [ ] ${p}`).join('\n')
-      : 'None';
-
-    let md = `## [${agent.clientId}]\n\n`;
-    md += `**AGENT_PROFILE:** ${stateObj.agentProfile}\n\n`;
-    md += `**CURRENT_OBJECTIVE:** ${stateObj.currentObjective}\n\n`;
-    md += `**ARCHITECTURE_FOOTPRINT:**\n${footprintMd}\n\n`;
-    md += `**IMPLEMENTATION_PLAN:**\n${planMd}\n\n`;
-    md += `**NOTES_FOR_TEAM:**\n- ${stateObj.notesForTeam || 'None'}`;
-
-    if (stateObj.pastWorkSummary && stateObj.pastWorkSummary.length > 0) {
-      md += `\n\n**PAST_WORK_SUMMARY:**\n${stateObj.pastWorkSummary.map((w: string) => `- ${w}`).join('\n')}`;
-    }
-    return md;
-  }).join('\n\n---\n\n');
+  const formattedContent = formatRoomOverviewMarkdown(
+    activeAgents.map((agent) => ({
+      agentDisplayId: getDisplayAgentIdFromScopedClientId(agent.clientId),
+      stateContent: normalizeStateContent(agent.stateContent),
+    })),
+  );
 
   return { content: formattedContent, stateHash: combinedHash };
 }
 
+export async function getDashboardAgentStatesForProject(
+  userId: string,
+  projectId: string,
+  options?: {
+    disconnectedScopedClientIds?: string[];
+    onlineThresholdMs?: number;
+  },
+): Promise<DashboardAgentState[]> {
+  const sessions = await db.query.agentStates.findMany({
+    where: and(
+      eq(agentStates.userId, userId),
+      eq(agentStates.projectId, projectId),
+    ),
+    orderBy: (states, { desc }) => [desc(states.lastPingAt), desc(states.id)],
+  });
+
+  const now = Date.now();
+  const threshold = options?.onlineThresholdMs ?? ONLINE_THRESHOLD_MS;
+  const disconnectedSet = new Set(options?.disconnectedScopedClientIds ?? []);
+
+  return sessions.map((session) => {
+    const parts = splitScopedClientId(session.clientId);
+    const stateContent = normalizeStateContent(session.stateContent);
+    const isOnline = now - new Date(session.lastPingAt).getTime() <= threshold;
+    const status: DashboardAgentStatus = disconnectedSet.has(session.clientId)
+      ? 'disconnected'
+      : (isOnline ? 'online' : 'offline');
+
+    const displayName = stateContent.agentProfile || getDisplayAgentIdFromScopedClientId(session.clientId);
+    const agentId = parts.scopedAgentId || getDisplayAgentIdFromScopedClientId(session.clientId);
+
+    return {
+      stateClientId: session.clientId,
+      clientBaseId: parts.clientBaseId,
+      agentId,
+      displayName,
+      status,
+      lastPingAt: session.lastPingAt,
+      stateHash: session.stateHash,
+      stateContent,
+      stateMarkdown: formatSingleAgentStateMarkdown(agentId, stateContent),
+      agentProfile: stateContent.agentProfile,
+      currentObjective: stateContent.currentObjective,
+    };
+  });
+}
+
+/**
+ * Look up an existing agent state row for reconnection detection.
+ * Returns the state content and metadata if the agent has a prior session, or null.
+ */
+export async function getExistingAgentState(
+  userId: string,
+  projectId: string,
+  clientId: string,
+): Promise<{ stateContent: AgentStateContent; lastPingAt: Date; stateHash: string } | null> {
+  const row = await db.query.agentStates.findFirst({
+    where: and(
+      eq(agentStates.userId, userId),
+      eq(agentStates.projectId, projectId),
+      eq(agentStates.clientId, clientId),
+    ),
+  });
+
+  if (!row) return null;
+
+  return {
+    stateContent: normalizeStateContent(row.stateContent),
+    lastPingAt: row.lastPingAt,
+    stateHash: row.stateHash,
+  };
+}
+
+/**
+ * Touch the agent's heartbeat to bring it back online without modifying state content.
+ */
+export async function touchAgentHeartbeat(
+  userId: string,
+  projectId: string,
+  clientId: string,
+) {
+  const now = new Date();
+  await db
+    .update(agentStates)
+    .set({ lastPingAt: now, windowStartAt: now, pingCount: 1 })
+    .where(
+      and(
+        eq(agentStates.userId, userId),
+        eq(agentStates.projectId, projectId),
+        eq(agentStates.clientId, clientId),
+      ),
+    );
+}
+
 export async function getActiveAgentsForProject(userId: string, projectId: string) {
-  const sixtySecondsAgo = new Date(Date.now() - 60 * 1000);
+  const sixtySecondsAgo = new Date(Date.now() - ONLINE_THRESHOLD_MS);
   const activeSessions = await db.query.agentStates.findMany({
     where: and(
       eq(agentStates.userId, userId),
@@ -147,8 +289,10 @@ export async function getActiveAgentsForProject(userId: string, projectId: strin
     .filter((s) => s.lastPingAt > sixtySecondsAgo)
     .map((s) => {
       const stateObj = s.stateContent as any;
+      const agentDisplayId = getDisplayAgentIdFromScopedClientId(s.clientId);
       return {
-        clientId: s.clientId,
+        clientId: agentDisplayId,
+        stateClientId: s.clientId,
         projectId: s.projectId,
         lastPingAt: s.lastPingAt,
         stateHash: s.stateHash,

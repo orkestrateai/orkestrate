@@ -1,4 +1,4 @@
-import { pgSchema, pgTable, text, timestamp, uuid, boolean, jsonb, integer, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgSchema, pgTable, text, timestamp, uuid, boolean, jsonb, integer, uniqueIndex, index } from 'drizzle-orm/pg-core';
 
 const auth = pgSchema('auth');
 const authUsers = auth.table('users', {
@@ -26,12 +26,18 @@ export const agentStates = pgTable('agent_states', {
 }));
 
 export const agentTelemetry = pgTable('agent_telemetry', {
+    userId: uuid('user_id').references(() => authUsers.id),
+    roomId: text('room_id').default('unassigned').notNull(),
     clientId: text('client_id').notNull(),
     agent: text('agent').notNull(),
     eventType: text('event_type').notNull(),
     payload: jsonb('payload').notNull(),
     createdAt: timestamp('created_at').notNull(),
-});
+}, (table) => ({
+    telemetryRoomCreatedIdx: index('agent_telemetry_room_created_idx').on(table.roomId, table.createdAt),
+    telemetryUserCreatedIdx: index('agent_telemetry_user_created_idx').on(table.userId, table.createdAt),
+    telemetryClientAgentCreatedIdx: index('agent_telemetry_client_agent_created_idx').on(table.clientId, table.agent, table.createdAt),
+}));
 
 export const rooms = pgTable('rooms', {
     id: text('id').primaryKey(),
