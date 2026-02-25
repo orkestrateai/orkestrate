@@ -1,4 +1,3 @@
-console.log('[Agentalk] Two-way mode is disabled on this branch. Running one-way telemetry only.');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -41,7 +40,7 @@ const INGEST_PATH = `/api/telemetry/ingest?clientId=${encodeURIComponent(clientI
 const INGEST_URL = `${endpoint.protocol}//${endpoint.hostname}:${endpoint.port}${INGEST_PATH}`;
 
 // Keep one telemetry process per client/room/host tuple.
-// If agent id changes unexpectedly, this still guarantees only one active streamer.
+// If agent id changes unexpectedly, this still guarantees one active streamer.
 const PID_DIR = path.join(os.tmpdir(), 'agentalk');
 const pidIdentity = `${clientId}|${roomId}|${endpoint.hostname}:${endpoint.port}`;
 const pidKey = crypto.createHash('sha1').update(pidIdentity).digest('hex').slice(0, 12);
@@ -381,5 +380,4 @@ process.stdin.on('data', (data) => {
         sendLog(text);
     }
 });
-
 
