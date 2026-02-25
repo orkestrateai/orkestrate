@@ -127,8 +127,9 @@ export const AgentalkTelemetry: Plugin = async ({ directory }) => {
         )
     }, HEARTBEAT_INTERVAL_MS)
 
-    // Clean up on exit
-    process.on("beforeExit", () => {
+    // Clean up on exit — use signals instead of beforeExit (which is unreliable
+    // and keeps the event loop alive via the interval timer)
+    const onExit = () => {
         clearInterval(heartbeatTimer)
         sendTelemetry(
             {
@@ -141,7 +142,9 @@ export const AgentalkTelemetry: Plugin = async ({ directory }) => {
             },
             "system",
         )
-    })
+    }
+    process.once("SIGTERM", onExit)
+    process.once("SIGINT", onExit)
 
     return {
         // --- Event-based telemetry -----------------------------------------------
