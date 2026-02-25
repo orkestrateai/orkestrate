@@ -161,15 +161,24 @@ function sendLogSync(message, eventName = 'log') {
         const { execSync } = require('child_process');
         const body = JSON.stringify({ message, event: eventName });
 
-        // Write body to a temp file to avoid shell injection via interpolation
-        const tmpFile = path.join(os.tmpdir(), `agentalk_sync_${process.pid}.json`);
-        fs.writeFileSync(tmpFile, body);
+        // Use a random filename to prevent symlink attacks on shared temp dirs
+        const randomSuffix = crypto.randomBytes(8).toString('hex');
+        const tmpFile = path.join(os.tmpdir(), `agentalk_${randomSuffix}.json`);
+        fs.writeFileSync(tmpFile, body, { mode: 0o600 });
 
         try {
             if (process.platform === 'win32') {
-                execSync(`powershell -Command "Invoke-WebRequest -Uri '${INGEST_URL}' -Method POST -Body (Get-Content -Raw '${tmpFile}') -ContentType 'application/json' -UseBasicParsing" 2>$null`, { timeout: 3000, stdio: 'ignore' });
+                // Pass path via env var to avoid shell interpolation issues with quotes/spaces
+                execSync(
+                    `powershell -Command "$f = [System.Environment]::GetEnvironmentVariable('AGENTALK_TMP'); Invoke-WebRequest -Uri '${INGEST_URL}' -Method POST -Body (Get-Content -LiteralPath $f -Raw) -ContentType 'application/json' -UseBasicParsing"`,
+                    { timeout: 3000, stdio: 'ignore', env: { ...process.env, AGENTALK_TMP: tmpFile } }
+                );
             } else {
-                execSync(`curl -s -X POST '${endpoint.protocol}//${endpoint.hostname}:${endpoint.port}${INGEST_PATH}' -H 'Content-Type: application/json' -d @'${tmpFile}'`, { timeout: 3000, stdio: 'ignore' });
+                // Pass path via env var for POSIX too
+                execSync(
+                    `curl -s -X POST '${endpoint.protocol}//${endpoint.hostname}:${endpoint.port}${INGEST_PATH}' -H 'Content-Type: application/json' -d @"$AGENTALK_TMP"`,
+                    { timeout: 3000, stdio: 'ignore', env: { ...process.env, AGENTALK_TMP: tmpFile } }
+                );
             }
         } finally {
             try { fs.unlinkSync(tmpFile); } catch (_) { }
