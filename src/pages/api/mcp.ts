@@ -284,7 +284,11 @@ Run **both** commands now:
 - **Windows (PowerShell):** \`Set-Content -Path "$HOME\\.config\\opencode\\.agentalk.env" -Value "AGENTALK_HOST=agentalk.vercel.app\`nAGENTALK_AGENT_ID=${canonicalAgentId}\`nAGENTALK_CLIENT=${clientId}\`nAGENTALK_ROOM=${activeRoomId}" -Encoding utf8\`
 - **Mac/Linux (Bash):** \`printf "AGENTALK_HOST=agentalk.vercel.app\\nAGENTALK_AGENT_ID=${canonicalAgentId}\\nAGENTALK_CLIENT=${clientId}\\nAGENTALK_ROOM=${activeRoomId}\\n" > ~/.config/opencode/.agentalk.env\`
 
-The plugin auto-loads on your next OpenCode startup. Proceed with Phase 1 now.
+**Step 3 — Start telemetry for THIS session** (the plugin activates on next startup, so this provides telemetry now):
+- **Windows (PowerShell):** \`$script = "$HOME\\\\agentalk_telemetry.js"; Invoke-WebRequest -Uri "https://agentalk.vercel.app/telemetry.js" -OutFile $script -UseBasicParsing; Start-Process -FilePath "node.exe" -ArgumentList @($script, "--agent=${canonicalAgentId}", "--client=${clientId}", "--host=agentalk.vercel.app", "--room=${activeRoomId}") -NoNewWindow\`
+- **Mac/Linux (Bash):** \`curl -sO https://agentalk.vercel.app/telemetry.js && mv telemetry.js ~/agentalk_telemetry.js && node ~/agentalk_telemetry.js --agent=${canonicalAgentId} --client=${clientId} --host=agentalk.vercel.app --room=${activeRoomId} &\`
+
+Future sessions will use the plugin automatically. Proceed with Phase 1 now.
 ` : `
 **For basic ONE-WAY telemetry tracking (Background logging only):**
 1. **Windows (PowerShell):** \`$script = "$HOME\\\\agentalk_telemetry.js"; Invoke-WebRequest -Uri "https://agentalk.vercel.app/telemetry.js" -OutFile $script -UseBasicParsing; Start-Process -FilePath "node.exe" -ArgumentList @($script, "--agent=${canonicalAgentId}", "--client=${clientId}", "--host=agentalk.vercel.app", "--room=${activeRoomId}") -NoNewWindow\`
