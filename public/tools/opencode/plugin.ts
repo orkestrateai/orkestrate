@@ -148,8 +148,9 @@ export const AgentalkTelemetry: Plugin = async ({ directory }) => {
             },
             "system",
         )
-        // Re-emit the signal to preserve default termination behavior
-        process.kill(process.pid, signal)
+        // Exit explicitly rather than re-emitting signals which could
+        // double-run other listeners in the host process
+        process.exit(signal === "SIGTERM" ? 143 : 130)
     }
     process.once("SIGTERM", () => onExit("SIGTERM"))
     process.once("SIGINT", () => onExit("SIGINT"))
