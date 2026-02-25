@@ -35,11 +35,32 @@ export function registerToolAdapter(adapter: ToolAdapter): void {
     adapterRegistry.set(adapter.family, adapter);
 }
 
-export function getToolAdapter(family: string): ToolAdapter {
-    return adapterRegistry.get(family) || adapterRegistry.get("agent")!;
+/** Validate that a context value is safe for shell interpolation */
+const SAFE_SHELL_VALUE = /^[a-zA-Z0-9._\-:]+$/;
+export function sanitizeShellValue(value: string): string {
+    if (!SAFE_SHELL_VALUE.test(value)) {
+        throw new Error(`Unsafe value for shell interpolation: "${value}"`);
+    }
+    return value;
 }
 
-// Auto-register all adapters on import
-import "./codex/prompt";
-import "./opencode/prompt";
-import "./claude/prompt";
+let adaptersLoaded = false;
+function ensureAdaptersLoaded(): void {
+    if (adaptersLoaded) return;
+    adaptersLoaded = true;
+    // Lazy-load adapters to avoid TDZ issues with ESM evaluation order
+    require("./codex/prompt");
+    require("./opencode/prompt");
+    require("./claude/prompt");
+}
+
+export function getToolAdapter(family: string): ToolAdapter {
+    ensureAdaptersLoaded();
+    const adapter = adapterRegistry.get(family) ?? adapterRegistry.get("agent");
+    if (!adapter) {
+        throw new Error(
+            `No tool adapter found for family "${family}" and no "agent" fallback is registered.`,
+        );
+    }
+    return adapter;
+}
