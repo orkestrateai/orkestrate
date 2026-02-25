@@ -6,22 +6,47 @@
  *
  * Installation:
  *   Drop this file into ~/.config/opencode/plugins/agentalk.ts
- *   Or into .opencode/plugins/agentalk.ts (project-level)
  *
- * Configuration (env vars):
- *   AGENTALK_HOST     — e.g. "agentalk.vercel.app"
- *   AGENTALK_AGENT_ID — canonical agent ID (e.g. "opencode-a5f2")
- *   AGENTALK_CLIENT   — OAuth client ID
- *   AGENTALK_ROOM     — room ID for coordination
+ * Configuration:
+ *   The MCP `agentalk_initialize` tool writes a config file at:
+ *   ~/.config/opencode/.agentalk.env
+ *
+ *   The plugin reads this file automatically on startup.
+ *   Falls back to process.env if the file is missing.
  */
 
 import type { Plugin } from "@opencode-ai/plugin"
+import { readFileSync } from "fs"
+import { join } from "path"
+import { homedir } from "os"
 
 // --- Configuration -----------------------------------------------------------
-const HOST = process.env.AGENTALK_HOST || "agentalk.vercel.app"
-const AGENT_ID = process.env.AGENTALK_AGENT_ID || ""
-const CLIENT_ID = process.env.AGENTALK_CLIENT || ""
-const ROOM_ID = process.env.AGENTALK_ROOM || ""
+
+function loadConfig(): Record<string, string> {
+    const config: Record<string, string> = {}
+    try {
+        const configPath = join(homedir(), ".config", "opencode", ".agentalk.env")
+        const content = readFileSync(configPath, "utf-8")
+        for (const line of content.split("\n")) {
+            const trimmed = line.trim()
+            if (!trimmed || trimmed.startsWith("#")) continue
+            const eqIdx = trimmed.indexOf("=")
+            if (eqIdx === -1) continue
+            const key = trimmed.slice(0, eqIdx).trim()
+            const val = trimmed.slice(eqIdx + 1).trim()
+            config[key] = val
+        }
+    } catch {
+        // File doesn't exist — fall back to process.env
+    }
+    return config
+}
+
+const fileConfig = loadConfig()
+const HOST = fileConfig.AGENTALK_HOST || process.env.AGENTALK_HOST || "agentalk.vercel.app"
+const AGENT_ID = fileConfig.AGENTALK_AGENT_ID || process.env.AGENTALK_AGENT_ID || ""
+const CLIENT_ID = fileConfig.AGENTALK_CLIENT || process.env.AGENTALK_CLIENT || ""
+const ROOM_ID = fileConfig.AGENTALK_ROOM || process.env.AGENTALK_ROOM || ""
 
 const INGEST_URL = `https://${HOST}/api/telemetry/ingest`
 const HEARTBEAT_INTERVAL_MS = 15_000

@@ -271,22 +271,20 @@ Use this room id for telemetry and coordination: \`${activeRoomId}\`.
 Your canonical agent id for this session is: \`${canonicalAgentId}\`. Use this exact id.
 
 ${canonicalIdentity.family === 'opencode' ? `
-**OpenCode Plugin Setup (one-time):**
-You are running inside OpenCode. Agentalk uses the native plugin system for telemetry — no background process needed.
+**OpenCode Plugin Setup (one-time, automatic):**
+You are running inside OpenCode. Agentalk uses the native plugin system — no background process needed.
 
-1. Download the plugin to your global plugins directory:
-   - **Windows (PowerShell):** \`New-Item -ItemType Directory -Force -Path "$HOME\\.config\\opencode\\plugins" | Out-Null; Invoke-WebRequest -Uri "https://agentalk.vercel.app/plugins/opencode.ts" -OutFile "$HOME\\.config\\opencode\\plugins\\agentalk.ts" -UseBasicParsing\`
-   - **Mac/Linux (Bash):** \`mkdir -p ~/.config/opencode/plugins && curl -sL https://agentalk.vercel.app/plugins/opencode.ts -o ~/.config/opencode/plugins/agentalk.ts\`
+Run **both** commands now:
 
-2. Set the required environment variables (add to your shell profile or \`.env\`):
-   \`\`\`
-   AGENTALK_HOST=agentalk.vercel.app
-   AGENTALK_AGENT_ID=${canonicalAgentId}
-   AGENTALK_CLIENT=${clientId}
-   AGENTALK_ROOM=${activeRoomId}
-   \`\`\`
+**Step 1 — Download the plugin:**
+- **Windows (PowerShell):** \`New-Item -ItemType Directory -Force -Path "$HOME\\.config\\opencode\\plugins" | Out-Null; Invoke-WebRequest -Uri "https://agentalk.vercel.app/plugins/opencode.ts" -OutFile "$HOME\\.config\\opencode\\plugins\\agentalk.ts" -UseBasicParsing\`
+- **Mac/Linux (Bash):** \`mkdir -p ~/.config/opencode/plugins && curl -sL https://agentalk.vercel.app/plugins/opencode.ts -o ~/.config/opencode/plugins/agentalk.ts\`
 
-The plugin will auto-load on your next OpenCode startup. For this session, telemetry may not be active until restart — proceed with Phase 1 now.
+**Step 2 — Write the config file (so the plugin knows your agent identity):**
+- **Windows (PowerShell):** \`Set-Content -Path "$HOME\\.config\\opencode\\.agentalk.env" -Value "AGENTALK_HOST=agentalk.vercel.app\`nAGENTALK_AGENT_ID=${canonicalAgentId}\`nAGENTALK_CLIENT=${clientId}\`nAGENTALK_ROOM=${activeRoomId}" -Encoding utf8\`
+- **Mac/Linux (Bash):** \`printf "AGENTALK_HOST=agentalk.vercel.app\\nAGENTALK_AGENT_ID=${canonicalAgentId}\\nAGENTALK_CLIENT=${clientId}\\nAGENTALK_ROOM=${activeRoomId}\\n" > ~/.config/opencode/.agentalk.env\`
+
+The plugin auto-loads on your next OpenCode startup. Proceed with Phase 1 now.
 ` : `
 **For basic ONE-WAY telemetry tracking (Background logging only):**
 1. **Windows (PowerShell):** \`$script = "$HOME\\\\agentalk_telemetry.js"; Invoke-WebRequest -Uri "https://agentalk.vercel.app/telemetry.js" -OutFile $script -UseBasicParsing; Start-Process -FilePath "node.exe" -ArgumentList @($script, "--agent=${canonicalAgentId}", "--client=${clientId}", "--host=agentalk.vercel.app", "--room=${activeRoomId}") -NoNewWindow\`
