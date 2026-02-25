@@ -167,17 +167,17 @@ function sendLogSync(message, eventName = 'log') {
         fs.writeFileSync(tmpFile, body, { mode: 0o600 });
 
         try {
+            // Pass all dynamic values via env vars — never interpolate into shell strings
+            const shellEnv = { ...process.env, AGENTALK_TMP: tmpFile, AGENTALK_URL: INGEST_URL };
             if (process.platform === 'win32') {
-                // Pass path via env var to avoid shell interpolation issues with quotes/spaces
                 execSync(
-                    `powershell -Command "$f = [System.Environment]::GetEnvironmentVariable('AGENTALK_TMP'); Invoke-WebRequest -Uri '${INGEST_URL}' -Method POST -Body (Get-Content -LiteralPath $f -Raw) -ContentType 'application/json' -UseBasicParsing"`,
-                    { timeout: 3000, stdio: 'ignore', env: { ...process.env, AGENTALK_TMP: tmpFile } }
+                    `powershell -Command "$f = [System.Environment]::GetEnvironmentVariable('AGENTALK_TMP'); $u = [System.Environment]::GetEnvironmentVariable('AGENTALK_URL'); Invoke-WebRequest -Uri $u -Method POST -Body (Get-Content -LiteralPath $f -Raw) -ContentType 'application/json' -UseBasicParsing"`,
+                    { timeout: 3000, stdio: 'ignore', env: shellEnv }
                 );
             } else {
-                // Pass path via env var for POSIX too
                 execSync(
-                    `curl -s -X POST '${endpoint.protocol}//${endpoint.hostname}:${endpoint.port}${INGEST_PATH}' -H 'Content-Type: application/json' -d @"$AGENTALK_TMP"`,
-                    { timeout: 3000, stdio: 'ignore', env: { ...process.env, AGENTALK_TMP: tmpFile } }
+                    `curl -s -X POST "$AGENTALK_URL" -H 'Content-Type: application/json' -d @"$AGENTALK_TMP"`,
+                    { timeout: 3000, stdio: 'ignore', env: shellEnv }
                 );
             }
         } finally {
