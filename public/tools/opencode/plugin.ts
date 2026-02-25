@@ -127,10 +127,16 @@ export const AgentalkTelemetry: Plugin = async ({ directory }) => {
         )
     }, HEARTBEAT_INTERVAL_MS)
 
+    // Unref so the timer doesn't prevent the process from exiting naturally
+    heartbeatTimer.unref()
+
     // Clean up on exit — use signals instead of beforeExit (which is unreliable
     // and keeps the event loop alive via the interval timer)
-    const onExit = () => {
+    const onExit = (signal: NodeJS.Signals) => {
         clearInterval(heartbeatTimer)
+        // Note: async sendTelemetry won't complete on process exit — this is
+        // best-effort. The heartbeat timeout on the server will detect the
+        // disconnect within HEARTBEAT_INTERVAL_MS anyway.
         sendTelemetry(
             {
                 type: "disconnect",
@@ -142,9 +148,11 @@ export const AgentalkTelemetry: Plugin = async ({ directory }) => {
             },
             "system",
         )
+        // Re-emit the signal to preserve default termination behavior
+        process.kill(process.pid, signal)
     }
-    process.once("SIGTERM", onExit)
-    process.once("SIGINT", onExit)
+    process.once("SIGTERM", () => onExit("SIGTERM"))
+    process.once("SIGINT", () => onExit("SIGINT"))
 
     return {
         // --- Event-based telemetry -----------------------------------------------
