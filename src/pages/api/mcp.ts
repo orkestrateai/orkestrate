@@ -273,9 +273,12 @@ export default async function handler(
         }
 
         // Build prompt using adapter + shared prompt builder
-        const reconnection: ReconnectionState | null = existingState
-          ? { stateContent: existingState.stateContent, lastPingAt: existingState.lastPingAt }
-          : null;
+        // Only treat as reconnection if the agent had an active (non-idle) objective
+        const reconnection: ReconnectionState | null =
+          existingState &&
+            existingState.stateContent.currentObjective !== "Standing by for next task."
+            ? { stateContent: existingState.stateContent, lastPingAt: existingState.lastPingAt }
+            : null;
         const promptRules = buildAgentalkPrompt(
           canonicalIdentity.family,
           {

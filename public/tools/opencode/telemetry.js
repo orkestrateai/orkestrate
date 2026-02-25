@@ -161,10 +161,18 @@ function sendLogSync(message, eventName = 'log') {
         const { execSync } = require('child_process');
         const body = JSON.stringify({ message, event: eventName });
 
-        if (process.platform === 'win32') {
-            execSync(`powershell -Command "Invoke-WebRequest -Uri '${INGEST_URL}' -Method POST -Body '${body.replace(/'/g, "''")}' -ContentType 'application/json' -UseBasicParsing" 2>$null`, { timeout: 3000, stdio: 'ignore' });
-        } else {
-            execSync(`curl -s -X POST "${INGEST_URL}" -H "Content-Type: application/json" -d '${body.replace(/'/g, "'\\''")}'`, { timeout: 3000, stdio: 'ignore' });
+        // Write body to a temp file to avoid shell injection via interpolation
+        const tmpFile = path.join(os.tmpdir(), `agentalk_sync_${process.pid}.json`);
+        fs.writeFileSync(tmpFile, body);
+
+        try {
+            if (process.platform === 'win32') {
+                execSync(`powershell -Command "Invoke-WebRequest -Uri '${INGEST_URL}' -Method POST -Body (Get-Content -Raw '${tmpFile}') -ContentType 'application/json' -UseBasicParsing" 2>$null`, { timeout: 3000, stdio: 'ignore' });
+            } else {
+                execSync(`curl -s -X POST '${endpoint.protocol}//${endpoint.hostname}:${endpoint.port}${INGEST_PATH}' -H 'Content-Type: application/json' -d @'${tmpFile}'`, { timeout: 3000, stdio: 'ignore' });
+            }
+        } finally {
+            try { fs.unlinkSync(tmpFile); } catch (_) { }
         }
     } catch (e) {
         // Best effort only.
