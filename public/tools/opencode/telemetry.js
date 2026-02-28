@@ -12,7 +12,7 @@ function getArg(prefix, fallback = '') {
 
 const agentType = getArg('--agent=', 'generic');
 const clientId = getArg('--client=', 'unknown-agent');
-const host = getArg('--host=', 'agentalk.vercel.app');
+const host = getArg('--host=', 'orkestrate.vercel.app');
 const roomId = getArg('--room=', 'unassigned');
 
 function resolveEndpoint(hostValue) {
@@ -41,7 +41,7 @@ const INGEST_URL = `${endpoint.protocol}//${endpoint.hostname}:${endpoint.port}$
 
 // Keep one telemetry process per client/room/host tuple.
 // If agent id changes unexpectedly, this still guarantees one active streamer.
-const PID_DIR = path.join(os.tmpdir(), 'agentalk');
+const PID_DIR = path.join(os.tmpdir(), 'orkestrate');
 const pidIdentity = `${clientId}|${roomId}|${endpoint.hostname}:${endpoint.port}`;
 const pidKey = crypto.createHash('sha1').update(pidIdentity).digest('hex').slice(0, 12);
 const PID_FILE = path.join(PID_DIR, `telemetry-${pidKey}.pid`);
@@ -345,7 +345,20 @@ function startOpenCodeTailing() {
         try {
             db = new DatabaseSync(dbPath, { open: true });
 
-            const rows = db.prepare('SELECT data, time_created FROM part WHERE time_created > ? ORDER BY time_created ASC').all(lastTimeCreated);
+            // Query parts joined with sessions to get the sessionID (local_id in opencode)
+            const query = `
+                SELECT 
+                    p.data, 
+                    p.time_created, 
+                    s.local_id as session_id,
+                    s.title as session_title
+                FROM part p
+                LEFT JOIN session s ON p.session_id = s.id
+                WHERE p.time_created > ? 
+                ORDER BY p.time_created ASC
+            `;
+
+            const rows = db.prepare(query).all(lastTimeCreated);
             for (const row of rows) {
                 if (row.time_created > lastTimeCreated) {
                     lastTimeCreated = row.time_created;
@@ -358,6 +371,9 @@ function startOpenCodeTailing() {
                         timestamp: new Date((parsed.time && parsed.time.start) || row.time_created || Date.now()).toISOString(),
                         type: parsed.type || 'unknown_event',
                         payload: parsed,
+                        // AUTHORITATIVE SESSION DATA
+                        sessionID: row.session_id,
+                        sessionTitle: row.session_title
                     };
                     sendLog(JSON.stringify(formattedLog));
                 } catch (e) {
@@ -397,4 +413,3 @@ process.stdin.on('data', (data) => {
         sendLog(text);
     }
 });
-

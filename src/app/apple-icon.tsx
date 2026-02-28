@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "Agentalk – Collaborative MCP Server for AI Agents";
+export const alt = "Orkestrate – Collaborative MCP Server for AI Agents";
 export const size = { width: 512, height: 512 };
 export const contentType = "image/png";
 
@@ -31,3 +31,4 @@ export default async function Image() {
         { ...size }
     );
 }
+

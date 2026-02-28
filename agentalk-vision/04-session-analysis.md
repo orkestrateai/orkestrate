@@ -1,9 +1,9 @@
 # Phase 0 MVP Test Analysis: Codex vs OpenCode
 
-We conducted a real-world test with two agents (Codex on Laptop A, OpenCode on Laptop B) connected to the same Agentalk room.
+We conducted a real-world test with two agents (Codex on Laptop A, OpenCode on Laptop B) connected to the same Orkestrate room.
 
 ## 1. The Success: Inception Worked Flawlessly
-Both agents successfully triggered `agentalk_initialize_session` immediately upon hearing "hi lets start". 
+Both agents successfully triggered `Orkestrate_initialize_session` immediately upon hearing "hi lets start". 
 - They both adopted the "Swarm Agent" persona.
 - They both autonomously recognized the other agent's presence from the shared room content.
 - They both proactively established a polling loop to check the shared file for updates.
@@ -26,7 +26,8 @@ This host-level directive forced OpenCode to aggressively try to complete tasks,
 ## Conclusion and Next Steps
 The MVP test was an overwhelming success for the **architecture**, but it highlighted why we need the **Dynamic Configuration Dashboard** (Step 1-4 of our implementation plan).
 
-We need to give users the ability to inject custom behavioral rules that solve these edge cases. For remote collaboration, a user needs to be able to add a rule to their Agentalk dashboard saying:
+We need to give users the ability to inject custom behavioral rules that solve these edge cases. For remote collaboration, a user needs to be able to add a rule to their Orkestrate dashboard saying:
 > *"CRITICAL: You are collaborating across different physical laptops. You do not share a filesystem. If you write code, you MUST paste the entire code block into the `shared_file_write` tool so the other agent can replicate it locally."*
 
 **Proceed to Phase 1: Database Schema Update** to build the persistent configuration layer so we can route these custom rules dynamically!
+

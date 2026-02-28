@@ -31,7 +31,9 @@ export function splitScopedClientId(clientId: unknown): ScopedClientParts {
 }
 
 export function buildScopedClientId(clientBaseId: string, agentId: string): string {
-  return `${clientBaseId}::${agentId}`;
+  const sanitizedClient = clientBaseId.trim() || "unknown-client";
+  const sanitizedAgent = sanitizeAgentId(agentId) || "unknown-agent";
+  return `${sanitizedClient}::${sanitizedAgent}`;
 }
 
 export function getDisplayAgentIdFromScopedClientId(clientId: string): string {

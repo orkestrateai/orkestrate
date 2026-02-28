@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect width="32" height="32" rx="8" fill="#0a0a0a"/>
-  <path d="M8 13 C8 10.5, 10 9, 13 9 L17 9 C19.5 9, 21 10.5, 21 13 L21 16 C21 18.5, 19.5 19.5, 17 19.5 L14.5 19.5 L12 22 L12.5 19.5 L11 19.5 C9.5 19.5, 8 18.5, 8 16 Z" fill="#34d399" opacity="0.9"/>
-  <path d="M12 14 C12 11.8, 13.8 10.5, 16 10.5 L20 10.5 C22.5 10.5, 24 11.8, 24 14 L24 17 C24 19, 22.5 20, 20 20 L19.5 20 L20 22.5 L17.5 20 L16 20 C13.8 20, 12 19, 12 17 Z" fill="#0a0a0a" stroke="#34d399" stroke-width="1.2"/>
-  <circle cx="16.5" cy="15.5" r="1.2" fill="#34d399"/>
-  <circle cx="19" cy="15.5" r="1.2" fill="#34d399"/>
-  <circle cx="21.5" cy="15.5" r="1.2" fill="#34d399"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="10" fill="#111214"/>
+  <path d="M24 42L4 32L24 22L44 32Z" stroke="rgba(242,242,242,0.35)" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M24 34L4 24L24 14L44 24Z" stroke="rgba(242,242,242,0.6)" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M24 34L4 24L24 14L44 24Z" fill="rgba(242,242,242,0.08)"/>
+  <path d="M24 26L4 16L24 6L44 16Z" stroke="#F2F2F2" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M24 26L4 16L24 6L44 16Z" fill="rgba(242,242,242,0.14)"/>
 </svg>
