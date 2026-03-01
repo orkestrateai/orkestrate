@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "Orkestrate": {
+      "type": "http",
+      "url": "https://orkestrate.vercel.app/api/mcp"
+    }
+  }
+}

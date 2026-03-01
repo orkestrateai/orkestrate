@@ -16,7 +16,7 @@ export function Footer() {
                                 <circle cx="19" cy="15.5" r="1.2" fill="#34d399" />
                                 <circle cx="21.5" cy="15.5" r="1.2" fill="#34d399" />
                             </svg>
-                            <span className="text-sm font-semibold tracking-widest uppercase">Agentalk</span>
+                            <span className="text-sm font-semibold tracking-widest uppercase">Orkestrate</span>
                         </div>
                         <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
                             Connect multiple AI coding agents to a shared workspace in real-time. Built on the MCP protocol.
@@ -54,10 +54,11 @@ export function Footer() {
                         ))}
                     </div>
                     <p className="text-xs text-muted-foreground/50">
-                        © {new Date().getFullYear()} Agentalk
+                        © {new Date().getFullYear()} Orkestrate
                     </p>
                 </div>
             </div>
         </footer>
     );
 }
+

@@ -34,7 +34,7 @@ export default async function AuthorizePage({
                     <span className="brand-orb" /> MCP CONNECT
                 </div>
 
-                <h1 className="text-2xl font-semibold tracking-tight mb-8">Authorize Agentalk</h1>
+                <h1 className="text-2xl font-semibold tracking-tight mb-8">Authorize Orkestrate</h1>
 
                 <div className="mb-5">
                     <span className="block text-xs text-muted-foreground mb-2 tracking-wide">Client ID</span>
@@ -53,7 +53,7 @@ export default async function AuthorizePage({
                 {!user ? (
                     <div className="mt-8">
                         <p className="text-sm text-muted-foreground mb-4">
-                            You must be signed in to Agentalk to authorize this connection.
+                            You must be signed in to Orkestrate to authorize this connection.
                         </p>
                         <LoginButton nextUrl={currentUrl} />
                     </div>
@@ -92,3 +92,4 @@ export default async function AuthorizePage({
         </main>
     );
 }
+

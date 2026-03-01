@@ -1,9 +1,17 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { and, desc, eq, gte, like, or } from 'drizzle-orm';
+import { and, desc, eq, gte, like, or, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { agentStates, agentTelemetry, roomMemberships } from '@/db/schema';
+import { agentSessions, agentStates, agentTelemetry, roomMemberships } from '@/db/schema';
 import { buildScopedClientId, normalizeTelemetryScopedClientId, sanitizeAgentId, splitScopedClientId } from '@/lib/agent-identity';
+import { getWorkspaceCanonicalRemote, normalizeCanonicalRemote } from '@/lib/repo-identity';
+import {
+    computePatchHash,
+    detectClaimConflictsForEdit,
+    normalizePathLike,
+    recordAgentActivity,
+    recordConflictAlerts,
+} from '@/lib/agent-activity';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -12,18 +20,102 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const authClient = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 type TelemetryLifecycle = 'connect' | 'disconnect' | 'heartbeat' | null;
+type ObservedActivityType = 'file_edit_observed' | 'commit_observed';
 
-function parseTelemetryLifecycle(rawMessage: unknown): TelemetryLifecycle {
-    if (typeof rawMessage !== 'string') return null;
-    try {
-        const parsed = JSON.parse(rawMessage);
-        if (parsed?.type === 'connect') return 'connect';
-        if (parsed?.type === 'disconnect') return 'disconnect';
-        if (parsed?.type === 'heartbeat') return 'heartbeat';
-    } catch {
-        return null;
+type ObservedActivityEvent = {
+    eventType: ObservedActivityType;
+    payload: Record<string, unknown>;
+    repo: Record<string, unknown>;
+};
+
+function parseTelemetryLifecycle(body: Record<string, unknown>): TelemetryLifecycle {
+    // New format: top-level `type` field
+    const topType = body?.type;
+    if (topType === 'connect') return 'connect';
+    if (topType === 'disconnect') return 'disconnect';
+    if (topType === 'heartbeat') return 'heartbeat';
+
+    // Claude Code HTTP hook format: hook_event_name field
+    const hookEvent = body?.hook_event_name;
+    if (hookEvent === 'SessionStart') return 'connect';
+    if (hookEvent === 'SessionEnd') return 'disconnect';
+
+    // New format: `event` field set to 'heartbeat'
+    if (body?.event === 'heartbeat') return 'heartbeat';
+
+    // Standalone `telemetry.js` format: structured fields but potentially stringified message
+    if (body?.event === 'system' || body?.event === 'log') {
+        const payloadData = body.payload ? (body.payload as any) : null;
+        if (payloadData?.type === 'connect') return 'connect';
+        if (payloadData?.type === 'disconnect') return 'disconnect';
+        if (payloadData?.type === 'heartbeat') return 'heartbeat';
+    }
+
+    // Legacy format/double stringified: stringified message
+    if (typeof body?.message === 'string') {
+        try {
+            const parsed = JSON.parse(body.message as string);
+            if (parsed?.type === 'connect') return 'connect';
+            if (parsed?.type === 'disconnect') return 'disconnect';
+            if (parsed?.type === 'heartbeat') return 'heartbeat';
+        } catch { /* not JSON */ }
     }
     return null;
+}
+
+function normalizeRepoObject(input: unknown): Record<string, unknown> {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+    const obj = input as Record<string, unknown>;
+    return {
+        canonicalRemote: typeof obj.canonicalRemote === 'string' ? obj.canonicalRemote : undefined,
+        branch: typeof obj.branch === 'string' ? obj.branch : undefined,
+        headSha: typeof obj.headSha === 'string' ? obj.headSha : undefined,
+        dirty: typeof obj.dirty === 'boolean' ? obj.dirty : undefined,
+    };
+}
+
+function maybeExtractActivity(payload: unknown): ObservedActivityEvent | null {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+    const obj = payload as Record<string, unknown>;
+    const rawType = typeof obj.type === 'string' ? obj.type : '';
+    if (rawType !== 'file_edit_observed' && rawType !== 'commit_observed') {
+        return null;
+    }
+
+    const payloadObject =
+        obj.payload && typeof obj.payload === 'object' && !Array.isArray(obj.payload)
+            ? (obj.payload as Record<string, unknown>)
+            : {};
+
+    const repo = normalizeRepoObject((obj as any).repo ?? payloadObject.repo);
+    return {
+        eventType: rawType,
+        payload: payloadObject,
+        repo,
+    };
+}
+
+function parseObservedActivityEvents(body: Record<string, unknown>): ObservedActivityEvent[] {
+    const events: ObservedActivityEvent[] = [];
+    const seen = new Set<string>();
+    const pushUnique = (event: ObservedActivityEvent | null) => {
+        if (!event) return;
+        const key = `${event.eventType}:${JSON.stringify(event.payload)}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        events.push(event);
+    };
+
+    // Primary path: plugin/hook emits event='activity'
+    if (body.event === 'activity') {
+        pushUnique(maybeExtractActivity(body));
+        pushUnique(maybeExtractActivity(body.payload));
+    }
+
+    // Secondary path: top-level type-only payload
+    pushUnique(maybeExtractActivity(body));
+
+    return events;
 }
 
 async function inferUserFromRoomMembership(roomId: string): Promise<string | null> {
@@ -86,7 +178,11 @@ async function resolveTelemetryUserId(
                 lastPingAt: agentStates.lastPingAt,
             })
             .from(agentStates)
-            .where(and(gte(agentStates.lastPingAt, since), or(...candidateClauses)))
+            .where(and(
+                eq(agentStates.projectId, roomId),
+                gte(agentStates.lastPingAt, since),
+                or(...candidateClauses),
+            ))
             .orderBy(desc(agentStates.lastPingAt))
             .limit(20);
 
@@ -134,7 +230,7 @@ async function touchAgentSessionState(params: {
 
     const initialObjective =
         params.lifecycle === 'connect'
-            ? 'Agentalk initialized and ready to receive tasks.'
+            ? 'Orkestrate initialized and ready to receive tasks.'
             : 'Waiting for tasks';
 
     await db.insert(agentStates).values({
@@ -142,18 +238,130 @@ async function touchAgentSessionState(params: {
         projectId: params.roomId,
         clientId: scopedClientId,
         stateContent: {
-            agentProfile: 'Idle',
-            currentObjective: initialObjective,
-            architectureFootprint: [],
-            implementationPlan: [],
-            notesForTeam: 'None',
-            pastWorkSummary: [],
+            status: 'active',
+            objective: initialObjective,
+            claimedPaths: [],
+            plan: [],
+            notes: 'None',
+            completed: [],
+            repo: {},
+            agentProfile: 'Agent',
         },
         stateHash: Math.random().toString(36).slice(2, 12),
         lastPingAt: now,
         pingCount: 1,
         windowStartAt: now,
     });
+}
+
+/**
+ * Ensures a session record exists in agent_sessions and returns its UUID.
+ */
+async function resolveOrCreateSession(params: {
+    userId: string;
+    roomId: string;
+    scopedAgentId: string;
+    externalSessionId?: string;
+    sessionTitle?: string;
+}): Promise<string | null> {
+    const { userId, roomId, scopedAgentId, externalSessionId, sessionTitle } = params;
+
+    // 1. If we have an externalSessionId (e.g. from OpenCode SQLite), try to find/update it.
+    if (externalSessionId) {
+        // A. Direct check for existing record with this external ID
+        const existing = await db.query.agentSessions.findFirst({
+            where: and(
+                eq(agentSessions.userId, userId),
+                eq(agentSessions.roomId, roomId),
+                eq(agentSessions.scopedAgentId, scopedAgentId),
+                sql`${agentSessions.metadata}->>'externalSessionId' = ${externalSessionId}`
+            )
+        });
+
+        if (existing) {
+            // Update title if it has changed
+            if (sessionTitle && existing.title !== sessionTitle && sessionTitle !== 'New Session') {
+                await db.update(agentSessions).set({ title: sessionTitle }).where(eq(agentSessions.id, existing.id));
+            }
+            return existing.id;
+        }
+
+        // B. UPGRADE CHECK: Did we just create a "Heuristic" session for this agent in the last 5 minutes?
+        // If so, adopt it instead of creating a new one. This prevents the "pings vs real sessions" split.
+        const recentHeuristic = await db.query.agentSessions.findFirst({
+            where: and(
+                eq(agentSessions.userId, userId),
+                eq(agentSessions.roomId, roomId),
+                eq(agentSessions.scopedAgentId, scopedAgentId),
+                sql`${agentSessions.metadata} IS NULL OR ${agentSessions.metadata}->>'externalSessionId' IS NULL`,
+                gte(agentSessions.createdAt, new Date(Date.now() - 5 * 60 * 1000))
+            ),
+            orderBy: desc(agentSessions.createdAt)
+        });
+
+        if (recentHeuristic) {
+            await db.update(agentSessions).set({
+                metadata: { externalSessionId },
+                title: sessionTitle || recentHeuristic.title
+            }).where(eq(agentSessions.id, recentHeuristic.id));
+            return recentHeuristic.id;
+        }
+
+        // C. Not found, attempt insert (watching for race condition)
+        try {
+            const [inserted] = await db.insert(agentSessions).values({
+                userId,
+                roomId,
+                scopedAgentId,
+                title: sessionTitle || 'New Session',
+                metadata: { externalSessionId },
+                status: 'active',
+            }).returning({ id: agentSessions.id });
+
+            return inserted.id;
+        } catch (err: any) {
+            // If unique violation (23505), someone else just created it. Fetch and return that one.
+            if (err?.code === '23505') {
+                const raced = await db.query.agentSessions.findFirst({
+                    where: and(
+                        eq(agentSessions.userId, userId),
+                        eq(agentSessions.roomId, roomId),
+                        eq(agentSessions.scopedAgentId, scopedAgentId),
+                        sql`${agentSessions.metadata}->>'externalSessionId' = ${externalSessionId}`
+                    )
+                });
+                return raced?.id || null;
+            }
+            throw err;
+        }
+    }
+
+    // 2. Fallback: No external original ID. Try to find the most recent active session for this agent.
+    const recent = await db.query.agentSessions.findFirst({
+        where: and(
+            eq(agentSessions.userId, userId),
+            eq(agentSessions.roomId, roomId),
+            eq(agentSessions.scopedAgentId, scopedAgentId),
+            eq(agentSessions.status, 'active')
+        ),
+        orderBy: desc(agentSessions.createdAt)
+    });
+
+    // If there's an active session from the last hour, use it.
+    if (recent && (Date.now() - recent.createdAt.getTime()) < 60 * 60 * 1000) {
+        return recent.id;
+    }
+
+    // Otherwise, create a new "Heuristic" session
+    const [inserted] = await db.insert(agentSessions).values({
+        userId,
+        roomId,
+        scopedAgentId,
+        title: 'New Session',
+        status: 'active',
+    }).returning({ id: agentSessions.id });
+
+    return inserted.id;
 }
 
 export async function POST(req: NextRequest) {
@@ -168,72 +376,233 @@ export async function POST(req: NextRequest) {
         if (!parsedBody || typeof parsedBody !== 'object' || Array.isArray(parsedBody)) {
             return new Response('Invalid payload', { status: 400 });
         }
+        const observedActivityEvents = parseObservedActivityEvents(parsedBody as Record<string, unknown>);
 
-        let message = typeof parsedBody.message === 'string' ? parsedBody.message : JSON.stringify(parsedBody.message ?? '');
+        // Extract lifecycle
+        const lifecycle = parseTelemetryLifecycle(parsedBody);
+
+        // Resolve User
+        const inferredUserId = await resolveTelemetryUserId(req, clientId, agent, roomId);
+
+        // For heartbeats: touch state but don't record telemetry
+        if (lifecycle === 'heartbeat') {
+            if (inferredUserId) {
+                try {
+                    await touchAgentSessionState({ userId: inferredUserId, roomId, clientId, agent, lifecycle });
+                } catch (e) {
+                    console.error('[Telemetry] Failed to touch agent state on heartbeat:', e);
+                }
+            }
+            return new Response('ok', { status: 200 });
+        }
+
+        // For connect/disconnect, touch state
+        if (inferredUserId && (lifecycle === 'connect' || lifecycle === 'disconnect')) {
+            try {
+                await touchAgentSessionState({ userId: inferredUserId, roomId, clientId, agent, lifecycle });
+            } catch (e) {
+                console.error('[Telemetry] Failed to upsert agent session state:', e);
+            }
+        }
+
+        // Session Resolution (authoritative registration)
+        let sessionId: string | null = null;
+        if (inferredUserId) {
+            // Extract potential session metadata from payload
+            // Support both camelCase (OpenCode) and snake_case (Claude Code hooks)
+            const externalSessionId =
+                parsedBody.sessionID ||
+                parsedBody.session_id ||
+                (parsedBody.payload as any)?.sessionID ||
+                (parsedBody.payload as any)?.session_id ||
+                (parsedBody.payload as any)?.properties?.info?.sessionID;
+
+            const sessionTitle =
+                parsedBody.sessionTitle ||
+                (parsedBody.payload as any)?.sessionTitle;
+
+            try {
+                sessionId = await resolveOrCreateSession({
+                    userId: inferredUserId,
+                    roomId,
+                    scopedAgentId,
+                    externalSessionId,
+                    sessionTitle
+                });
+            } catch (e) {
+                console.error('[Telemetry] Session resolution failed:', e);
+            }
+        }
+
+        // Build final record fields
+        // Claude Code hooks use `hook_event_name` (e.g. PostToolUse, SessionStart)
+        const eventType =
+            (typeof parsedBody.hook_event_name === 'string' && parsedBody.hook_event_name) ||
+            (typeof parsedBody.type === 'string' && parsedBody.type) ||
+            (typeof parsedBody.event === 'string' && parsedBody.event) ||
+            'log';
+
+        let message: string;
+        if (typeof parsedBody.message === 'string') {
+            message = parsedBody.message;
+        } else {
+            message = JSON.stringify(parsedBody);
+        }
         if (message.length > 200_000) {
             const dropped = message.length - 200_000;
             message = `${message.slice(0, 200_000)}\n...[truncated ${dropped} chars]`;
         }
-
-        let nestedType: string | undefined;
-        if (typeof parsedBody.message === 'string') {
-            try {
-                const nested = JSON.parse(parsedBody.message);
-                if (nested && typeof nested.type === 'string') {
-                    nestedType = nested.type;
-                }
-            } catch {
-                // Not JSON; expected for plain text logs.
-            }
-        }
-
-        const eventType =
-            (typeof parsedBody.event === 'string' && parsedBody.event) ||
-            (typeof parsedBody.type === 'string' && parsedBody.type) ||
-            nestedType ||
-            'log';
 
         const payloadData = {
             ...parsedBody,
             message,
             roomId,
             scopedAgentId,
+            sessionId, // Link the DB UUID
         };
 
         const createdAt = new Date();
-        const createdAtIso = createdAt.toISOString();
-        const inferredUserId = await resolveTelemetryUserId(req, clientId, agent, roomId);
-        const lifecycle = parseTelemetryLifecycle(message);
 
-        if (inferredUserId && (lifecycle === 'connect' || lifecycle === 'heartbeat' || lifecycle === 'disconnect')) {
-            try {
-                await touchAgentSessionState({
-                    userId: inferredUserId,
-                    roomId,
-                    clientId,
-                    agent,
-                    lifecycle,
-                });
-            } catch (e) {
-                console.error('[Telemetry] Failed to upsert agent session state:', e);
-            }
-        }
-
-        // 1. DB Insert (authoritative path)
+        // DB Insert
         await db.insert(agentTelemetry).values({
             userId: inferredUserId ?? null,
             roomId,
             clientId,
             agent,
+            sessionId: sessionId as any, // Drizzle type cast
             eventType,
-            payload: payloadData,
+            payload: payloadData as any,
             createdAt,
         });
 
-        // 2. Broadcast via Supabase Realtime REST API (best-effort)
+        const workspaceCanonicalRemote = observedActivityEvents.length > 0
+            ? normalizeCanonicalRemote(await getWorkspaceCanonicalRemote(roomId))
+            : null;
+
+        if (observedActivityEvents.length > 0) {
+            for (const activity of observedActivityEvents) {
+                const payload = { ...activity.payload };
+                const repo = activity.repo || {};
+                const receivedRemote = normalizeCanonicalRemote(
+                    typeof repo.canonicalRemote === 'string' ? repo.canonicalRemote : null,
+                );
+
+                if (
+                    workspaceCanonicalRemote &&
+                    receivedRemote &&
+                    workspaceCanonicalRemote !== receivedRemote
+                ) {
+                    await recordAgentActivity({
+                        workspaceId: roomId,
+                        scopedAgentId,
+                        sessionId,
+                        eventType: 'conflict_alert',
+                        repo,
+                        payload: {
+                            type: 'codebase_mismatch',
+                            sourceEventType: activity.eventType,
+                            expectedCanonicalRemote: workspaceCanonicalRemote,
+                            receivedCanonicalRemote: receivedRemote,
+                        },
+                    });
+                    continue;
+                }
+
+                if (activity.eventType === 'file_edit_observed') {
+                    const editObj = (payload.edit && typeof payload.edit === 'object' && !Array.isArray(payload.edit))
+                        ? (payload.edit as Record<string, unknown>)
+                        : payload;
+                    const normalizedPath = normalizePathLike(editObj.path);
+
+                    const sanitizedEdit = {
+                        path: normalizedPath || '',
+                        operation:
+                            typeof editObj.operation === 'string'
+                                ? editObj.operation
+                                : 'unknown',
+                        lineStart:
+                            typeof editObj.lineStart === 'number' ? editObj.lineStart : undefined,
+                        lineEnd:
+                            typeof editObj.lineEnd === 'number' ? editObj.lineEnd : undefined,
+                        snippet:
+                            typeof editObj.snippet === 'string'
+                                ? editObj.snippet.slice(0, 300)
+                                : undefined,
+                        patchHash:
+                            typeof editObj.patchHash === 'string' && editObj.patchHash
+                                ? editObj.patchHash
+                                : computePatchHash(JSON.stringify(editObj)),
+                    };
+
+                    const activityRow = await recordAgentActivity({
+                        workspaceId: roomId,
+                        scopedAgentId,
+                        sessionId,
+                        eventType: 'file_edit_observed',
+                        repo,
+                        payload: {
+                            ...payload,
+                            edit: sanitizedEdit,
+                        },
+                    });
+
+                    if (normalizedPath) {
+                        const conflicts = await detectClaimConflictsForEdit({
+                            workspaceId: roomId,
+                            scopedAgentId,
+                            editPath: normalizedPath,
+                        });
+                        if (conflicts.length > 0) {
+                            await recordConflictAlerts({
+                                workspaceId: roomId,
+                                scopedAgentId,
+                                sessionId,
+                                editPath: normalizedPath,
+                                conflicts,
+                                repo,
+                            });
+                        }
+                    }
+
+                    // Keep best-effort reference for live broadcasts
+                    (payload as any).__activityId = activityRow?.id;
+                } else if (activity.eventType === 'commit_observed') {
+                    const commitObj =
+                        payload.commit && typeof payload.commit === 'object' && !Array.isArray(payload.commit)
+                            ? (payload.commit as Record<string, unknown>)
+                            : payload;
+
+                    await recordAgentActivity({
+                        workspaceId: roomId,
+                        scopedAgentId,
+                        sessionId,
+                        eventType: 'commit_observed',
+                        repo,
+                        payload: {
+                            ...payload,
+                            commit: {
+                                sha: typeof commitObj.sha === 'string' ? commitObj.sha : '',
+                                message:
+                                    typeof commitObj.message === 'string'
+                                        ? commitObj.message.slice(0, 500)
+                                        : '',
+                                changedPaths: Array.isArray(commitObj.changedPaths)
+                                    ? commitObj.changedPaths
+                                        .map((p) => (typeof p === 'string' ? p : ''))
+                                        .filter((p) => Boolean(p))
+                                        .slice(0, 200)
+                                    : [],
+                            },
+                        },
+                    });
+                }
+            }
+        }
+
+        // Broadcast BEST EFFORT
         if (supabaseUrl && supabaseKey) {
             try {
-                const broadcastRes = await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
+                await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -246,22 +615,20 @@ export async function POST(req: NextRequest) {
                                 topic: 'telemetry:live',
                                 event: 'log',
                                 payload: {
-                                    timestamp: createdAtIso,
+                                    timestamp: createdAt.toISOString(),
                                     clientId,
                                     agent,
                                     roomId,
                                     scopedAgentId,
+                                    sessionId,
                                     ...payloadData,
                                 },
                             },
                         ],
                     }),
                 });
-                if (!broadcastRes.ok) {
-                    console.error(`[Telemetry] Broadcast failed: ${broadcastRes.status}`);
-                }
-            } catch (broadcastError) {
-                console.error('[Telemetry] Broadcast request failed:', broadcastError);
+            } catch (err) {
+                console.error('[Telemetry] Broadcast failed:', err);
             }
         }
 

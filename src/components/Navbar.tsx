@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import type { User } from "@supabase/supabase-js";
 import Link from "next/link";
+import { Logo } from "@/components/brand/Logo";
 
 export function Navbar({
     user,
@@ -13,18 +14,9 @@ export function Navbar({
 }) {
     return (
         <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-12 py-5 bg-background/60 backdrop-blur-xl border-b border-white/[0.06]">
-            <div className="flex items-center gap-2.5">
-                <svg width="24" height="24" viewBox="0 0 32 32" fill="none" className="shrink-0">
-                    <path d="M8 13 C8 10.5, 10 9, 13 9 L17 9 C19.5 9, 21 10.5, 21 13 L21 16 C21 18.5, 19.5 19.5, 17 19.5 L14.5 19.5 L12 22 L12.5 19.5 L11 19.5 C9.5 19.5, 8 18.5, 8 16 Z" fill="#34d399" opacity="0.9" />
-                    <path d="M12 14 C12 11.8, 13.8 10.5, 16 10.5 L20 10.5 C22.5 10.5, 24 11.8, 24 14 L24 17 C24 19, 22.5 20, 20 20 L19.5 20 L20 22.5 L17.5 20 L16 20 C13.8 20, 12 19, 12 17 Z" fill="currentColor" stroke="#34d399" strokeWidth="1.2" className="text-background" />
-                    <circle cx="16.5" cy="15.5" r="1.2" fill="#34d399" />
-                    <circle cx="19" cy="15.5" r="1.2" fill="#34d399" />
-                    <circle cx="21.5" cy="15.5" r="1.2" fill="#34d399" />
-                </svg>
-                <span className="text-sm font-semibold tracking-widest uppercase">
-                    Agen<span className="text-white">talk</span>
-                </span>
-            </div>
+            <Link href="/">
+                <Logo size="sm" withText={true} />
+            </Link>
             <div className="flex items-center gap-3">
                 {user ? (
                     <div className="flex items-center gap-3">

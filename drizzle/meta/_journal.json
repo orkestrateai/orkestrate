@@ -43,6 +43,13 @@
                         "when":  1771863638486,
                         "tag":  "0005_telemetry_hardening",
                         "breakpoints":  true
+                    },
+                    {
+                        "idx":  6,
+                        "version":  "7",
+                        "when":  1772308800000,
+                        "tag":  "0006_orchestration_v1",
+                        "breakpoints":  true
                     }
                 ]
 }

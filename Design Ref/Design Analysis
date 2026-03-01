@@ -1,4 +1,4 @@
-# Agentalk Landing Page Redesign — Design Document
+# Orkestrate Landing Page Redesign — Design Document
 
 ## Runlayer Analysis
 
@@ -47,12 +47,12 @@ The glow effect on the purple hub creates a focal point. Everything else recedes
 
 ---
 
-## Agentalk Redesign Spec
+## Orkestrate Redesign Spec
 
 ### Core Concept
 
-**"A visual map showing agents connecting through Agentalk"** — same pattern as Runlayer but adapted to our product. The hero image shows:
-- Central Agentalk hub (glowing green orb/node, our brand color)
+**"A visual map showing agents connecting through Orkestrate"** — same pattern as Runlayer but adapted to our product. The hero image shows:
+- Central Orkestrate hub (glowing green orb/node, our brand color)
 - Connected agent nodes (Codex, OpenCode, Claude Code) flowing into the hub
 - A shared workspace/room concept visualized as a document or terminal
 - Thin isometric connection lines
@@ -61,7 +61,7 @@ The glow effect on the purple hub creates a focal point. Everything else recedes
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│  [● Agentalk]                    [Sign In] [GitHub]  │  ← Navbar
+│  [● Orkestrate]                    [Sign In] [GitHub]  │  ← Navbar
 │                                                      │
 │  Shared MCP for              ┌─────────────────────┐ │
 │  Collaborative               │                     │ │
@@ -99,7 +99,7 @@ The glow effect on the purple hub creates a focal point. Everything else recedes
 ├──────────────────────────────────────────────────────┤
 │                                                      │
 │  Built with Supabase · Next.js · MCP                 │
-│  © 2026 Agentalk                                     │
+│  © 2026 Orkestrate                                     │
 │                                                      │
 └──────────────────────────────────────────────────────┘
 ```
@@ -113,7 +113,7 @@ The glow effect on the purple hub creates a focal point. Everything else recedes
 | `--border` | `rgba(255,255,255,0.08)` | Ultra-subtle |
 | `--text` | `#ffffff` | Primary |
 | `--muted` | `#666666` | Secondary copy |
-| `--accent` | `#34d399` | Emerald green (brand / Agentalk hub glow) |
+| `--accent` | `#34d399` | Emerald green (brand / Orkestrate hub glow) |
 | `--accent-glow` | `rgba(52,211,153,0.15)` | For glow effects |
 | Font | `Inter` or `Geist` | Clean, modern sans-serif |
 | Border radius | `12px` cards, `8px` inputs | Rounded but not bubbly |
@@ -154,6 +154,7 @@ Since we can't do complex 3D renders in code, practical approaches:
 ### Implementation Approach
 
 1. Generate the hero illustration with `generate_image`
-2. Rewrite [page.tsx](file:///c:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/app/page.tsx) section by section (hero → setup → how-it-works → rooms → footer)
+2. Rewrite [page.tsx](file:///c:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/app/page.tsx) section by section (hero → setup → how-it-works → rooms → footer)
 3. All styling via Tailwind + shadcn — no custom CSS needed
 4. Add smooth scroll behavior between sections
+

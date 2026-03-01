@@ -50,6 +50,11 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --color-success: oklch(0.696 0.17 162.48);
+  --font-serif: var(--font-fraunces);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --color-indigo-pure: #6366F1;
+  --color-obsidian: #050505;
 }
 
 @layer base {
@@ -128,9 +133,23 @@
   vertical-align: middle;
 }
 
-/* Custom scrollbar styles for terminal */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
+/* Line complete glow flash */
+@keyframes line-complete-glow {
+  0% {
+    text-shadow: 0 0 0 rgba(255, 255, 255, 0);
+  }
+
+  50% {
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.8), 0 0 40px rgba(255, 255, 255, 0.4);
+  }
+
+  100% {
+    text-shadow: 0 0 0 rgba(255, 255, 255, 0);
+  }
+}
+
+.line-complete-flash {
+  animation: line-complete-glow 300ms ease-out forwards;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
@@ -144,4 +163,16 @@
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Base scrollbar hidden */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

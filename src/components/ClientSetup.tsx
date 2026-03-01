@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Copy, Check, ChevronDown, ExternalLink } from "lucide-react";
 
-const MCP_ENDPOINT = "https://agentalk.vercel.app/api/mcp";
+const MCP_ENDPOINT = "https://Orkestrate.vercel.app/api/mcp";
 
 interface ClientConfig {
     id: string;
@@ -31,15 +31,15 @@ function getClients(): ClientConfig[] {
             configFile: ".mcp.json",
             docsUrl: "https://docs.anthropic.com/en/docs/claude-code",
             docsLabel: "View Claude Code docs",
-            cliCommand: `claude mcp add --scope project --transport http agentalk "${MCP_ENDPOINT}"`,
+            cliCommand: `claude mcp add --scope project --transport http Orkestrate "${MCP_ENDPOINT}"`,
             cliDescription: "Add the MCP server to your project config using the command line:",
             configDescription: "Alternatively, add this configuration to",
             authCommand: "claude /mcp",
             authDescription: "After configuring the MCP server, you need to authenticate. In a regular terminal (not the IDE extension) run:",
-            authNote: 'Select the "agentalk" server, then "Authenticate" to begin the authentication flow.',
+            authNote: 'Select the "Orkestrate" server, then "Authenticate" to begin the authentication flow.',
             config: {
                 mcpServers: {
-                    agentalk: {
+                    Orkestrate: {
                         type: "http",
                         url: MCP_ENDPOINT,
                     },
@@ -53,12 +53,12 @@ function getClients(): ClientConfig[] {
             configFile: "~/.config/opencode/opencode.json",
             docsUrl: "https://opencode.ai",
             docsLabel: "View OpenCode docs",
-            authCommand: "opencode mcp auth agentalk",
+            authCommand: "opencode mcp auth Orkestrate",
             authNote: "This will open your browser to complete the OAuth authentication flow.",
             config: {
                 "$schema": "https://opencode.ai/config.json",
                 mcp: {
-                    agentalk: {
+                    Orkestrate: {
                         type: "remote",
                         url: MCP_ENDPOINT,
                         enabled: true,
@@ -73,15 +73,15 @@ function getClients(): ClientConfig[] {
             configFile: "~/.codex/config.toml",
             docsUrl: "https://github.com/openai/codex",
             docsLabel: "View Codex docs",
-            cliCommand: `codex mcp add agentalk --url ${MCP_ENDPOINT}`,
-            cliDescription: "Add the Agentalk MCP server to Codex:",
+            cliCommand: `codex mcp add Orkestrate --url ${MCP_ENDPOINT}`,
+            cliDescription: "Add the Orkestrate MCP server to Codex:",
             configDescription: "Alternatively, add this configuration to",
-            rawConfig: `[mcp_servers.agentalk]\n    url = "${MCP_ENDPOINT}"`,
+            rawConfig: `[mcp_servers.Orkestrate]\n    url = "${MCP_ENDPOINT}"`,
             secondaryConfig: {
                 description: "After adding the server, enable remote MCP client support by adding this to your ~/.codex/config.toml:",
                 content: `[features]\n    rmcp_client = true`,
             },
-            authCommand: "codex mcp login agentalk",
+            authCommand: "codex mcp login Orkestrate",
             authNote: "Finally, run /mcp inside Codex to verify authentication.",
             config: {},
         },
@@ -147,7 +147,7 @@ export function ClientSetup({ handleCopy, copyStatus }: { handleCopy: (text: str
 
             {/* Description */}
             <p className="text-sm text-muted-foreground mb-6">
-                Configure your MCP client to connect with your Agentalk project
+                Configure your MCP client to connect with your Orkestrate project
             </p>
 
             {/* Installation Card */}
@@ -268,3 +268,4 @@ export function ClientSetup({ handleCopy, copyStatus }: { handleCopy: (text: str
         </div>
     );
 }
+

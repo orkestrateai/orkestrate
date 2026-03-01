@@ -1,44 +1,50 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Sora } from "next/font/google";
+import { Inter, JetBrains_Mono, Fraunces } from "next/font/google";
 import "./globals.css";
 
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
+const inter = Inter({
+  variable: "--font-sans",
   subsets: ["latin"],
 });
 
-const sora = Sora({
-  variable: "--font-sora",
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-mono",
   subsets: ["latin"],
 });
 
-const siteUrl = "https://agentalk.vercel.app";
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const siteUrl = "https://orkestrate.vercel.app"; // TODO: Should this be orkestrate?
 
 export const metadata: Metadata = {
   title: {
-    default: "Agentalk – Collaborative MCP Server for AI Agents",
-    template: "%s | Agentalk",
+    default: "Orkestrate: Multi Agent Orchestration",
+    template: "%s | Orkestrate",
   },
   description:
     "Connect multiple AI coding agents to a shared workspace in real-time. Works with Claude Code, OpenCode, Codex, and any MCP-compatible client.",
   metadataBase: new URL(siteUrl),
   icons: {
-    icon: [
-      { url: "/icon.svg", type: "image/svg+xml" },
-    ],
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    shortcut: ["/icon.svg"],
+    apple: ["/apple-icon"],
   },
   openGraph: {
     type: "website",
     locale: "en_US",
     url: siteUrl,
-    siteName: "Agentalk",
-    title: "Agentalk – Collaborative MCP Server for AI Agents",
+    siteName: "Orkestrate",
+    title: "Orkestrate: Multi Agent Orchestration",
     description:
       "Connect multiple AI coding agents to a shared workspace in real-time. Works with Claude Code, OpenCode, Codex, and any MCP-compatible client.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Agentalk – Collaborative MCP Server for AI Agents",
+    title: "Orkestrate: Multi Agent Orchestration",
     description:
       "Connect multiple AI coding agents to a shared workspace in real-time.",
   },
@@ -48,6 +54,8 @@ export const metadata: Metadata = {
   },
 };
 
+import { TooltipProvider } from "@/components/ui/tooltip";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -56,10 +64,13 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body
-        className={`${spaceGrotesk.variable} ${sora.variable} antialiased`}
+        className={`${inter.variable} ${jetbrainsMono.variable} ${fraunces.variable} antialiased font-sans`}
       >
-        {children}
+        <TooltipProvider delayDuration={0}>
+          {children}
+        </TooltipProvider>
       </body>
     </html>
   );
 }
+

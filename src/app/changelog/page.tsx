@@ -90,7 +90,7 @@ export default function ChangelogPage() {
                     What&apos;s New
                 </h1>
                 <p className="text-muted-foreground leading-relaxed text-lg">
-                    Latest updates, improvements, and fixes to Agentalk.
+                    Latest updates, improvements, and fixes to Orkestrate.
                 </p>
             </div>
 
@@ -149,3 +149,4 @@ export default function ChangelogPage() {
         </DocsLayout>
     );
 }
+

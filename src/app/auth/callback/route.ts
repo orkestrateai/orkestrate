@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { ensureActiveWorkspaceForUser } from '@/lib/workspaces'
+
+export const runtime = 'nodejs'
 
 export async function GET(request: Request) {
     const { searchParams, origin } = new URL(request.url)
@@ -36,7 +39,17 @@ export async function GET(request: Request) {
         // Exchange the auth code for a session
         const { error } = await supabase.auth.exchangeCodeForSession(code)
         if (!error) {
-            return NextResponse.redirect(`${origin}${next}`)
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user?.id) {
+                try {
+                    await ensureActiveWorkspaceForUser(user.id)
+                } catch (provisionError) {
+                    // Do not block login redirect on workspace bootstrap failures.
+                    console.error("Failed to ensure active room during auth callback:", provisionError)
+                }
+            }
+            const target = next === "/" ? "/dashboard" : next
+            return NextResponse.redirect(`${origin}${target}`)
         }
     }
 

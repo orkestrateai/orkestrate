@@ -13,7 +13,7 @@ export interface AgentContext {
     clientId: string;
     /** Room ID for coordination */
     roomId: string;
-    /** Agentalk host, e.g. "agentalk.vercel.app" */
+    /** Orkestrate host, e.g. "Orkestrate.vercel.app" */
     host: string;
 }
 
@@ -64,3 +64,4 @@ export function getToolAdapter(family: string): ToolAdapter {
     }
     return adapter;
 }
+

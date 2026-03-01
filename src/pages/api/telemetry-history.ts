@@ -4,10 +4,13 @@ import { and, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { agentStates, agentTelemetry } from "@/db/schema";
 import { json } from "@/lib/http";
-import { resolveReadableRoomIdForUser } from "@/lib/rooms";
+import { resolveReadableWorkspaceIdForUser } from "@/lib/workspaces";
 import { normalizeTelemetryScopedClientId, splitScopedClientId } from "@/lib/agent-identity";
+import { listRecentActivity } from "@/lib/agent-activity";
 
 const HISTORY_LIMIT = 5000;
+// Event types to exclude from history results (noise)
+const EXCLUDED_EVENT_TYPES = new Set(['heartbeat', 'connect', 'disconnect', 'ping', 'system']);
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
@@ -32,18 +35,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return json(res, 401, { error: "Unauthorized" });
     }
 
-    const roomIdFromQuery = typeof req.query.roomId === "string" ? req.query.roomId : null;
-    const { roomId, requestedWasAccessible } = await resolveReadableRoomIdForUser(userId, roomIdFromQuery);
-    if (roomIdFromQuery && !requestedWasAccessible) {
-      return json(res, 403, { error: "Room not accessible" });
+    const requestedId = (req.query.workspaceId || req.query.roomId) as string | undefined;
+    const { workspaceId, requestedWasAccessible } = await resolveReadableWorkspaceIdForUser(userId, requestedId || null);
+
+    if (requestedId && !requestedWasAccessible) {
+      return json(res, 403, { error: "Workspace not accessible" });
     }
-    if (!roomId) {
-      return json(res, 200, { roomId: null, logs: [] });
+    if (!workspaceId) {
+      return json(res, 200, { workspaceId: null, roomId: null, logs: [] });
     }
 
     const sinceHours = Number(req.query.sinceHours ?? 24);
     const safeHours = Number.isFinite(sinceHours) ? Math.min(Math.max(sinceHours, 1), 168) : 24;
     const threshold = new Date(Date.now() - safeHours * 60 * 60 * 1000);
+    const includeActivity = String(req.query.includeActivity || "").toLowerCase() === "true";
 
     const knownClientRows = await db
       .select({ clientId: agentStates.clientId })
@@ -56,10 +61,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .filter((v): v is string => Boolean(v)),
     ));
 
-    const legacyRoomFilter = sql`(payload->>'roomId') = ${roomId}`;
+    const legacyRoomFilter = sql`(payload->>'roomId') = ${workspaceId}`;
 
     const roomScope = or(
-      eq(agentTelemetry.roomId, roomId),
+      eq(agentTelemetry.roomId, workspaceId),
       and(isNull(agentTelemetry.roomId), legacyRoomFilter),
     );
 
@@ -85,6 +90,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         eventType: agentTelemetry.eventType,
         payload: agentTelemetry.payload,
         createdAt: agentTelemetry.createdAt,
+        sessionId: agentTelemetry.sessionId,
       })
       .from(agentTelemetry)
       .where(and(gte(agentTelemetry.createdAt, threshold), roomScope, userScope))
@@ -92,6 +98,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .limit(HISTORY_LIMIT);
 
     const logs = rows
+      .filter((row) => {
+        // Server-side filtering of noisy events
+        if (row.eventType && EXCLUDED_EVENT_TYPES.has(row.eventType)) return false;
+        // Also check the payload message for legacy heartbeats
+        const payload = (row.payload as any) || {};
+        if (typeof payload.type === 'string' && EXCLUDED_EVENT_TYPES.has(payload.type)) return false;
+        return true;
+      })
       .reverse()
       .map((row) => {
         const payload = (row.payload as any) || {};
@@ -119,10 +133,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           scopedAgentId: normalizeTelemetryScopedClientId(row.clientId, row.agent),
           message,
           event: typeof payload.event === "string" ? payload.event : row.eventType || "log",
+          sessionId: row.sessionId,
         };
       });
 
-    return json(res, 200, { roomId, logs });
+    const activity = includeActivity
+      ? (await listRecentActivity({ workspaceId, limit: 200 }))
+        .reverse()
+        .map((event) => ({
+          timestamp: event.createdAt instanceof Date ? event.createdAt.toISOString() : String(event.createdAt),
+          clientId: splitScopedClientId(event.scopedAgentId).clientBaseId,
+          agent: splitScopedClientId(event.scopedAgentId).scopedAgentId || event.scopedAgentId,
+          scopedAgentId: event.scopedAgentId,
+          message: JSON.stringify({
+            type: event.eventType,
+            payload: event.payload,
+            repo: event.repo,
+            workspaceId,
+          }),
+          event: "activity",
+          sessionId: event.sessionId,
+        }))
+      : [];
+
+    const mergedLogs = [...logs, ...activity].sort((a, b) => {
+      const left = new Date(a.timestamp).getTime();
+      const right = new Date(b.timestamp).getTime();
+      return left - right;
+    });
+
+    return json(res, 200, { workspaceId, roomId: workspaceId, logs: mergedLogs });
   } catch (error) {
     return json(res, 500, {
       error: "Internal server error",

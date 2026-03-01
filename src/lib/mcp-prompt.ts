@@ -1,7 +1,7 @@
 /**
  * Shared MCP Prompt Builder
  *
- * Builds the Agentalk protocol prompt by combining tool-specific Phase 0
+ * Builds the Orkestrate protocol prompt by combining tool-specific Phase 0
  * from the adapter with shared Phases 1-4 and optional reconnection context.
  */
 
@@ -57,7 +57,7 @@ ${pastWork}
 4. Do NOT re-create your workspace file if it already exists — pick up where you left off.`;
 }
 
-export function buildAgentalkPrompt(
+export function buildOrkestratePrompt(
     family: string,
     ctx: AgentContext,
     reconnection: ReconnectionState | null,
@@ -70,14 +70,16 @@ export function buildAgentalkPrompt(
         : "";
 
     return `
-# Agentalk: MCP Team Coordination Protocol
+# Orkestrate: MCP Team Coordination Protocol
 
-You are part of a multi-agent system connected via the **Agentalk MCP**. To prevent race conditions and ensure smooth collaboration, you MUST follow this strict behavioral loop for *every* task you undertake.
+You are part of a multi-agent system connected via the **Orkestrate MCP**. To prevent race conditions and ensure smooth collaboration, you MUST follow this strict behavioral loop for *every* task you undertake.
 ${isReconnection ? '\n> **NOTE:** This is a session reconnection. Your prior state and identity have been preserved. See the "Session Resumed" section below.' : ""}
 
 ### Core Tools Available
 1. \`read_team_state\`: Retrieves the current shared state of all active agents in the room.
 2. \`update_my_state\`: Upserts your personal state so other agents know what you are doing.
+3. \`get_dashboard_instructions\`: Checks for pending prompts or instructions sent from the Orkestrate Dashboard.
+4. \`acknowledge_instruction\`: Call this to acknowledge you have received and are executing an instruction.
 
 ---
 
@@ -101,6 +103,14 @@ Before taking **ANY** action on a new task, you MUST:
 2. Run the \`read_team_state\` tool. Optional: include \`{"agentId":"a"}\` only if you intentionally run parallel slots.
 3. Review the returned team state to understand what every other active agent is doing and avoid their \`ARCHITECTURE_FOOTPRINT\`.
 4. Draft your own plan locally.
+
+### Phase 2.5: Check for Instructions
+Periodically, especially when you are **idle** or have finished a sub-task, you MUST:
+1. Run \`get_dashboard_instructions\`.
+2. If an instruction is returned:
+    - Run \`acknowledge_instruction\` with \`{"status": "dispatched"}\` immediately.
+    - Reprioritize your work to address the new instruction.
+    - Update your \`currentObjective\` in Phase 3.
 
 ### Phase 3: Declare Intent
 Once your plan is ready, you MUST run \`update_my_state\` to broadcast it to the team.
@@ -139,6 +149,12 @@ If you used an \`agentId\` slot hint in \`read_team_state\`, you MUST pass the s
   "pastWorkSummary": ["[List high-level components you have previously completed]"]
 }
 \`\`\`
+
+### Phase 5: Two-Way Communication
+The Orkestrate Dashboard can send you direct prompts. 
+* Always check for instructions via \`get_dashboard_instructions\` when finishing a task.
+* After processing an instruction, you can "reply" to the human by updating your \`notesForTeam\` or \`currentObjective\` with the results of your work.
 ${sessionContextBlock}
 `.trim();
 }
+

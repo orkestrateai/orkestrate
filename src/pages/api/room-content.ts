@@ -3,18 +3,39 @@ import { json } from "@/lib/http";
 import { createClient } from "@supabase/supabase-js";
 import { and, desc, eq, gte, inArray, isNull, or } from "drizzle-orm";
 import { getDashboardAgentStatesForProject, formatRoomOverviewMarkdown } from "@/lib/shared-workspace";
-import { resolveReadableRoomIdForUser } from "@/lib/rooms";
+import { resolveReadableWorkspaceIdForUser } from "@/lib/workspaces";
 import { db } from "@/db";
 import { agentTelemetry } from "@/db/schema";
 import { normalizeTelemetryScopedClientId } from "@/lib/agent-identity";
+import { getWorkspaceCanonicalRemote } from "@/lib/repo-identity";
+import { listRecentActivity } from "@/lib/agent-activity";
 
 function getLifecycleEventType(payload: any): "connect" | "disconnect" | null {
+    const directType = typeof payload?.type === "string" ? payload.type : null;
+    if (directType === "connect" || directType === "disconnect") {
+        return directType;
+    }
+
+    const hookEvent = typeof payload?.hook_event_name === "string" ? payload.hook_event_name : null;
+    if (hookEvent === "SessionStart" || hookEvent === "TelemetryConnect") {
+        return "connect";
+    }
+    if (hookEvent === "SessionEnd" || hookEvent === "TelemetryDisconnect") {
+        return "disconnect";
+    }
+
+    const nestedType = typeof payload?.payload?.type === "string" ? payload.payload.type : null;
+    if (nestedType === "connect" || nestedType === "disconnect") {
+        return nestedType;
+    }
+
     const message = payload?.message;
     if (typeof message !== "string") return null;
     try {
         const parsed = JSON.parse(message);
-        if (parsed?.type === "connect") return "connect";
-        if (parsed?.type === "disconnect") return "disconnect";
+        if (parsed?.type === "connect" || parsed?.type === "disconnect") {
+            return parsed.type;
+        }
     } catch {
         return null;
     }
@@ -41,13 +62,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         if (req.method === "GET") {
-            const roomIdFromQuery = typeof req.query.roomId === "string" ? req.query.roomId : null;
-            const { roomId, requestedWasAccessible } = await resolveReadableRoomIdForUser(userId, roomIdFromQuery);
-            if (roomIdFromQuery && !requestedWasAccessible) {
-                return json(res, 403, { error: "Room not accessible" });
+            const requestedId = (req.query.workspaceId || req.query.roomId) as string | undefined;
+            const { workspaceId, requestedWasAccessible } = await resolveReadableWorkspaceIdForUser(userId, requestedId || null);
+
+            if (requestedId && !requestedWasAccessible) {
+                return json(res, 403, { error: "Workspace not accessible" });
             }
-            if (!roomId) {
+            if (!workspaceId) {
                 return json(res, 200, {
+                    workspaceId: null,
                     roomId: null,
                     overviewMarkdown: "",
                     agents: [],
@@ -59,7 +82,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 });
             }
 
-            const dashboardAgents = await getDashboardAgentStatesForProject(userId, roomId);
+            const workspaceCanonicalRemote = await getWorkspaceCanonicalRemote(workspaceId);
+            const dashboardAgents = await getDashboardAgentStatesForProject(userId, workspaceId, {
+                workspaceCanonicalRemote,
+            });
             const clientBaseIds = Array.from(new Set(dashboardAgents.map((a) => a.clientBaseId).filter(Boolean)));
 
             const disconnectedScopedIds = new Set<string>();
@@ -74,25 +100,43 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     })
                     .from(agentTelemetry)
                     .where(and(
-                        eq(agentTelemetry.roomId, roomId),
+                        eq(agentTelemetry.roomId, workspaceId),
+                        or(
+                            eq(agentTelemetry.eventType, "system"),
+                            eq(agentTelemetry.eventType, "connect"),
+                            eq(agentTelemetry.eventType, "disconnect"),
+                            eq(agentTelemetry.eventType, "SessionStart"),
+                            eq(agentTelemetry.eventType, "SessionEnd"),
+                            eq(agentTelemetry.eventType, "TelemetryConnect"),
+                            eq(agentTelemetry.eventType, "TelemetryDisconnect"),
+                        ),
                         gte(agentTelemetry.createdAt, threshold),
                         inArray(agentTelemetry.clientId, clientBaseIds),
                         or(eq(agentTelemetry.userId, userId), isNull(agentTelemetry.userId)),
                     ))
                     .orderBy(desc(agentTelemetry.createdAt));
 
-                const latestLifecycleByScopedId = new Map<string, "connect" | "disconnect">();
+                const latestLifecycleByScopedId = new Map<string, { lifecycle: "connect" | "disconnect"; createdAt: Date }>();
                 for (const row of lifecycleRows) {
                     const lifecycle = getLifecycleEventType(row.payload);
                     if (!lifecycle) continue;
                     const scopedId = normalizeTelemetryScopedClientId(row.clientId, row.agent);
                     if (latestLifecycleByScopedId.has(scopedId)) continue;
-                    latestLifecycleByScopedId.set(scopedId, lifecycle);
+                    latestLifecycleByScopedId.set(scopedId, { lifecycle, createdAt: row.createdAt });
                 }
 
                 for (const agent of dashboardAgents) {
-                    const lifecycle = latestLifecycleByScopedId.get(agent.stateClientId);
-                    if (lifecycle === "disconnect") {
+                    const latestLifecycle = latestLifecycleByScopedId.get(agent.stateClientId);
+
+                    // An agent is considered explicitly disconnected if:
+                    // 1. The latest lifecycle event is "disconnect"
+                    // 2. AND that event happened AFTER the most recent heartbeat/ping.
+                    // This prevents stale disconnects from overriding new heartbeats.
+                    const disconnectedAfterLastPing =
+                        latestLifecycle?.lifecycle === "disconnect" &&
+                        new Date(latestLifecycle.createdAt).getTime() > new Date(agent.lastPingAt).getTime();
+
+                    if (disconnectedAfterLastPing) {
                         disconnectedScopedIds.add(agent.stateClientId);
                     }
                 }
@@ -110,19 +154,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             );
             const onlineCount = agents.filter((agent) => agent.status === "online").length;
             const totalCount = agents.length;
+            const recentActivity = await listRecentActivity({ workspaceId, limit: 50 });
+            const recentConflicts = recentActivity
+                .filter((event) => event.eventType === "conflict_alert")
+                .slice(0, 20);
 
             return json(res, 200, {
-                roomId,
+                workspaceId,
+                roomId: workspaceId,
+                workspaceCanonicalRemote,
                 overviewMarkdown,
                 agents,
                 counts: { onlineCount, totalCount },
+                recentActivity,
+                recentConflicts,
                 // Backward compatibility
                 content: overviewMarkdown,
                 activeAgentCount: onlineCount,
                 activeAgents: agents.map((agent) => ({
                     clientId: agent.agentId,
                     stateClientId: agent.stateClientId,
-                    projectId: roomId,
+                    projectId: workspaceId,
                     lastPingAt: agent.lastPingAt,
                     stateHash: agent.stateHash,
                     agentProfile: agent.agentProfile,
