@@ -262,11 +262,11 @@ function buildMcpToolList() {
     {
       name: "write_knowledge_base",
       description:
-        "Create, update, or move knowledge-base files/folders. Delete is intentionally unsupported in MCP v1.",
+        "Create, update, move, or delete knowledge-base files/folders.",
       inputSchema: {
         type: "object",
         properties: {
-          action: { enum: ["create", "update", "move"] },
+          action: { enum: ["create", "update", "move", "delete"] },
           id: { type: "string" },
           title: { type: "string" },
           description: { type: "string" },
@@ -798,13 +798,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         );
       }
 
+      if (action === "delete") {
+        if (typeof args.id !== "string" || !args.id.trim()) {
+          return json(res, 400, rpcError(id, -32602, "Missing id for delete."));
+        }
+
+        const [doc] = await db
+          .delete(knowledgeDocs)
+          .where(
+            and(
+              eq(knowledgeDocs.id, args.id),
+              eq(knowledgeDocs.workspaceId, workspaceId),
+            ),
+          )
+          .returning();
+
+        if (!doc) {
+          return json(res, 404, rpcError(id, -32004, "Knowledge doc not found."));
+        }
+
+        return json(
+          res,
+          200,
+          rpcResult(id, {
+            content: [{ type: "text", text: JSON.stringify({ deleted: true, doc }, null, 2) }],
+          }),
+        );
+      }
+
       return json(
         res,
         400,
         rpcError(
           id,
           -32602,
-          "Unsupported action. Allowed: create, update, move. Delete is disabled in MCP v1.",
+          "Unsupported action. Allowed: create, update, move, delete.",
         ),
       );
     }
