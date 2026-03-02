@@ -1,10 +1,25 @@
 {
   "version": 1,
   "skills": {
+    "3d-web-experience": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "969ddfb5df5eeb2affed21ed6b73dd11b56c8d46ed8ca939e74cfa191f2390c1"
+    },
     "ai-elements": {
       "source": "vercel/ai-elements",
       "sourceType": "github",
       "computedHash": "fe9941dffde6a0b0ad032e6100a07f7a4e5483ae088540bb52cf7310879a707e"
+    },
+    "threejs-animation": {
+      "source": "cloudai-x/threejs-skills",
+      "sourceType": "github",
+      "computedHash": "457900cae6babbe092e3226a2ac9ae5d09a84199c1b3d5050ed400d4f56a9d82"
+    },
+    "threejs-shaders": {
+      "source": "cloudai-x/threejs-skills",
+      "sourceType": "github",
+      "computedHash": "d95f7e19b4aa4992d3d5dfbdbfeec0d21affd251dc2006dc0d4d4d1a317f1b04"
     }
   }
 }

@@ -205,17 +205,19 @@ export default function GlobalSidebar() {
     return (
         <div className="w-[240px] flex-shrink-0 bg-[#16181A] border-r border-[#232529] flex flex-col font-sans text-[14px] text-[#F2F2F2] h-full selection:bg-indigo-500/30">
             <div className="relative z-50" ref={workspaceRef}>
-                <div
-                    className="px-3 py-3 flex items-center group cursor-pointer hover:bg-[#1A1C20] transition-colors"
-                    onClick={() => setIsWorkspaceOpen(!isWorkspaceOpen)}
-                >
-                    <div className="min-w-0 flex-1">
+                <div className="px-3 py-3 group hover:bg-[#1A1C20] transition-colors">
+                    <Link href="/" className="block mb-1">
                         <Logo size="sm" withText={true} />
-                        <span className="block text-[11px] text-[#8A8F98] mt-1 truncate">
+                    </Link>
+                    <button
+                        className="flex items-center gap-1.5 cursor-pointer w-full"
+                        onClick={() => setIsWorkspaceOpen(!isWorkspaceOpen)}
+                    >
+                        <span className="block text-[11px] text-[#8A8F98] truncate">
                             {activeRoom?.name || "Workspace"}
                         </span>
-                    </div>
-                    <ChevronDown className="w-4 h-4 text-[#909090] opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <ChevronDown className="w-3 h-3 text-[#5E626B] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                    </button>
                 </div>
 
                 {isWorkspaceOpen && (
@@ -407,7 +409,7 @@ export default function GlobalSidebar() {
                     <span className="text-[14px]">Log out</span>
                 </button>
             </div>
-        </div>
+        </div >
     );
 }
 
