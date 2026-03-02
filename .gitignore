@@ -1,5 +1,3 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # dependencies
 /node_modules
 /.pnp
@@ -23,18 +21,35 @@
 # misc
 .DS_Store
 *.pem
+Thumbs.db
+Desktop.ini
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+bun-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files (NEVER commit for security)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env.local
+
+# IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
 # vercel
-.vercel
+/.vercel
 
 # typescript
 *.tsbuildinfo
@@ -43,5 +58,11 @@ next-env.d.ts
 # agent-local / ephemeral files
 opencode_*.json
 .claude/
+.agent/
+.agents/
+.gemini/
+.qwen/
+.kilocode/
 inject*.ps1
-bun.lock
+/tmp/
+*.log
