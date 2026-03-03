@@ -51,10 +51,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const includeActivity = String(req.query.includeActivity || "").toLowerCase() === "true";
 
     const knownClientRows = await db
-      .select({ clientId: agentStates.clientId })
+      .select({ scopedAgentId: agentStates.scopedAgentId })
       .from(agentStates)
       .where(eq(agentStates.userId, userId));
-    const knownScopedClientIds = Array.from(new Set(knownClientRows.map((r) => r.clientId).filter((v): v is string => Boolean(v))));
+    const knownScopedClientIds = Array.from(new Set(knownClientRows.map((r) => r.scopedAgentId).filter((v): v is string => Boolean(v))));
     const knownBaseClientIds = Array.from(new Set(
       knownScopedClientIds
         .map((clientId) => splitScopedClientId(clientId).clientBaseId)
@@ -70,10 +70,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const nullUserClauses = [];
     if (knownBaseClientIds.length > 0) {
-      nullUserClauses.push(inArray(agentTelemetry.clientId, knownBaseClientIds));
+      nullUserClauses.push(inArray(agentTelemetry.scopedAgentId, knownBaseClientIds));
     }
     if (knownScopedClientIds.length > 0) {
-      nullUserClauses.push(inArray(agentTelemetry.clientId, knownScopedClientIds));
+      nullUserClauses.push(inArray(agentTelemetry.scopedAgentId, knownScopedClientIds));
     }
 
     const userScope = nullUserClauses.length > 0
@@ -85,8 +85,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const rows = await db
       .select({
-        clientId: agentTelemetry.clientId,
-        agent: agentTelemetry.agent,
+        scopedAgentId: agentTelemetry.scopedAgentId,
+        agentId: agentTelemetry.agentId,
         eventType: agentTelemetry.eventType,
         payload: agentTelemetry.payload,
         createdAt: agentTelemetry.createdAt,
@@ -128,12 +128,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         return {
           timestamp: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
-          clientId: row.clientId,
-          agent: row.agent,
-          scopedAgentId: normalizeTelemetryScopedClientId(row.clientId, row.agent),
+          scopedAgentId: row.scopedAgentId,
+          clientId: splitScopedClientId(row.scopedAgentId).clientBaseId,
+          agent: splitScopedClientId(row.scopedAgentId).scopedAgentId || "Agent",
           message,
           event: typeof payload.event === "string" ? payload.event : row.eventType || "log",
           sessionId: row.sessionId,
+          agentId: row.agentId,
         };
       });
 

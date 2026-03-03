@@ -45,6 +45,7 @@ export function computePatchHash(input: unknown): string {
 export async function recordAgentActivity(input: {
   workspaceId: string;
   scopedAgentId: string;
+  agentId?: string | null;
   sessionId?: string | null;
   eventType: ActivityEventType;
   repo?: Record<string, unknown>;
@@ -55,6 +56,7 @@ export async function recordAgentActivity(input: {
     .values({
       workspaceId: input.workspaceId,
       scopedAgentId: input.scopedAgentId,
+      agentId: input.agentId || null,
       sessionId: input.sessionId ?? null,
       eventType: input.eventType,
       repo: input.repo ?? {},
@@ -117,7 +119,7 @@ export async function detectClaimConflictsForEdit(input: {
   }> = [];
 
   for (const state of states) {
-    const stateClientId = (state.clientId || "").toLowerCase();
+    const stateClientId = (state.scopedAgentId || "").toLowerCase();
     if (!stateClientId) continue;
     if (stateClientId === input.scopedAgentId.toLowerCase()) continue;
     if (new Date(state.lastPingAt).getTime() < cutoff) continue;
@@ -127,7 +129,7 @@ export async function detectClaimConflictsForEdit(input: {
     if (!matchingClaim) continue;
 
     conflicts.push({
-      conflictingScopedAgentId: state.clientId,
+      conflictingScopedAgentId: state.scopedAgentId,
       claimPath: matchingClaim,
     });
   }
@@ -138,6 +140,7 @@ export async function detectClaimConflictsForEdit(input: {
 export async function recordConflictAlerts(input: {
   workspaceId: string;
   scopedAgentId: string;
+  agentId?: string | null;
   sessionId?: string | null;
   editPath: string;
   conflicts: Array<{ conflictingScopedAgentId: string; claimPath: string }>;
@@ -147,6 +150,7 @@ export async function recordConflictAlerts(input: {
     recordAgentActivity({
       workspaceId: input.workspaceId,
       scopedAgentId: input.scopedAgentId,
+      agentId: input.agentId,
       sessionId: input.sessionId ?? null,
       eventType: "conflict_alert",
       repo: input.repo,

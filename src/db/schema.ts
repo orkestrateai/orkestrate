@@ -5,11 +5,29 @@ const authUsers = auth.table('users', {
     id: uuid('id').notNull(),
 });
 
+export const agents = pgTable('agents', {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id').notNull().references(() => authUsers.id),
+    projectId: text('project_id').default('default').notNull(),
+    scopedAgentId: text('scoped_agent_id').notNull(),
+    family: text('family').default('agent').notNull(),
+    agentProfile: text('agent_profile').default('Agent').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+    userProjectScopedUq: uniqueIndex('agents_user_project_scoped_uq').on(
+        table.userId,
+        table.projectId,
+        table.scopedAgentId
+    ),
+}));
+
 export const agentStates = pgTable('agent_states', {
     id: uuid('id').defaultRandom().primaryKey(),
     userId: uuid('user_id').notNull().references(() => authUsers.id),
     projectId: text('project_id').default('default').notNull(), // Groups agents working on the same repo
-    clientId: text('client_id').notNull(), // e.g. "cursor", "cline"
+    scopedAgentId: text('scoped_agent_id').notNull(), // Unified
+    agentId: uuid('agent_id').references(() => agents.id), // Link to master identity
     stateContent: jsonb('state_content').notNull(), // Storing raw JSON 
     stateHash: text('state_hash').default('').notNull(),
 
@@ -21,7 +39,7 @@ export const agentStates = pgTable('agent_states', {
     userProjectClientUq: uniqueIndex('agent_states_user_project_client_uq').on(
         table.userId,
         table.projectId,
-        table.clientId
+        table.scopedAgentId
     ),
 }));
 
@@ -29,8 +47,8 @@ export const agentTelemetry = pgTable('agent_telemetry', {
     id: uuid('id').defaultRandom().primaryKey(),
     userId: uuid('user_id').references(() => authUsers.id),
     roomId: text('room_id').default('unassigned').notNull(),
-    clientId: text('client_id').notNull(),
-    agent: text('agent').notNull(),
+    scopedAgentId: text('scoped_agent_id').notNull(), // Standardized
+    agentId: uuid('agent_id').references(() => agents.id),
     sessionId: uuid('session_id'),
     eventType: text('event_type').notNull(),
     payload: jsonb('payload').notNull(),
@@ -38,7 +56,7 @@ export const agentTelemetry = pgTable('agent_telemetry', {
 }, (table) => ({
     telemetryRoomCreatedIdx: index('agent_telemetry_room_created_idx').on(table.roomId, table.createdAt),
     telemetryUserCreatedIdx: index('agent_telemetry_user_created_idx').on(table.userId, table.createdAt),
-    telemetryClientAgentCreatedIdx: index('agent_telemetry_client_agent_created_idx').on(table.clientId, table.agent, table.createdAt),
+    telemetryClientAgentCreatedIdx: index('agent_telemetry_client_agent_created_idx').on(table.scopedAgentId, table.createdAt),
     telemetrySessionIdx: index('agent_telemetry_session_idx').on(table.sessionId),
 }));
 
@@ -46,6 +64,7 @@ export const agentCommands = pgTable('agent_commands', {
     id: uuid('id').defaultRandom().primaryKey(),
     roomId: text('room_id').notNull(),
     scopedAgentId: text('scoped_agent_id').notNull(),
+    agentId: uuid('agent_id').references(() => agents.id),
     sessionId: uuid('session_id'),
     text: text('text').notNull(),
     status: text('status').default('queued').notNull(),
@@ -104,6 +123,7 @@ export const agentSessions = pgTable('agent_sessions', {
     userId: uuid('user_id').notNull().references(() => authUsers.id),
     roomId: text('room_id').notNull().references(() => rooms.id),
     scopedAgentId: text('scoped_agent_id').notNull(),
+    agentId: uuid('agent_id').references(() => agents.id),
     title: text('title').default('New Session').notNull(),
     summary: text('summary'),
     status: text('status').default('active').notNull(), // active, completed, interrupted
@@ -157,6 +177,7 @@ export const agentActivity = pgTable('agent_activity', {
     id: uuid('id').defaultRandom().primaryKey(),
     workspaceId: text('workspace_id').notNull().references(() => rooms.id),
     scopedAgentId: text('scoped_agent_id').notNull(),
+    agentId: uuid('agent_id').references(() => agents.id),
     sessionId: uuid('session_id'),
     eventType: text('event_type').notNull(),
     repo: jsonb('repo').default({}).notNull(),

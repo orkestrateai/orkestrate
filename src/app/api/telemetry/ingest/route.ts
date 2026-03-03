@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { and, desc, eq, gte, like, or, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { agentSessions, agentStates, agentTelemetry, roomMemberships } from '@/db/schema';
+import { agents, agentSessions, agentStates, agentTelemetry, roomMemberships } from '@/db/schema';
 import {
     buildScopedClientId,
     normalizeTelemetryScopedClientId,
@@ -175,9 +175,9 @@ async function resolveTelemetryUserId(
         candidateIds.add(buildScopedClientId(parts.clientBaseId, normalizedAgent));
     }
 
-    const candidateClauses = Array.from(candidateIds).map((id) => eq(agentStates.clientId, id));
+    const candidateClauses = Array.from(candidateIds).map((id) => eq(agentStates.scopedAgentId, id));
     if (parts.clientBaseId) {
-        candidateClauses.push(like(agentStates.clientId, `${parts.clientBaseId}::%`));
+        candidateClauses.push(like(agentStates.scopedAgentId, `${parts.clientBaseId}::%`));
     }
     if (candidateClauses.length === 0) return null;
 
@@ -186,7 +186,7 @@ async function resolveTelemetryUserId(
         const rows = await db
             .select({
                 userId: agentStates.userId,
-                clientId: agentStates.clientId,
+                scopedAgentId: agentStates.scopedAgentId,
                 lastPingAt: agentStates.lastPingAt,
             })
             .from(agentStates)
@@ -204,11 +204,11 @@ async function resolveTelemetryUserId(
 
         if (parts.clientBaseId && normalizedAgent) {
             const preferredScoped = buildScopedClientId(parts.clientBaseId, normalizedAgent);
-            const exact = rows.find((row) => row.clientId === preferredScoped);
+            const exact = rows.find((row) => row.scopedAgentId === preferredScoped);
             if (exact?.userId) return exact.userId;
         }
 
-        const exactBase = rows.find((row) => row.clientId === parts.clientBaseId || row.clientId === parts.rawClientId);
+        const exactBase = rows.find((row) => row.scopedAgentId === parts.clientBaseId || row.scopedAgentId === parts.rawClientId);
         if (exactBase?.userId) return exactBase.userId;
 
         const inferred = rows[0]?.userId;
@@ -233,17 +233,34 @@ async function touchAgentSessionState(params: {
     });
     const scopedClientId = buildScopedClientId(parts.clientBaseId, identity.id);
     const now = new Date();
+
+    // 1. Ensure master agent identity exists
+    const [agentRecord] = await db.insert(agents).values({
+        userId: params.userId,
+        projectId: params.roomId,
+        scopedAgentId: scopedClientId,
+        family: identity.family,
+        agentProfile: 'Agent',
+    }).onConflictDoUpdate({
+        target: [agents.userId, agents.projectId, agents.scopedAgentId],
+        set: { updatedAt: now }
+    }).returning();
+
     const whereClause = and(
         eq(agentStates.userId, params.userId),
         eq(agentStates.projectId, params.roomId),
-        eq(agentStates.clientId, scopedClientId),
+        eq(agentStates.scopedAgentId, scopedClientId),
     );
 
     const existing = await db.query.agentStates.findFirst({ where: whereClause });
 
     if (existing) {
-        await db.update(agentStates).set({ lastPingAt: now }).where(whereClause);
-        return;
+        const agentIdToUse = agentRecord?.id || existing.agentId;
+        await db.update(agentStates).set({
+            lastPingAt: now,
+            agentId: agentIdToUse
+        }).where(whereClause);
+        return agentIdToUse;
     }
 
     const initialObjective =
@@ -251,10 +268,11 @@ async function touchAgentSessionState(params: {
             ? 'Orkestrate initialized and ready to receive tasks.'
             : 'Waiting for tasks';
 
-    await db.insert(agentStates).values({
+    const [newState] = await db.insert(agentStates).values({
         userId: params.userId,
         projectId: params.roomId,
-        clientId: scopedClientId,
+        scopedAgentId: scopedClientId,
+        agentId: agentRecord?.id || null,
         stateContent: {
             status: 'active',
             objective: initialObjective,
@@ -269,7 +287,9 @@ async function touchAgentSessionState(params: {
         lastPingAt: now,
         pingCount: 1,
         windowStartAt: now,
-    });
+    }).returning();
+
+    return agentRecord?.id || newState.agentId || null;
 }
 
 /**
@@ -279,10 +299,11 @@ async function resolveOrCreateSession(params: {
     userId: string;
     roomId: string;
     scopedAgentId: string;
+    agentId?: string | null;
     externalSessionId?: string;
     sessionTitle?: string;
 }): Promise<string | null> {
-    const { userId, roomId, scopedAgentId, externalSessionId, sessionTitle } = params;
+    const { userId, roomId, scopedAgentId, agentId, externalSessionId, sessionTitle } = params;
 
     // 1. If we have an externalSessionId (e.g. from OpenCode SQLite), try to find/update it.
     if (externalSessionId) {
@@ -410,25 +431,19 @@ export async function POST(req: NextRequest) {
         // Resolve User
         const inferredUserId = await resolveTelemetryUserId(req, clientId, agent, roomId);
 
-        // For heartbeats: touch state but don't record telemetry
-        if (lifecycle === 'heartbeat') {
-            if (inferredUserId) {
-                try {
-                    await touchAgentSessionState({ userId: inferredUserId, roomId, clientId, agent, lifecycle });
-                } catch (e) {
-                    console.error('[Telemetry] Failed to touch agent state on heartbeat:', e);
-                }
+        // For all phases, touch state and ensure agent ID
+        let masterAgentId: string | null = null;
+        if (inferredUserId) {
+            try {
+                masterAgentId = await touchAgentSessionState({ userId: inferredUserId, roomId, clientId: scopedAgentId, agent, lifecycle });
+            } catch (e) {
+                console.error('[Telemetry] Failed to touch agent state:', e);
             }
-            return new Response('ok', { status: 200 });
         }
 
-        // For connect/disconnect, touch state
-        if (inferredUserId && (lifecycle === 'connect' || lifecycle === 'disconnect')) {
-            try {
-                await touchAgentSessionState({ userId: inferredUserId, roomId, clientId, agent, lifecycle });
-            } catch (e) {
-                console.error('[Telemetry] Failed to upsert agent session state:', e);
-            }
+        // For heartbeats: we are done
+        if (lifecycle === 'heartbeat') {
+            return new Response('ok', { status: 200 });
         }
 
         // Session Resolution (authoritative registration)
@@ -452,6 +467,7 @@ export async function POST(req: NextRequest) {
                     userId: inferredUserId,
                     roomId,
                     scopedAgentId,
+                    agentId: masterAgentId,
                     externalSessionId,
                     sessionTitle
                 });
@@ -493,8 +509,8 @@ export async function POST(req: NextRequest) {
         await db.insert(agentTelemetry).values({
             userId: inferredUserId ?? null,
             roomId,
-            clientId,
-            agent,
+            scopedAgentId,
+            agentId: masterAgentId || null,
             sessionId: sessionId as any, // Drizzle type cast
             eventType,
             payload: payloadData as any,
@@ -521,6 +537,7 @@ export async function POST(req: NextRequest) {
                     await recordAgentActivity({
                         workspaceId: roomId,
                         scopedAgentId,
+                        agentId: masterAgentId,
                         sessionId,
                         eventType: 'conflict_alert',
                         repo,
@@ -563,6 +580,7 @@ export async function POST(req: NextRequest) {
                     const activityRow = await recordAgentActivity({
                         workspaceId: roomId,
                         scopedAgentId,
+                        agentId: masterAgentId,
                         sessionId,
                         eventType: 'file_edit_observed',
                         repo,
@@ -582,6 +600,7 @@ export async function POST(req: NextRequest) {
                             await recordConflictAlerts({
                                 workspaceId: roomId,
                                 scopedAgentId,
+                                agentId: masterAgentId,
                                 sessionId,
                                 editPath: normalizedPath,
                                 conflicts,
@@ -601,6 +620,7 @@ export async function POST(req: NextRequest) {
                     await recordAgentActivity({
                         workspaceId: roomId,
                         scopedAgentId,
+                        agentId: masterAgentId,
                         sessionId,
                         eventType: 'commit_observed',
                         repo,

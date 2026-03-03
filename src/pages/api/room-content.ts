@@ -93,8 +93,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 const threshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
                 const lifecycleRows = await db
                     .select({
-                        clientId: agentTelemetry.clientId,
-                        agent: agentTelemetry.agent,
+                        scopedAgentId: agentTelemetry.scopedAgentId,
                         payload: agentTelemetry.payload,
                         createdAt: agentTelemetry.createdAt,
                     })
@@ -111,7 +110,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                             eq(agentTelemetry.eventType, "TelemetryDisconnect"),
                         ),
                         gte(agentTelemetry.createdAt, threshold),
-                        inArray(agentTelemetry.clientId, clientBaseIds),
+                        inArray(agentTelemetry.scopedAgentId, clientBaseIds),
                         or(eq(agentTelemetry.userId, userId), isNull(agentTelemetry.userId)),
                     ))
                     .orderBy(desc(agentTelemetry.createdAt));
@@ -120,7 +119,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 for (const row of lifecycleRows) {
                     const lifecycle = getLifecycleEventType(row.payload);
                     if (!lifecycle) continue;
-                    const scopedId = normalizeTelemetryScopedClientId(row.clientId, row.agent);
+                    const scopedId = row.scopedAgentId;
                     if (latestLifecycleByScopedId.has(scopedId)) continue;
                     latestLifecycleByScopedId.set(scopedId, { lifecycle, createdAt: row.createdAt });
                 }

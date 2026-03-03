@@ -176,7 +176,7 @@ export async function upsertAgentState(
     where: and(
       eq(agentStates.userId, userId),
       eq(agentStates.projectId, projectId),
-      eq(agentStates.clientId, clientId),
+      eq(agentStates.scopedAgentId, clientId),
     ),
   });
 
@@ -221,7 +221,7 @@ export async function upsertAgentState(
     .values({
       userId,
       projectId,
-      clientId,
+      scopedAgentId: clientId,
       stateContent: fallbackContent,
       stateHash:
         (typeof updateData.stateHash === "string" && updateData.stateHash) ||
@@ -235,7 +235,7 @@ export async function upsertAgentState(
         : 1,
     })
     .onConflictDoUpdate({
-      target: [agentStates.userId, agentStates.projectId, agentStates.clientId],
+      target: [agentStates.userId, agentStates.projectId, agentStates.scopedAgentId],
       set: updateData,
     });
 }
@@ -260,7 +260,7 @@ export async function getTeamStateForProject(
 
   const formattedContent = formatRoomOverviewMarkdown(
     activeAgents.map((agent) => ({
-      agentDisplayId: getDisplayAgentIdFromScopedClientId(agent.clientId),
+      agentDisplayId: getDisplayAgentIdFromScopedClientId(agent.scopedAgentId),
       stateContent: normalizeStateContent(agent.stateContent),
     })),
   );
@@ -289,10 +289,10 @@ export async function getDashboardAgentStatesForProject(
   const workspaceRemote = (options?.workspaceCanonicalRemote || "").toLowerCase();
 
   return sessions.map((session) => {
-    const parts = splitScopedClientId(session.clientId);
+    const parts = splitScopedClientId(session.scopedAgentId);
     const stateContent = normalizeStateContent(session.stateContent);
     const isOnline = now - new Date(session.lastPingAt).getTime() <= threshold;
-    const status: DashboardAgentStatus = disconnectedSet.has(session.clientId)
+    const status: DashboardAgentStatus = disconnectedSet.has(session.scopedAgentId)
       ? "disconnected"
       : isOnline
         ? "online"
@@ -300,9 +300,9 @@ export async function getDashboardAgentStatesForProject(
 
     const displayName =
       stateContent.agentProfile ||
-      getDisplayAgentIdFromScopedClientId(session.clientId);
+      getDisplayAgentIdFromScopedClientId(session.scopedAgentId);
     const agentId =
-      parts.scopedAgentId || getDisplayAgentIdFromScopedClientId(session.clientId);
+      parts.scopedAgentId || getDisplayAgentIdFromScopedClientId(session.scopedAgentId);
 
     const agentRemote = (stateContent.repo.canonicalRemote || "").toLowerCase();
     const codebaseMatch: "matched" | "mismatch" | "unknown" =
@@ -313,7 +313,7 @@ export async function getDashboardAgentStatesForProject(
         : "unknown";
 
     return {
-      stateClientId: session.clientId,
+      stateClientId: session.scopedAgentId,
       clientBaseId: parts.clientBaseId,
       agentId,
       displayName,
@@ -338,7 +338,7 @@ export async function getExistingAgentState(
     where: and(
       eq(agentStates.userId, userId),
       eq(agentStates.projectId, projectId),
-      eq(agentStates.clientId, clientId),
+      eq(agentStates.scopedAgentId, clientId),
     ),
   });
 
@@ -364,7 +364,7 @@ export async function touchAgentHeartbeat(
       and(
         eq(agentStates.userId, userId),
         eq(agentStates.projectId, projectId),
-        eq(agentStates.clientId, clientId),
+        eq(agentStates.scopedAgentId, clientId),
       ),
     );
 }
@@ -381,10 +381,10 @@ export async function getActiveAgentsForProject(userId: string, projectId: strin
     .filter((s) => s.lastPingAt > sixtySecondsAgo)
     .map((s) => {
       const stateObj = normalizeStateContent(s.stateContent);
-      const agentDisplayId = getDisplayAgentIdFromScopedClientId(s.clientId);
+      const agentDisplayId = getDisplayAgentIdFromScopedClientId(s.scopedAgentId);
       return {
         clientId: agentDisplayId,
-        stateClientId: s.clientId,
+        stateClientId: s.scopedAgentId,
         projectId: s.projectId,
         lastPingAt: s.lastPingAt,
         stateHash: s.stateHash,

@@ -7,13 +7,13 @@ async function run() {
     const rows = await db
         .select({
             id: agentTelemetry.id,
-            agent: agentTelemetry.agent,
+            scopedAgentId: agentTelemetry.scopedAgentId,
             eventType: agentTelemetry.eventType,
             payload: agentTelemetry.payload,
             createdAt: agentTelemetry.createdAt,
         })
         .from(agentTelemetry)
-        .where(like(agentTelemetry.agent, '%opencode%'))
+        .where(like(agentTelemetry.scopedAgentId, '%opencode%'))
         .orderBy(desc(agentTelemetry.createdAt))
         .limit(1000);
 
