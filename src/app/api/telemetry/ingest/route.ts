@@ -3,7 +3,13 @@ import { createClient } from '@supabase/supabase-js';
 import { and, desc, eq, gte, like, or, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { agentSessions, agentStates, agentTelemetry, roomMemberships } from '@/db/schema';
-import { buildScopedClientId, normalizeTelemetryScopedClientId, sanitizeAgentId, splitScopedClientId } from '@/lib/agent-identity';
+import {
+    buildScopedClientId,
+    normalizeTelemetryScopedClientId,
+    resolveCanonicalAgentIdentity,
+    sanitizeAgentId,
+    splitScopedClientId
+} from '@/lib/agent-identity';
 import { getWorkspaceCanonicalRemote, normalizeCanonicalRemote } from '@/lib/repo-identity';
 import {
     computePatchHash,
@@ -155,7 +161,13 @@ async function resolveTelemetryUserId(
 
     // 2) Fallback: infer from recent MCP heartbeat state by client_id.
     const parts = splitScopedClientId(clientId);
-    const normalizedAgent = sanitizeAgentId(agent);
+    const identity = resolveCanonicalAgentIdentity({
+        requestedAgentId: agent,
+        clientId: parts.clientBaseId,
+        clientName: null, // We don't have the client name here usually
+    });
+
+    const normalizedAgent = identity.id;
     const candidateIds = new Set<string>();
     if (parts.rawClientId) candidateIds.add(parts.rawClientId);
     if (parts.clientBaseId) candidateIds.add(parts.clientBaseId);
@@ -213,7 +225,13 @@ async function touchAgentSessionState(params: {
     agent: string;
     lifecycle: TelemetryLifecycle;
 }) {
-    const scopedClientId = normalizeTelemetryScopedClientId(params.clientId, params.agent);
+    const parts = splitScopedClientId(params.clientId);
+    const identity = resolveCanonicalAgentIdentity({
+        requestedAgentId: params.agent,
+        clientId: parts.clientBaseId,
+        clientName: null,
+    });
+    const scopedClientId = buildScopedClientId(parts.clientBaseId, identity.id);
     const now = new Date();
     const whereClause = and(
         eq(agentStates.userId, params.userId),
@@ -368,9 +386,17 @@ export async function POST(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
         const clientId = searchParams.get('clientId') || 'unknown';
-        const agent = searchParams.get('agent') || 'generic';
+        const agentHint = searchParams.get('agent') || 'generic';
         const roomId = searchParams.get('roomId') || 'unassigned';
-        const scopedAgentId = normalizeTelemetryScopedClientId(clientId, agent);
+
+        const parts = splitScopedClientId(clientId);
+        const identity = resolveCanonicalAgentIdentity({
+            requestedAgentId: agentHint,
+            clientId: parts.clientBaseId,
+            clientName: null,
+        });
+        const agent = identity.id;
+        const scopedAgentId = buildScopedClientId(parts.clientBaseId, agent);
 
         const parsedBody = await req.json();
         if (!parsedBody || typeof parsedBody !== 'object' || Array.isArray(parsedBody)) {

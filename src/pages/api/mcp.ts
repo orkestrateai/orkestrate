@@ -4,7 +4,11 @@ import { bearerToken, json, sendOAuthChallenge } from "@/lib/http";
 import { createServiceClient } from "@/lib/supabase";
 import { getClientRegistration, validateAccessToken } from "@/lib/oauth-store";
 import { ensureActiveWorkspaceForUser } from "@/lib/workspaces";
-import { buildScopedClientId, sanitizeAgentId } from "@/lib/agent-identity";
+import {
+  buildScopedClientId,
+  resolveCanonicalAgentIdentity,
+  sanitizeAgentId,
+} from "@/lib/agent-identity";
 import {
   getTeamStateForProject,
   getDashboardAgentStatesForProject,
@@ -27,42 +31,6 @@ function rpcError(id: any, code: number, message: string) {
   return { jsonrpc: "2.0", id, error: { code, message } };
 }
 
-function detectAgentFamily(
-  clientName: unknown,
-  fallbackClientId: string,
-  hint?: unknown,
-): string {
-  const name = String(clientName || "").toLowerCase();
-  const fallback = String(fallbackClientId || "").toLowerCase();
-  const hintText = String(hint || "").toLowerCase();
-  const combined = `${name} ${fallback} ${hintText}`;
-  if (combined.includes("opencode") || combined.includes("open code")) {
-    return "opencode";
-  }
-  if (combined.includes("codex")) return "codex";
-  if (combined.includes("claude")) return "claude";
-  if (combined.includes("cursor")) return "cursor";
-  return "agent";
-}
-
-function resolveCanonicalAgentIdentity(input: {
-  requestedAgentId: unknown;
-  clientId: string;
-  clientName: unknown;
-}) {
-  const requested = sanitizeAgentId(input.requestedAgentId);
-  const family = detectAgentFamily(
-    input.clientName,
-    input.clientId,
-    requested || "main",
-  );
-  const stableFallback = sanitizeAgentId(family) || "agent";
-  return {
-    id: requested || stableFallback,
-    family,
-    slotHint: requested || "main",
-  };
-}
 
 function toStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -465,6 +433,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         collisions,
       };
 
+      // Server-side telemetry side-effect
+      const telemetryUrl = process.env.NEXT_PUBLIC_SITE_URL
+        ? `${process.env.NEXT_PUBLIC_SITE_URL}/api/telemetry/ingest`
+        : `http://localhost:${process.env.PORT || 3000}/api/telemetry/ingest`;
+
+      void fetch(`${telemetryUrl}?clientId=${clientId}&agent=${canonicalIdentity.id}&roomId=${workspaceId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "heartbeat",
+          type: "heartbeat",
+          source: "mcp-server-side",
+        }),
+      }).catch(() => { });
+
       return json(
         res,
         200,
@@ -595,6 +578,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         throw e;
       }
+
+      const telemetryUrl = process.env.NEXT_PUBLIC_SITE_URL
+        ? `${process.env.NEXT_PUBLIC_SITE_URL}/api/telemetry/ingest`
+        : `http://localhost:${process.env.PORT || 3000}/api/telemetry/ingest`;
+
+      void fetch(`${telemetryUrl}?clientId=${clientId}&agent=${canonicalIdentity.id}&roomId=${workspaceId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "write_agent_state",
+          type: "write_agent_state",
+          source: "mcp-server-side",
+          payload: {
+            status: stateObj.status,
+            objective: stateObj.objective,
+            claimedPaths: stateObj.claimedPaths,
+          }
+        }),
+      }).catch(() => { });
 
       return json(
         res,

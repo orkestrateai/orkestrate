@@ -61,3 +61,45 @@ export function telemetryClientIdCandidates(clientId: unknown, agent?: unknown):
   }
   return Array.from(candidates);
 }
+export function detectAgentFamily(
+  clientName: unknown,
+  fallbackClientId: string,
+  hint?: unknown,
+): string {
+  const name = String(clientName || "").toLowerCase();
+  const fallback = String(fallbackClientId || "").toLowerCase();
+  const hintText = String(hint || "").toLowerCase();
+  const combined = `${name} ${fallback} ${hintText}`;
+
+  if (combined.includes("opencode") || combined.includes("open code")) {
+    return "opencode";
+  }
+  if (combined.includes("codex")) return "codex";
+  if (combined.includes("claude")) return "claude";
+  if (combined.includes("cursor")) return "cursor";
+  return "agent";
+}
+
+export function resolveCanonicalAgentIdentity(input: {
+  requestedAgentId: unknown;
+  clientId: string;
+  clientName: unknown;
+}) {
+  const requested = sanitizeAgentId(input.requestedAgentId);
+  const family = detectAgentFamily(
+    input.clientName,
+    input.clientId,
+    requested || "main",
+  );
+  const stableFallback = sanitizeAgentId(family) || "agent";
+
+  // Generic/Null labels COLLAPSE to the family name to prevent "main" vs "generic" dupes
+  const isGeneric = !requested || requested === "generic" || requested === "agent" || requested === "main";
+  const canonicalId = isGeneric ? stableFallback : requested;
+
+  return {
+    id: canonicalId,
+    family,
+    slotHint: requested || "main",
+  };
+}
