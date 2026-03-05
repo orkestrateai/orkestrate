@@ -1,503 +1,278 @@
 /**
- * Orkestrate Telemetry + Control Plugin for OpenCode
+ * Orkestrate OpenCode Plugin
  *
- * Simple model:
- * 1) Send OpenCode events to Orkestrate telemetry
- * 2) Poll queued prompts and submit them into OpenCode TUI
+ * OUT → sends structured events to /api/telemetry/ingest
+ * IN  ← polls /api/agent-control/pull, injects prompts into TUI
  */
+import type { Plugin } from "@opencode-ai/plugin";
+import { readFileSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
+import { createHmac } from "crypto";
 
-import type { Plugin } from "@opencode-ai/plugin"
-import { readFileSync } from "fs"
-import { join } from "path"
-import { homedir } from "os"
-import { execFileSync } from "child_process"
-import { createHash } from "crypto"
+// ── Config ──────────────────────────────────────────────────────────────────────
 
-function loadConfig(): Record<string, string> {
-  const config: Record<string, string> = {}
+function loadEnv(): Record<string, string> {
   try {
-    const configPath = join(homedir(), ".config", "opencode", ".Orkestrate.env")
-    const content = readFileSync(configPath, "utf-8")
-    for (const line of content.split("\n")) {
-      const trimmed = line.trim()
-      if (!trimmed || trimmed.startsWith("#")) continue
-      const eqIdx = trimmed.indexOf("=")
-      if (eqIdx === -1) continue
-      const key = trimmed.slice(0, eqIdx).trim()
-      const val = trimmed.slice(eqIdx + 1).trim()
-      config[key] = val
+    const raw = readFileSync(join(homedir(), ".config", "opencode", ".Orkestrate.env"), "utf-8");
+    const out: Record<string, string> = {};
+    for (const line of raw.split("\n")) {
+      const t = line.trim();
+      if (!t || t.startsWith("#")) continue;
+      const eq = t.indexOf("=");
+      if (eq > 0) out[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
     }
-  } catch {
-    // file missing is fine; fallback to process env below
-  }
-  return config
+    return out;
+  } catch { return {}; }
 }
 
-const fileConfig = loadConfig()
-const HOST = fileConfig.Orkestrate_HOST || process.env.Orkestrate_HOST || "orkestrate.vercel.app"
-const AGENT_ID = fileConfig.Orkestrate_AGENT_ID || process.env.Orkestrate_AGENT_ID || ""
-const CLIENT_ID = fileConfig.Orkestrate_CLIENT || process.env.Orkestrate_CLIENT || ""
-const ROOM_ID = fileConfig.Orkestrate_ROOM || process.env.Orkestrate_ROOM || ""
+const env = loadEnv();
+const AGENT_ID = env.Orkestrate_AGENT_ID || process.env.Orkestrate_AGENT_ID || "";
+const SECRET = env.Orkestrate_SECRET || process.env.Orkestrate_SECRET || "";
+const HOST = env.Orkestrate_HOST || process.env.Orkestrate_HOST || "orkestrate.vercel.app";
+const BASE = /^https?:\/\//i.test(HOST) ? HOST
+  : HOST.includes("localhost") || HOST.includes("127.0.0.1") ? `http://${HOST}`
+    : `https://${HOST}`;
+const INGEST = `${BASE}/api/telemetry/ingest`;
+const PULL = `${BASE}/api/agent-control/pull`;
+const PULL_WAIT_MS = 25000;
 
-const INGEST_URL = `https://${HOST}/api/telemetry/ingest`
-const CONTROL_PULL_URL = `https://${HOST}/api/agent-control/pull`
-const CONTROL_ACK_URL = `https://${HOST}/api/agent-control/ack`
-const HEARTBEAT_INTERVAL_MS = 30_000
-const CONTROL_POLL_INTERVAL_MS = 3_000
+// ── Send helper ─────────────────────────────────────────────────────────────────
 
-let activeSessionId: string | null = null
-let repoSnapshotCache:
-  | {
-    key: string
-    at: number
-    value: { canonicalRemote?: string; branch?: string; headSha?: string; dirty?: boolean }
-  }
-  | null = null
+const MAX_QUEUE_SIZE = 2000;
+const MAX_RETRIES = 3;
+const RETRY_BASE_MS = 150;
+const REQUEST_TIMEOUT_MS = 8000;
 
-function buildTelemetryUrl(): string {
-  const params = new URLSearchParams({
-    clientId: CLIENT_ID,
-    agent: AGENT_ID,
-    roomId: ROOM_ID,
-  })
-  return `${INGEST_URL}?${params.toString()}`
+type TelemetryEnvelope = {
+  kind: string;
+  agentId: string;
+  at: string;
+  source: string;
+  seq: number;
+  payload: Record<string, unknown>;
+};
+
+type QueuedRequest = {
+  kind: string;
+  body: string;
+  headers: Record<string, string>;
+};
+
+const sendQueue: QueuedRequest[] = [];
+let inFlight = 0;
+let seq = 0;
+let droppedEvents = 0;
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
-async function sendTelemetry(payload: Record<string, unknown>, event = "log"): Promise<void> {
-  if (!AGENT_ID || !CLIENT_ID || !ROOM_ID) return
+async function post(body: string, headers: Record<string, string>) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    await fetch(buildTelemetryUrl(), {
+    const res = await fetch(INGEST, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        event,
-        ...payload,
-        sessionID: activeSessionId,
-      }),
-    })
-  } catch {
-    // never break OpenCode for telemetry failures
+      headers,
+      body,
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  } finally {
+    clearTimeout(timer);
   }
 }
 
-function normalizeRemote(raw: string): string {
-  const value = raw.trim()
-  const scp = value.match(/^([^@]+)@([^:]+):(.+)$/)
-  if (scp) {
-    return `${scp[2].toLowerCase()}/${scp[3].replace(/\.git$/i, "").replace(/^\/+/, "")}`
-  }
-  try {
-    const parsed = new URL(value)
-    return `${parsed.hostname.toLowerCase()}${parsed.pathname.replace(/\.git$/i, "").replace(/\/+$/, "")}`
-  } catch {
-    return value.replace(/\.git$/i, "").toLowerCase()
-  }
-}
-
-function runGit(directory: string, args: string[]): string {
-  return execFileSync("git", args, { cwd: directory, stdio: ["ignore", "pipe", "ignore"] })
-    .toString("utf-8")
-    .trim()
-}
-
-function readRepoSnapshot(directory: string): { canonicalRemote?: string; branch?: string; headSha?: string; dirty?: boolean } {
-  const cacheKey = directory
-  if (repoSnapshotCache && repoSnapshotCache.key === cacheKey && Date.now() - repoSnapshotCache.at < 4000) {
-    return repoSnapshotCache.value
-  }
-
-  try {
-    const remote = runGit(directory, ["config", "--get", "remote.origin.url"])
-    const branch = runGit(directory, ["rev-parse", "--abbrev-ref", "HEAD"])
-    const headSha = runGit(directory, ["rev-parse", "HEAD"])
-    const dirty = runGit(directory, ["status", "--porcelain", "-uno"]).length > 0
-    const value = {
-      canonicalRemote: remote ? normalizeRemote(remote) : undefined,
-      branch: branch || undefined,
-      headSha: headSha || undefined,
-      dirty,
+async function postWithRetry(req: QueuedRequest) {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+    try {
+      await post(req.body, req.headers);
+      return;
+    } catch {
+      if (attempt === MAX_RETRIES) {
+        console.warn(`[Orkestrate] Failed to deliver telemetry event '${req.kind}'`);
+        return;
+      }
+      await delay(RETRY_BASE_MS * (2 ** attempt));
     }
-    repoSnapshotCache = { key: cacheKey, at: Date.now(), value }
-    return value
-  } catch {
-    const value = {}
-    repoSnapshotCache = { key: cacheKey, at: Date.now(), value }
-    return value
   }
 }
 
-function maybeString(input: unknown): string | null {
-  return typeof input === "string" && input.trim() ? input.trim() : null
+function pumpQueue() {
+  if (inFlight > 0 || sendQueue.length === 0) return;
+
+  const next = sendQueue.shift();
+  if (!next) return;
+
+  inFlight += 1;
+  void postWithRetry(next).finally(() => {
+    inFlight -= 1;
+    if (sendQueue.length === 0 && droppedEvents > 0) {
+      console.warn(`[Orkestrate] Dropped ${droppedEvents} telemetry events due to local queue pressure.`);
+      droppedEvents = 0;
+    }
+    pumpQueue();
+  });
 }
 
-function extractPath(input: Record<string, unknown>): string | null {
-  return (
-    maybeString(input.path) ||
-    maybeString(input.file) ||
-    maybeString(input.targetFile) ||
-    maybeString(input.TargetFile) ||
-    maybeString(input.AbsolutePath) ||
-    maybeString(input.newPath) ||
-    maybeString(input.destination) ||
-    null
-  )
-}
-
-function extractLine(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined
-}
-
-function inferEditOperation(toolName: string): "create" | "update" | "delete" | "move" | "unknown" {
-  const n = toolName.toLowerCase()
-  if (n.includes("delete") || n.includes("remove")) return "delete"
-  if (n.includes("move") || n.includes("rename")) return "move"
-  if (n.includes("create")) return "create"
-  if (n.includes("write") || n.includes("edit") || n.includes("replace")) return "update"
-  return "unknown"
-}
-
-function buildPatchHash(input: unknown): string {
-  return createHash("sha1").update(JSON.stringify(input ?? {})).digest("hex").slice(0, 16)
-}
-
-function extractFileEditActivity(toolName: string, input: Record<string, unknown>, output: any) {
-  const lower = toolName.toLowerCase()
-  const mutating = [
-    "edit",
-    "replace_file_content",
-    "multi_replace_file_content",
-    "write",
-    "write_file",
-    "create_file",
-    "delete",
-    "delete_file",
-    "move_file",
-    "rename",
-  ]
-  if (!mutating.some((token) => lower.includes(token))) return null
-
-  const path = extractPath(input)
-  if (!path) return null
-
-  const snippet =
-    typeof output?.output === "string"
-      ? output.output.slice(0, 300)
-      : typeof output?.title === "string"
-        ? output.title.slice(0, 300)
-        : undefined
-
-  const lineStart = extractLine((input as any).lineStart ?? (input as any).startLine ?? (input as any).line)
-  const lineEnd = extractLine((input as any).lineEnd ?? (input as any).endLine)
-  const operation = inferEditOperation(toolName)
-
-  return {
-    type: "file_edit_observed",
-    payload: {
-      edit: {
-        path,
-        operation,
-        lineStart,
-        lineEnd,
-        snippet,
-        patchHash: buildPatchHash({
-          toolName,
-          path,
-          operation,
-          lineStart,
-          lineEnd,
-          snippet,
-          args: input,
-        }),
-      },
-    },
+async function flushSendQueue(timeoutMs = 1500) {
+  const until = Date.now() + timeoutMs;
+  while ((sendQueue.length > 0 || inFlight > 0) && Date.now() < until) {
+    await delay(20);
   }
 }
 
-function extractCommitActivity(toolName: string, input: Record<string, unknown>, directory: string) {
-  const lower = toolName.toLowerCase()
-  if (!(lower.includes("bash") || lower.includes("run_command") || lower.includes("execute"))) {
-    return null
+async function send(kind: string, payload: Record<string, unknown>) {
+  if (!AGENT_ID) return;
+  const ts = new Date().toISOString();
+  const envelope: TelemetryEnvelope = {
+    kind,
+    agentId: AGENT_ID,
+    at: ts,
+    source: "opencode-plugin",
+    seq: ++seq,
+    payload,
+  };
+  const body = JSON.stringify(envelope);
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (SECRET) {
+    headers["x-orkestrate-ts"] = ts;
+    headers["x-orkestrate-signature"] = createHmac("sha256", SECRET).update(body).digest("hex");
   }
 
-  const command =
-    maybeString(input.command) ||
-    maybeString(input.cmd) ||
-    maybeString((input as any).CommandLine)
-  if (!command || !/git\s+commit\b/i.test(command)) return null
-
-  const repo = readRepoSnapshot(directory)
-  let changedPaths: string[] = []
-  try {
-    const output = runGit(directory, ["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"])
-    changedPaths = output.split("\n").map((line) => line.trim()).filter((line) => Boolean(line)).slice(0, 200)
-  } catch {
-    // ignore
+  if (sendQueue.length >= MAX_QUEUE_SIZE) {
+    sendQueue.shift();
+    droppedEvents += 1;
   }
-
-  const messageMatch = command.match(/-m\s+["']([^"']+)["']/i)
-  const message = messageMatch?.[1] || "git commit"
-
-  return {
-    type: "commit_observed",
-    payload: {
-      commit: {
-        sha: repo.headSha || "",
-        message,
-        changedPaths,
-      },
-    },
-    repo,
-  }
+  sendQueue.push({ kind, body, headers });
+  pumpQueue();
 }
 
-async function submitPromptToTui(client: any, directory: string, text: string) {
-  if (typeof client?.tui?.appendPrompt !== "function" || typeof client?.tui?.submitPrompt !== "function") {
-    throw new Error("OpenCode TUI API unavailable (appendPrompt/submitPrompt)")
-  }
+// ── Extract text from parts ─────────────────────────────────────────────────────
 
-  await client.tui.appendPrompt({
-    query: { directory },
-    body: { text },
-  } as any)
-
-  await client.tui.submitPrompt({
-    query: { directory },
-  } as any)
+function partsToText(parts: any[]): string {
+  if (!Array.isArray(parts)) return "";
+  return parts
+    .filter((p: any) => p?.type === "text" && typeof p?.text === "string")
+    .map((p: any) => p.text)
+    .join("\n")
+    .trim();
 }
 
-async function acknowledgeCommand(
-  commandId: string,
-  status: "dispatched" | "failed",
-  failureReason?: string,
-) {
-  try {
-    const params = new URLSearchParams({
-      clientId: CLIENT_ID,
-      agent: AGENT_ID,
-      roomId: ROOM_ID,
-    })
-    await fetch(`${CONTROL_ACK_URL}?${params.toString()}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        commandId,
-        status,
-        failureReason: failureReason || null,
-      }),
-    })
-  } catch {
-    // best effort; telemetry still captures dispatch result
-  }
-}
+// ── Plugin ──────────────────────────────────────────────────────────────────────
 
 export const OrkestrateTelemetry: Plugin = async ({ client, directory }) => {
-  if (!AGENT_ID || !CLIENT_ID || !ROOM_ID) {
-    console.log("[Orkestrate] Not configured - skipping plugin.")
-    return {}
+  if (!AGENT_ID) {
+    console.log("[Orkestrate] No Orkestrate_AGENT_ID set");
+    return {};
   }
 
-  await sendTelemetry(
-    {
-      type: "connect",
-      payload: {
-        agent: AGENT_ID,
-        client: CLIENT_ID,
-        roomId: ROOM_ID,
-        source: "opencode-plugin",
-        directory,
-      },
-    },
-    "system",
-  )
+  await send("connect", { directory });
 
-  const heartbeatTimer = setInterval(() => {
-    void sendTelemetry(
-      {
-        type: "heartbeat",
-        payload: { agent: AGENT_ID, uptime: process.uptime() },
-      },
-      "heartbeat",
-    )
-  }, HEARTBEAT_INTERVAL_MS)
-  heartbeatTimer.unref()
+  // ── Command polling (dashboard → TUI) ──
+  let activeSessionId: string | null = null;
+  let pullAgentId = AGENT_ID;
+  let stopPullLoop = false;
+  let currentPullAbort: AbortController | null = null;
 
-  const pollControlCommands = async () => {
-    try {
-      const params = new URLSearchParams({
-        clientId: CLIENT_ID,
-        agent: AGENT_ID,
-        roomId: ROOM_ID,
-      })
-      const res = await fetch(`${CONTROL_PULL_URL}?${params.toString()}`)
-      if (!res.ok) return
+  const pullLoop = async () => {
+    while (!stopPullLoop) {
+      try {
+        const ac = new AbortController();
+        currentPullAbort = ac;
+        const url = `${PULL}?agentId=${encodeURIComponent(pullAgentId)}&waitMs=${PULL_WAIT_MS}`;
+        const res = await fetch(url, { signal: ac.signal });
+        currentPullAbort = null;
 
-      const data = await res.json()
-      const commands = Array.isArray(data?.commands) ? data.commands : []
-
-      for (const command of commands) {
-        const commandId = typeof command?.id === "string" ? command.id : ""
-        const text = typeof command?.text === "string" ? command.text.trim() : ""
-        if (!text || !commandId) continue
-
-        await sendTelemetry(
-          {
-            type: "dashboard_prompt",
-            payload: {
-              commandId,
-              text,
-              source: "dashboard",
-            },
-          },
-          "system",
-        )
-
-        try {
-          await submitPromptToTui(client, directory, text)
-          await acknowledgeCommand(commandId, "dispatched")
-          await sendTelemetry(
-            {
-              type: "dashboard_prompt_dispatched",
-              payload: {
-                commandId,
-                mode: "tui",
-              },
-            },
-            "system",
-          )
-        } catch (e: any) {
-          await acknowledgeCommand(commandId, "failed", e?.message || "TUI prompt dispatch failed")
-          await sendTelemetry(
-            {
-              type: "dashboard_prompt_error",
-              payload: {
-                commandId,
-                reason: e?.message || "TUI prompt dispatch failed",
-              },
-            },
-            "system",
-          )
+        if (!res.ok) {
+          await delay(1000);
+          continue;
         }
+
+        const data = await (res.json() as Promise<any>);
+        if (typeof data?.agentId === "string" && data.agentId.trim()) {
+          pullAgentId = data.agentId.trim();
+        }
+
+        const commands = Array.isArray(data?.commands) ? data.commands : [];
+        for (const cmd of commands) {
+          const text = cmd?.text?.trim();
+          if (!text) continue;
+          try {
+            if (activeSessionId && typeof (client as any).session?.prompt === "function") {
+              await (client as any).session.prompt({
+                path: { id: activeSessionId },
+                body: { parts: [{ type: "text", text }] },
+              });
+            } else if (typeof (client as any).tui?.appendPrompt === "function") {
+              await (client as any).tui.appendPrompt({ body: { text } });
+              await (client as any).tui.submitPrompt();
+            }
+            await send("command_ok", { commandId: cmd.id, text });
+          } catch (e: any) {
+            await send("command_err", { commandId: cmd.id, error: e?.message });
+          }
+        }
+      } catch {
+        currentPullAbort = null;
+        if (!stopPullLoop) await delay(1000);
       }
-    } catch {
-      // best effort polling
     }
-  }
+  };
+  void pullLoop();
 
-  const controlPollTimer = setInterval(() => {
-    void pollControlCommands()
-  }, CONTROL_POLL_INTERVAL_MS)
-  controlPollTimer.unref()
+  let cleanedUp = false;
+  const cleanup = async () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    stopPullLoop = true;
+    if (currentPullAbort) {
+      try { currentPullAbort.abort(); } catch { }
+      currentPullAbort = null;
+    }
+    await send("disconnect", {});
+    await flushSendQueue(1500);
+  };
+  process.on("beforeExit", () => { void cleanup(); });
+  process.once("SIGTERM", () => { void cleanup().finally(() => process.exit(0)); });
+  process.once("SIGINT", () => { void cleanup().finally(() => process.exit(0)); });
 
-  const cleanup = () => {
-    clearInterval(heartbeatTimer)
-    clearInterval(controlPollTimer)
-    void sendTelemetry(
-      {
-        type: "disconnect",
-        payload: {
-          agent: AGENT_ID,
-          client: CLIENT_ID,
-          roomId: ROOM_ID,
-        },
-      },
-      "system",
-    )
-  }
-
-  process.on("beforeExit", cleanup)
-  process.once("SIGTERM", cleanup)
-  process.once("SIGINT", cleanup)
+  // ── Hooks ─────────────────────────────────────────────────────────────────────
 
   return {
-    event: async ({ event }) => {
-      // Track session id for correlation only.
-      if (event.type === "session.created") {
-        const sid = (event as any)?.properties?.info?.id
-        if (typeof sid === "string" && sid) activeSessionId = sid
-      }
-      if (event.type === "message.updated") {
-        const sid = (event as any)?.properties?.info?.sessionID
-        if (typeof sid === "string" && sid) activeSessionId = sid
-      }
-      if (event.type === "session.status" || event.type === "session.idle") {
-        const sid = (event as any)?.properties?.sessionID
-        if (typeof sid === "string" && sid) activeSessionId = sid
-      }
-
-      // Send all OpenCode event JSON through telemetry.
-      await sendTelemetry(
-        {
-          type: event.type,
-          payload: event,
-        },
-        "log",
-      )
+    // User message — the key hook we were missing
+    "chat.message": async (input, output) => {
+      activeSessionId = input.sessionID;
+      const text = partsToText(output.parts);
+      await send("user_message", { text, input, output });
     },
 
+    // All events — assistant streaming, session lifecycle, etc.
+    event: async ({ event }) => {
+      const e = event as any;
+
+      // Track session ID
+      const sid = e?.properties?.info?.sessionID || e?.properties?.sessionID;
+      if (typeof sid === "string" && sid.startsWith("ses_")) activeSessionId = sid;
+
+      await send("event", { e });
+    },
+
+    // Tool execution
     "tool.execute.before": async (input, output) => {
-      await sendTelemetry(
-        {
-          type: "tool",
-          payload: {
-            type: "tool",
-            tool: input.tool,
-            state: { status: "running", input: (input as any).args },
-          },
-        },
-        "log",
-      )
+      activeSessionId = input.sessionID;
+      await send("tool_start", { input, output });
     },
 
     "tool.execute.after": async (input, output) => {
-      const toolName = typeof input?.tool === "string" ? input.tool : "tool"
-      const toolInput = ((input as any)?.args && typeof (input as any).args === "object") ? (input as any).args : {}
-
-      await sendTelemetry(
-        {
-          type: "tool",
-          payload: {
-            type: "tool",
-            tool: toolName,
-            state: { status: "completed", output: (output.output || "").slice(0, 2000) },
-            title: output.title,
-          },
-        },
-        "log",
-      )
-
-      const repo = readRepoSnapshot(directory)
-      const editActivity = extractFileEditActivity(toolName, toolInput as Record<string, unknown>, output)
-      if (editActivity) {
-        await sendTelemetry(
-          {
-            type: editActivity.type,
-            payload: editActivity.payload,
-            repo,
-          },
-          "activity",
-        )
-      }
-
-      const commitActivity = extractCommitActivity(toolName, toolInput as Record<string, unknown>, directory)
-      if (commitActivity) {
-        await sendTelemetry(
-          {
-            type: commitActivity.type,
-            payload: commitActivity.payload,
-            repo: commitActivity.repo || repo,
-          },
-          "activity",
-        )
-      }
+      activeSessionId = input.sessionID;
+      await send("tool_end", { input, output });
     },
 
-    "experimental.session.compacting": async (_input, output) => {
-      output.context.push(
-        `## Orkestrate Team Coordination\n` +
-        `You are agent \`${AGENT_ID}\` connected to room \`${ROOM_ID}\` via the Orkestrate MCP.\n` +
-        `After compaction, call \`read_agent_state\` to re-sync with the team before resuming work.\n` +
-        `Your canonical agent id is: \`${AGENT_ID}\`. Use this exact id in all MCP tool calls.`,
-      )
+    // Permission requests
+    "permission.ask": async (input, output) => {
+      await send("permission", { input, output });
     },
-  }
-}
+  };
+};

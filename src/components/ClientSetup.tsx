@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Copy, Check, ChevronDown, ExternalLink } from "lucide-react";
 
-const MCP_ENDPOINT = "https://Orkestrate.vercel.app/api/mcp";
+const MCP_ENDPOINT = "https://orkestrate.vercel.app/api/mcp";
 
 interface ClientConfig {
     id: string;
@@ -28,15 +28,15 @@ function getClients(): ClientConfig[] {
             id: "claude-code",
             name: "Claude Code",
             icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="8" /></svg>,
-            configFile: ".mcp.json",
-            docsUrl: "https://docs.anthropic.com/en/docs/claude-code",
-            docsLabel: "View Claude Code docs",
-            cliCommand: `claude mcp add --scope project --transport http Orkestrate "${MCP_ENDPOINT}"`,
+            configFile: ".mcp.json (project scope)",
+            docsUrl: "https://docs.anthropic.com/en/docs/claude-code/mcp",
+            docsLabel: "View Claude Code MCP docs",
+            cliCommand: `claude mcp add --transport http --scope project Orkestrate "${MCP_ENDPOINT}"`,
             cliDescription: "Add the MCP server to your project config using the command line:",
             configDescription: "Alternatively, add this configuration to",
-            authCommand: "claude /mcp",
-            authDescription: "After configuring the MCP server, you need to authenticate. In a regular terminal (not the IDE extension) run:",
-            authNote: 'Select the "Orkestrate" server, then "Authenticate" to begin the authentication flow.',
+            authCommand: "claude mcp list\nclaude\n# inside session: /mcp",
+            authDescription: "Verify it is registered, then open Claude Code and authenticate from the /mcp panel:",
+            authNote: 'In /mcp, select "Orkestrate" and choose "Authenticate".',
             config: {
                 mcpServers: {
                     Orkestrate: {
@@ -51,10 +51,12 @@ function getClients(): ClientConfig[] {
             name: "OpenCode",
             icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2" /></svg>,
             configFile: "~/.config/opencode/opencode.json",
-            docsUrl: "https://opencode.ai",
-            docsLabel: "View OpenCode docs",
+            docsUrl: "https://opencode.ai/docs/mcp-servers",
+            docsLabel: "View OpenCode MCP docs",
+            cliCommand: "opencode mcp add",
+            cliDescription: "Add a remote MCP server in the CLI prompt flow (name: Orkestrate, URL: endpoint below):",
             authCommand: "opencode mcp auth Orkestrate",
-            authNote: "This will open your browser to complete the OAuth authentication flow.",
+            authNote: "This opens your browser for OAuth. Verify status with `opencode mcp auth list` or `opencode mcp list`.",
             config: {
                 "$schema": "https://opencode.ai/config.json",
                 mcp: {
@@ -71,18 +73,14 @@ function getClients(): ClientConfig[] {
             name: "Codex",
             icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="3" /></svg>,
             configFile: "~/.codex/config.toml",
-            docsUrl: "https://github.com/openai/codex",
-            docsLabel: "View Codex docs",
+            docsUrl: "https://developers.openai.com/codex/cli/docs-mcp",
+            docsLabel: "View Codex MCP docs",
             cliCommand: `codex mcp add Orkestrate --url ${MCP_ENDPOINT}`,
             cliDescription: "Add the Orkestrate MCP server to Codex:",
             configDescription: "Alternatively, add this configuration to",
             rawConfig: `[mcp_servers.Orkestrate]\n    url = "${MCP_ENDPOINT}"`,
-            secondaryConfig: {
-                description: "After adding the server, enable remote MCP client support by adding this to your ~/.codex/config.toml:",
-                content: `[features]\n    rmcp_client = true`,
-            },
             authCommand: "codex mcp login Orkestrate",
-            authNote: "Finally, run /mcp inside Codex to verify authentication.",
+            authNote: "Verify with `codex mcp list` or run `/mcp` inside Codex.",
             config: {},
         },
     ];

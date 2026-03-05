@@ -2,7 +2,7 @@
  * ChatRenderer — Extracted chat bubble rendering component.
  * 
  * This is the ORIGINAL chat rendering logic, preserved as a reference
- * while we rebuild the telemetry detail view with proper per-agent JSON handling.
+ * while we rebuild the session activity detail view with proper per-agent JSON handling.
  * 
  * Usage (when re-enabled):
  *   <ChatRenderer messages={filteredChatFeed} terminalRef={terminalRef} />

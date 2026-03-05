@@ -28,6 +28,7 @@ const fetcher = (url: string) => {
 type Room = {
     id: string;
     isActive?: boolean;
+    repoUrl?: string | null;
 };
 
 type DashboardAgent = {
@@ -39,6 +40,9 @@ type DashboardAgent = {
     lastPingAt: string;
     agentProfile: string;
     currentObjective: string;
+    pluginConnected?: boolean;
+    activeSessionId?: string | null;
+    canViewChat?: boolean;
     codebaseMatch?: "matched" | "mismatch" | "unknown";
 };
 
@@ -54,6 +58,8 @@ type AgentCard = {
     memoryUsage: string;
     avatarUrl: string;
     codebaseMatch: "matched" | "mismatch" | "unknown";
+    pluginConnected: boolean;
+    canViewChat: boolean;
 };
 
 const AVATAR_POOL = [
@@ -95,6 +101,8 @@ function toCard(agent: DashboardAgent, roomId: string | null, idx: number): Agen
         memoryUsage: "--",
         avatarUrl: AVATAR_POOL[idx % AVATAR_POOL.length],
         codebaseMatch: agent.codebaseMatch || "unknown",
+        pluginConnected: Boolean(agent.pluginConnected),
+        canViewChat: Boolean(agent.canViewChat),
     };
 }
 
@@ -104,7 +112,9 @@ export default function AgentsDirectoryPage() {
 
     const { data: wsData, error: wsError } = useSWR("/api/workspaces", fetcher, { refreshInterval: 5000 });
     const rooms: Room[] = Array.isArray(wsData?.rooms) ? wsData.rooms : [];
-    const activeRoomId = rooms.find((r) => r.isActive)?.id || rooms[0]?.id || null;
+    const activeRoom = rooms.find((r) => r.isActive) || rooms[0] || null;
+    const activeRoomId = activeRoom?.id || null;
+    const isRepoLinked = Boolean(activeRoom?.repoUrl);
 
     const { data: contentData, error: contentError, isLoading: contentLoading } = useSWR(activeRoomId ? `/api/room-content?workspaceId=${encodeURIComponent(activeRoomId)}` : null, fetcher, { refreshInterval: 5000 });
     const agents: DashboardAgent[] = Array.isArray(contentData?.agents) ? contentData.agents : [];
@@ -170,6 +180,28 @@ export default function AgentsDirectoryPage() {
             </div>
 
             <div className="flex-1 overflow-y-auto w-full max-w-6xl mx-auto py-8 px-8">
+                {!isRepoLinked && activeRoomId && (
+                    <div className="mb-6 bg-amber-500/10 border border-amber-500/20 rounded-[10px] p-4 flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+                                <Terminal className="w-4 h-4 text-amber-500" />
+                            </div>
+                            <div>
+                                <h3 className="text-[13px] font-semibold text-amber-200">Repository Required</h3>
+                                <p className="text-[12px] text-amber-200/70 mt-0.5">
+                                    Agent coordination is disabled until a repository is linked to this room.
+                                </p>
+                            </div>
+                        </div>
+                        <Link
+                            href="/dashboard/settings"
+                            className="px-3 py-1.5 bg-amber-500 text-black text-[12px] font-semibold rounded-[6px] hover:bg-amber-400 transition-colors"
+                        >
+                            Connect Repository
+                        </Link>
+                    </div>
+                )}
+
                 {loading ? (
                     <div className="text-[13px] text-[#8A8F98]">Loading agents...</div>
                 ) : error ? (
@@ -180,12 +212,15 @@ export default function AgentsDirectoryPage() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                        {filteredAgents.map((agent) => (
-                            <Link
-                                key={agent.id}
-                                href={`/dashboard/agent-chat?agent=${encodeURIComponent(agent.id)}`}
-                                className="bg-[#16181A] border border-[#232529] rounded-[10px] shadow-sm hover:border-[#33363D] hover:bg-[#1A1C20] transition-all duration-200 group flex flex-col relative overflow-hidden"
-                            >
+
+                        {filteredAgents.map((agent) => {
+                            const canOpenChatCard = agent.canViewChat && agent.tool !== "OpenCode";
+                            const cardClassName = `bg-[#16181A] border border-[#232529] rounded-[10px] shadow-sm transition-all duration-200 group flex flex-col relative overflow-hidden ${canOpenChatCard
+                                ? "hover:border-[#33363D] hover:bg-[#1A1C20] cursor-pointer"
+                                : "opacity-80"
+                                }`;
+
+                            const cardInner = (
                                 <div className="p-5 flex items-start gap-4">
                                     <div className="relative shrink-0 mt-0.5">
                                         <img
@@ -203,7 +238,7 @@ export default function AgentsDirectoryPage() {
                                         <div className="flex items-start justify-between gap-3 mb-1">
                                             <div className="flex flex-col">
                                                 <div className="flex items-center gap-2">
-                                                    <span className="font-semibold text-[14px] text-[#F2F2F2] hover:underline underline-offset-2 decoration-[#373737]">
+                                                    <span className={`font-semibold text-[14px] text-[#F2F2F2] ${canOpenChatCard ? "hover:underline underline-offset-2 decoration-[#373737]" : ""}`}>
                                                         {agent.name}
                                                     </span>
                                                     <span className="text-[#8A8F98]">·</span>
@@ -211,6 +246,11 @@ export default function AgentsDirectoryPage() {
                                                         <Terminal className="w-3 h-3" />
                                                         <span>{agent.tool}</span>
                                                     </div>
+                                                    {!canOpenChatCard && (
+                                                        <span className="text-[10px] bg-[#232529] text-[#8A8F98] px-1.5 py-0.5 rounded-[4px] font-medium tracking-tight uppercase border border-[#2A2D32]">
+                                                            Coordination Only
+                                                        </span>
+                                                    )}
                                                 </div>
 
                                                 <div className="flex items-center gap-1.5 text-[13px] text-[#D1D3D8] mt-1.5">
@@ -221,6 +261,11 @@ export default function AgentsDirectoryPage() {
                                                     )}
                                                     <span className="truncate">{agent.task}</span>
                                                 </div>
+                                                {!agent.pluginConnected && agent.tool !== "Claude Code" && agent.tool !== "OpenCode" && (
+                                                    <div className="mt-2 text-[11px] text-amber-300/90">
+                                                        Plugin not connected. Ask this agent to run <span className="font-mono">setup orkestrate</span> and restart session.
+                                                    </div>
+                                                )}
                                             </div>
 
                                             <button className="p-1 text-[#8A8F98] hover:text-[#F2F2F2] hover:bg-[#2A2D32] rounded-[4px] opacity-0 group-hover:opacity-100 transition-all shrink-0">
@@ -241,13 +286,12 @@ export default function AgentsDirectoryPage() {
                                                 <Clock className="w-3.5 h-3.5 text-[#A1A1A1]" /> {agent.uptime}
                                             </div>
                                             <div
-                                                className={`px-2 py-0.5 rounded-[999px] border text-[10px] uppercase tracking-wide ${
-                                                    agent.codebaseMatch === "matched"
-                                                        ? "border-emerald-500/40 text-emerald-300 bg-emerald-500/10"
-                                                        : agent.codebaseMatch === "mismatch"
-                                                            ? "border-rose-500/40 text-rose-300 bg-rose-500/10"
-                                                            : "border-[#2A2D32] text-[#8A8F98] bg-[#1A1C20]"
-                                                }`}
+                                                className={`px-2 py-0.5 rounded-[999px] border text-[10px] uppercase tracking-wide ${agent.codebaseMatch === "matched"
+                                                    ? "border-emerald-500/40 text-emerald-300 bg-emerald-500/10"
+                                                    : agent.codebaseMatch === "mismatch"
+                                                        ? "border-rose-500/40 text-rose-300 bg-rose-500/10"
+                                                        : "border-[#2A2D32] text-[#8A8F98] bg-[#1A1C20]"
+                                                    }`}
                                                 title="Codebase match status"
                                             >
                                                 {agent.codebaseMatch}
@@ -255,8 +299,26 @@ export default function AgentsDirectoryPage() {
                                         </div>
                                     </div>
                                 </div>
-                            </Link>
-                        ))}
+                            );
+
+                            if (canOpenChatCard) {
+                                return (
+                                    <Link
+                                        key={agent.id}
+                                        href={`/dashboard/agent-chat/${encodeURIComponent(agent.name)}`}
+                                        className={cardClassName}
+                                    >
+                                        {cardInner}
+                                    </Link>
+                                );
+                            }
+
+                            return (
+                                <div key={agent.id} className={cardClassName}>
+                                    {cardInner}
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
             </div>

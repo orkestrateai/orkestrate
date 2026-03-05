@@ -71,11 +71,88 @@ Orkestrate is built on a modern, event-driven stack:
 
 ## 🔌 Tool Integration
 
-### OpenCode (Native Plugin)
-Drop `public/tools/opencode/plugin.ts` into your OpenCode plugins directory. It provides deep event hooks into the agent's lifecycle.
+### Orkestrate MCP Endpoint
 
-### Codex / Claude (Script Injection)
-Use the provided `telemetry.js` scripts to wrap agent executions.
+```text
+https://orkestrate.vercel.app/api/mcp
+```
+
+### Claude Code
+
+1. Add the MCP server:
+   ```bash
+   claude mcp add --transport http --scope project Orkestrate "https://orkestrate.vercel.app/api/mcp"
+   ```
+2. Verify setup:
+   ```bash
+   claude mcp list
+   ```
+3. Authenticate from an active Claude Code session via `/mcp` -> `Orkestrate` -> `Authenticate`.
+
+### OpenCode
+
+1. Run:
+   ```bash
+   opencode mcp add
+   ```
+2. In the prompt flow, set:
+   - Name: `Orkestrate`
+   - Type: `remote`
+   - URL: `https://orkestrate.vercel.app/api/mcp`
+3. Authenticate:
+   ```bash
+   opencode mcp auth Orkestrate
+   ```
+4. Verify:
+   ```bash
+   opencode mcp auth list
+   opencode mcp list
+   ```
+
+Manual OpenCode config (`~/.config/opencode/opencode.json`):
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "Orkestrate": {
+      "type": "remote",
+      "url": "https://orkestrate.vercel.app/api/mcp",
+      "enabled": true
+    }
+  }
+}
+```
+
+### Codex
+
+1. Add the MCP server:
+   ```bash
+   codex mcp add Orkestrate --url https://orkestrate.vercel.app/api/mcp
+   ```
+2. Authenticate:
+   ```bash
+   codex mcp login Orkestrate
+   ```
+3. Verify:
+   ```bash
+   codex mcp list
+   ```
+
+Manual Codex config (`~/.codex/config.toml`):
+
+```toml
+[mcp_servers.Orkestrate]
+url = "https://orkestrate.vercel.app/api/mcp"
+```
+
+### Optional OpenCode Telemetry Plugin
+
+If you want enhanced OpenCode telemetry in the Orkestrate dashboard:
+
+```bash
+mkdir -p ~/.config/opencode/plugins && curl -sL https://orkestrate.vercel.app/tools/opencode/plugin.ts -o ~/.config/opencode/plugins/Orkestrate.ts
+```
 
 ---
 

@@ -207,119 +207,6 @@ process.on('SIGINT', () => { gracefulShutdown('SIGINT'); process.exit(0); });
 process.on('SIGTERM', () => { gracefulShutdown('SIGTERM'); process.exit(0); });
 process.on('exit', () => { gracefulShutdown('exit'); });
 
-function shouldDropNoisyEvent(text) {
-    try {
-        const evt = JSON.parse(text);
-        const t = evt.type;
-        const pt = evt.payload?.type;
-        if (t === 'turn_context') return true;
-        if (t === 'event_msg' && (pt === 'token_count' || pt === 'agent_message' || pt === 'user_message')) return true;
-    } catch (e) {
-        // Non-JSON log line.
-    }
-    return false;
-}
-
-function findNewestFile(baseDir, extension) {
-    let newestFile = '';
-    let newestTime = 0;
-
-    function searchDir(dir) {
-        if (!fs.existsSync(dir)) return;
-        const files = fs.readdirSync(dir);
-        for (const file of files) {
-            const fullPath = path.join(dir, file);
-            const stat = fs.statSync(fullPath);
-            if (stat.isDirectory()) {
-                searchDir(fullPath);
-            } else if (file.endsWith(extension) && stat.mtimeMs > newestTime) {
-                newestTime = stat.mtimeMs;
-                newestFile = fullPath;
-            }
-        }
-    }
-
-    searchDir(baseDir);
-    return newestFile;
-}
-
-function startFileTailer(baseDir, extension, logPrefix) {
-    let activeFile = '';
-    let fileSize = 0;
-    let watcher = null;
-    let warnedNoFile = false;
-
-    function attachFile(filePath) {
-        if (watcher && activeFile) {
-            fs.unwatchFile(activeFile, watcher);
-        }
-
-        activeFile = filePath;
-        fileSize = 0;
-
-        console.log(`[Telemetry] Tailing ${logPrefix} log file: ${activeFile}`);
-        sendLog(`Started tailing ${logPrefix} log: ${activeFile}`, 'system');
-
-        watcher = (curr) => {
-            if (curr.size < fileSize) {
-                fileSize = 0;
-            }
-            if (curr.size <= fileSize) {
-                return;
-            }
-
-            const start = fileSize;
-            const end = curr.size;
-            fileSize = end;
-
-            const stream = fs.createReadStream(activeFile, {
-                encoding: 'utf-8',
-                start,
-                end,
-            });
-
-            let buffer = '';
-            stream.on('data', (chunk) => {
-                buffer += chunk;
-                const lines = buffer.split('\n');
-                buffer = lines.pop() || '';
-
-                for (const line of lines) {
-                    const text = line.trim();
-                    if (!text) continue;
-                    if (shouldDropNoisyEvent(text)) continue;
-                    sendLog(text);
-                }
-            });
-
-            stream.on('error', (e) => {
-                logTransportError(`[Telemetry] Failed reading tailed file: ${e.message}`);
-            });
-        };
-
-        fs.watchFile(activeFile, { interval: 500 }, watcher);
-    }
-
-    function scanForLatestFile() {
-        const newestFile = findNewestFile(baseDir, extension);
-        if (!newestFile) {
-            if (!warnedNoFile) {
-                warnedNoFile = true;
-                console.error(`[Telemetry] No ${logPrefix} session logs found in ${baseDir}`);
-            }
-            return;
-        }
-
-        warnedNoFile = false;
-        if (newestFile !== activeFile) {
-            attachFile(newestFile);
-        }
-    }
-
-    scanForLatestFile();
-    setInterval(scanForLatestFile, 3000);
-}
-
 function startOpenCodeTailing() {
     let DatabaseSync;
     try {
@@ -339,6 +226,7 @@ function startOpenCodeTailing() {
     sendLog('Started tailing OpenCode database natively', 'system');
 
     let lastTimeCreated = Date.now();
+    let lastPartRowId = 0;
 
     setInterval(() => {
         let db;
@@ -350,18 +238,24 @@ function startOpenCodeTailing() {
                 SELECT 
                     p.data, 
                     p.time_created, 
+                    p.rowid as part_rowid,
                     s.local_id as session_id,
                     s.title as session_title
                 FROM part p
                 LEFT JOIN session s ON p.session_id = s.id
-                WHERE p.time_created > ? 
-                ORDER BY p.time_created ASC
+                WHERE (p.time_created > ?) OR (p.time_created = ? AND p.rowid > ?)
+                ORDER BY p.time_created ASC, p.rowid ASC
             `;
 
-            const rows = db.prepare(query).all(lastTimeCreated);
+            const rows = db.prepare(query).all(lastTimeCreated, lastTimeCreated, lastPartRowId);
             for (const row of rows) {
-                if (row.time_created > lastTimeCreated) {
-                    lastTimeCreated = row.time_created;
+                const rowTimeCreated = Number(row.time_created) || 0;
+                const rowPartRowId = Number(row.part_rowid) || 0;
+                if (rowTimeCreated > lastTimeCreated) {
+                    lastTimeCreated = rowTimeCreated;
+                    lastPartRowId = rowPartRowId;
+                } else if (rowTimeCreated === lastTimeCreated && rowPartRowId > lastPartRowId) {
+                    lastPartRowId = rowPartRowId;
                 }
 
                 if (!row.data) continue;
@@ -391,21 +285,7 @@ function startOpenCodeTailing() {
 }
 
 sendLog(JSON.stringify({ type: 'connect', payload: { pid: process.pid, agent: agentType, client: clientId, roomId } }), 'system');
-
-// Use prefix matching since MCP passes canonical IDs like 'codex-a5f2', 'claude-b3c1', etc.
-const agentFamily = agentType.split('-')[0].toLowerCase();
-
-if (agentFamily === 'codex') {
-    const dir = path.join(os.homedir(), '.codex', 'sessions');
-    startFileTailer(dir, '.jsonl', 'Codex');
-} else if (agentFamily === 'claude') {
-    const dir = path.join(os.homedir(), '.claude');
-    startFileTailer(dir, '.jsonl', 'Claude Code');
-} else if (agentFamily === 'opencode') {
-    startOpenCodeTailing();
-} else {
-    console.log(`[Telemetry] Agent family '${agentFamily}' (from '${agentType}'), standing by for stdin...`);
-}
+startOpenCodeTailing();
 
 process.stdin.on('data', (data) => {
     const text = data.toString().trim();

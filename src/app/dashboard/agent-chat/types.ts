@@ -1,3 +1,5 @@
+"use client";
+
 export type Workspace = { id: string; isActive?: boolean };
 
 export type DashboardAgent = {
@@ -9,30 +11,21 @@ export type DashboardAgent = {
     lastPingAt: string;
     agentProfile: string;
     currentObjective: string;
+    pluginConnected?: boolean;
+    activeSessionId?: string | null;
+    canViewChat?: boolean;
 };
 
-export type ActivityLog = {
+export type TranscriptEntry = {
     timestamp: string;
-    clientId: string;
-    agent: string;
-    scopedAgentId: string;
-    message: string;
-    event: string;
-    sessionId: string | null;
-};
-
-export type ParsedEvent = ActivityLog & {
-    parsedType: string;
+    type: string;
     payload: any;
-    parsedRaw: any;
+    message: string;
 };
 
 export type SessionRecord = {
     id: string;
     title: string;
     createdAt: string;
-    metadata: any;
     status: string;
 };
-
-export type AgentFamily = "opencode" | "codex" | "claude" | "other";

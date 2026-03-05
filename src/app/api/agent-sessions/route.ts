@@ -1,63 +1,70 @@
-import { NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { and, desc, eq } from 'drizzle-orm';
-import { db } from '@/db';
-import { agentSessions, roomMemberships } from '@/db/schema';
+import { NextRequest, NextResponse } from "next/server";
+import { and, desc, eq } from "drizzle-orm";
+import { db } from "@/db";
+import { agentSessions } from "@/db/schema";
+import { authenticateRequestUser } from "@/lib/auth-user-request";
+import { canAccessWorkspace, ensureActiveWorkspaceForUser } from "@/lib/workspaces-core";
+import { reconcileWorkspaceAgentLiveness } from "@/lib/agents-core";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+function noStoreJson(payload: unknown, status = 200) {
+  return NextResponse.json(payload, { status, headers: { "Cache-Control": "no-store" } });
+}
+
+function toSessionTitle(index: number) {
+  return `Session ${index}`;
+}
 
 export async function GET(req: NextRequest) {
-    try {
-        const { searchParams } = new URL(req.url);
-        const workspaceId = searchParams.get('workspaceId');
-        const scopedAgentId = searchParams.get('scopedAgentId');
+  try {
+    const user = await authenticateRequestUser(req);
+    if (!user?.id) return noStoreJson({ error: "Unauthorized" }, 401);
 
-        if (!workspaceId) {
-            return new Response(JSON.stringify({ error: 'Missing workspaceId' }), { status: 400 });
-        }
+    const workspaceIdParam = req.nextUrl.searchParams.get("workspaceId") || "";
+    const scopedAgentId = req.nextUrl.searchParams.get("scopedAgentId") || "";
+    if (!scopedAgentId) return noStoreJson({ error: "Missing scopedAgentId" }, 400);
 
-        // 1. Auth check
-        const authHeader = req.headers.get('authorization');
-        if (!authHeader?.startsWith('Bearer ')) {
-            return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-        }
+    const workspaceId = workspaceIdParam || await ensureActiveWorkspaceForUser(user.id);
+    const allowed = await canAccessWorkspace(user.id, workspaceId);
+    if (!allowed) return noStoreJson({ error: "Workspace not accessible" }, 403);
+    await reconcileWorkspaceAgentLiveness(workspaceId);
 
-        const token = authHeader.slice(7);
-        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-        if (authError || !user) {
-            return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-        }
+    const activeOnly = req.nextUrl.searchParams.get("activeOnly") === "true";
+    const rows = await db.select().from(agentSessions)
+      .where(and(
+        eq(agentSessions.roomId, workspaceId),
+        eq(agentSessions.agentId, scopedAgentId),
+        ...(activeOnly ? [eq(agentSessions.status, "active" as const)] : []),
+      ))
+      .orderBy(desc(agentSessions.startedAt))
+      .limit(activeOnly ? 1 : 50);
 
-        // 2. Room membership check
-        const membership = await db.query.roomMemberships.findFirst({
-            where: and(
-                eq(roomMemberships.roomId, workspaceId),
-                eq(roomMemberships.userId, user.id)
-            )
-        });
+    const sessions = rows.map((row, idx) => ({
+      id: row.id,
+      title: toSessionTitle(rows.length - idx),
+      startedAt: row.startedAt.toISOString(),
+      endedAt: row.endedAt ? row.endedAt.toISOString() : null,
+      status: row.status,
+      objective: "Coordination session",
+      eventCount: 0,
+      unresolved: 0,
+      summary: row.status === "active" ? "Active session" : "Completed session",
+      contextWindow: "n/a",
+      tools: [],
+      confidence: 0.9,
+      agent: scopedAgentId.split("::")[1] || scopedAgentId,
+      role: "agent",
+      repo: "workspace",
+      branch: "unknown",
+      model: "unknown",
+    }));
 
-        if (!membership) {
-            return new Response(JSON.stringify({ error: 'Workspace access denied' }), { status: 403 });
-        }
+    const activeRow = rows[0] || null;
+    const logs = activeRow && Array.isArray(activeRow.transcript)
+      ? (activeRow.transcript as Array<Record<string, unknown>>)
+      : [];
 
-        // 3. Fetch Sessions
-        const whereClause = [eq(agentSessions.roomId, workspaceId)];
-        if (scopedAgentId) {
-            whereClause.push(eq(agentSessions.scopedAgentId, scopedAgentId));
-        }
-
-        const sessions = await db.query.agentSessions.findMany({
-            where: and(...whereClause),
-            orderBy: desc(agentSessions.createdAt),
-            limit: 100
-        });
-
-        return new Response(JSON.stringify({ sessions }), { status: 200 });
-
-    } catch (error) {
-        console.error('Failed to fetch agent sessions:', error);
-        return new Response(JSON.stringify({ error: 'Internal Server Error' }), { status: 500 });
-    }
+    return noStoreJson({ sessions, activeSessionId: activeRow?.id || null, logs });
+  } catch (error) {
+    return noStoreJson({ error: "Internal server error", detail: error instanceof Error ? error.message : String(error) }, 500);
+  }
 }

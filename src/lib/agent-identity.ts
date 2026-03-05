@@ -41,10 +41,31 @@ export function getDisplayAgentIdFromScopedClientId(clientId: string): string {
   return parts.scopedAgentId || parts.clientBaseId || "unknown-agent";
 }
 
-export function normalizeTelemetryScopedClientId(clientId: unknown, agent: unknown): string {
+export function normalizeTelemetryScopedClientId(
+  clientId: unknown,
+  agent: unknown,
+  clientName?: unknown,
+): string {
   const parts = splitScopedClientId(clientId);
-  const normalizedAgent = sanitizeAgentId(agent) || parts.scopedAgentId || "unknown-agent";
-  return buildScopedClientId(parts.clientBaseId || "unknown-client", normalizedAgent);
+  const requestedAgent = sanitizeAgentId(agent);
+  const genericRequested =
+    !requestedAgent ||
+    requestedAgent === "generic" ||
+    requestedAgent === "agent" ||
+    requestedAgent === "main";
+
+  // If the caller passed a generic label (main/generic/agent), prefer any explicit
+  // scoped suffix from clientId to avoid flipping between aliases.
+  const effectiveRequestedAgent =
+    genericRequested && parts.scopedAgentId ? parts.scopedAgentId : requestedAgent;
+
+  const identity = resolveCanonicalAgentIdentity({
+    requestedAgentId: effectiveRequestedAgent || requestedAgent || "main",
+    clientId: parts.clientBaseId || "unknown-client",
+    clientName: clientName ?? null,
+  });
+
+  return buildScopedClientId(parts.clientBaseId || "unknown-client", identity.id);
 }
 
 export function telemetryClientIdCandidates(clientId: unknown, agent?: unknown): string[] {

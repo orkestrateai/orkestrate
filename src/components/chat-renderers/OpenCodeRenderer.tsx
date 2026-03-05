@@ -6,7 +6,7 @@ import {
     CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { Check, X, Loader2, ChevronRight, Sparkles } from "lucide-react";
+import { Check, X, Loader2, ChevronRight, Sparkles, Clock3 } from "lucide-react";
 
 import { Streamdown } from "streamdown";
 import { cjk } from "@streamdown/cjk";
@@ -37,10 +37,61 @@ function getWarpToolTitle(toolName: string, inputData: any) {
 }
 
 export function OpenCodeRenderer({ parts }: { parts: any[] }) {
+    const formatTs = (value: unknown) => {
+        const text = typeof value === "string" ? value : "";
+        const d = new Date(text);
+        if (Number.isNaN(d.getTime())) return "";
+        return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    };
+
     return (
         <div className="flex flex-col w-full text-[#F2F2F2] font-sans">
             {parts.map((p, i) => {
                 switch (p.type) {
+                    case "chat":
+                        const isUser = p.role === "user";
+                        const timeLabel = formatTs(p.timestamp);
+                        return (
+                            <div key={i} className={cn("my-2 flex", isUser ? "justify-end" : "justify-start")}>
+                                <div className={cn(
+                                    "max-w-[82%] rounded-[12px] px-4 py-3 text-[14px] leading-relaxed whitespace-pre-wrap border shadow-sm",
+                                    isUser
+                                        ? "bg-[#1E2530] border-[#2A3442] text-[#E7ECF6]"
+                                        : "bg-[#16181A] border-[#232529] text-[#D1D3D8]",
+                                )}>
+                                    <div className="text-[10px] uppercase tracking-wide mb-1 opacity-70 flex items-center gap-1.5">
+                                        <span>{isUser ? "You" : "Agent"}</span>
+                                        {timeLabel && (
+                                            <>
+                                                <span>·</span>
+                                                <Clock3 className="w-3 h-3" />
+                                                <span>{timeLabel}</span>
+                                            </>
+                                        )}
+                                    </div>
+                                    <Streamdown plugins={streamdownPlugins}>
+                                        {String(p.text || "")}
+                                    </Streamdown>
+                                </div>
+                            </div>
+                        );
+
+                    case "session":
+                        return (
+                            <div key={i} className="my-4 flex justify-center">
+                                <div className="px-3 py-1.5 text-[11px] rounded-full border border-[#2A2D32] bg-[#16181A] text-[#8A8F98] tracking-wide uppercase">
+                                    {String(p.eventType || "session event").replace(/^session\./, "Session: ")}
+                                </div>
+                            </div>
+                        );
+
+                    case "meta":
+                        return (
+                            <div key={i} className="my-3 rounded-[8px] border border-[#232529] bg-[#111214] px-3 py-2 text-[12px] text-[#A1A6B4]">
+                                {p.text}
+                            </div>
+                        );
+
                     case "step-start":
                     case "step-finish":
                     case "dashboard_prompt_dispatched":

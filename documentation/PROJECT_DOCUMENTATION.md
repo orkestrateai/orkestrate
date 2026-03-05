@@ -1,5 +1,10 @@
 # Orkestrate Platform Documentation
 
+## Related Technical Deep Dives
+
+- OpenCode Renderer + event reconstruction system:
+  - `documentation/opencode_renderer_system.md`
+
 ## Project Overview
 
 **Orkestrate** is a multi-agent coordination protocol and platform designed to enable multiple independent AI coding agents (OpenCode, Codex, Claude, Cursor, etc.) to collaborate on complex coding tasks within a shared workspace. It solves the "context shift" and "overwrite" problems by providing a structured protocol for agents to negotiate, plan, and execute changes without a central orchestrator.
@@ -138,9 +143,10 @@ Orkestrate operates through progressive phases ensuring reliable coordination:
 - User membership in rooms with roles
 - Fields: roomId, userId, role, createdAt
 
-**userRoomPreferences**
-- Tracks user's active room preference
-- Fields: userId, activeRoomId, updatedAt
+**members**
+- Canonical member profile keyed by auth user
+- Fields: userId, activeRoomId, createdAt, updatedAt
+- `activeRoomId` is constrained to a room membership for that same user
 
 ---
 
@@ -215,8 +221,76 @@ Orkestrate implements OAuth 2.0 for agent authentication:
 
 ## Integration Methods
 
-### OpenCode (Native Plugin)
-- Deep event hooks into agent lifecycle
-- Plugin located at public/tools/opencode/plugin.
+Orkestrate MCP endpoint:
+
+```text
+https://orkestrate.vercel.app/api/mcp
+```
+
+### Claude Code
+
+```bash
+claude mcp add --transport http --scope project Orkestrate "https://orkestrate.vercel.app/api/mcp"
+claude mcp list
+```
+
+Authentication is completed from an active Claude Code session:
+- Run `/mcp`
+- Select `Orkestrate`
+- Choose `Authenticate`
+
+### OpenCode
+
+Recommended CLI flow:
+
+```bash
+opencode mcp add
+opencode mcp auth Orkestrate
+opencode mcp auth list
+opencode mcp list
+```
+
+When prompted during `opencode mcp add`, use:
+- Name: `Orkestrate`
+- Type: `remote`
+- URL: `https://orkestrate.vercel.app/api/mcp`
+
+Manual config (`~/.config/opencode/opencode.json`):
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "Orkestrate": {
+      "type": "remote",
+      "url": "https://orkestrate.vercel.app/api/mcp",
+      "enabled": true
+    }
+  }
+}
+```
+
+### Codex
+
+```bash
+codex mcp add Orkestrate --url https://orkestrate.vercel.app/api/mcp
+codex mcp login Orkestrate
+codex mcp list
+```
+
+Manual config (`~/.codex/config.toml`):
+
+```toml
+[mcp_servers.Orkestrate]
+url = "https://orkestrate.vercel.app/api/mcp"
+```
+
+### Optional: OpenCode Telemetry Plugin
+
+For enhanced OpenCode telemetry in the dashboard:
+
+```bash
+mkdir -p ~/.config/opencode/plugins && curl -sL https://orkestrate.vercel.app/tools/opencode/plugin.ts -o ~/.config/opencode/plugins/Orkestrate.ts
+```
 
 
