@@ -1,49 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
-import { dequeueAgentCommands } from "@/lib/agent-control";
-import { normalizeTelemetryScopedClientId } from "@/lib/agent-identity";
+import { desc, eq } from "drizzle-orm";
+import { pullAgentCommands, waitForAgentCommand } from "@/lib/agent-command-queue";
 import { db } from "@/db";
-import { agentSessions } from "@/db/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { agents } from "@/db/schema";
 
 export const runtime = "nodejs";
 
+function noStoreJson(payload: unknown, status = 200) {
+  return NextResponse.json(payload, { status, headers: { "Cache-Control": "no-store" } });
+}
+
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const clientId = searchParams.get("clientId") || "";
-    const agent = searchParams.get("agent") || "";
-    const roomId = searchParams.get("roomId") || "";
-    let sessionId = searchParams.get("sessionId") || null;
+    const agentHint = (req.nextUrl.searchParams.get("agentId") || "").trim();
+    if (!agentHint) return noStoreJson({ error: "Missing agentId" }, 400);
+    const waitParam = req.nextUrl.searchParams.get("waitMs") || "0";
+    const waitParsed = Number(waitParam);
+    const waitMs = Number.isFinite(waitParsed)
+      ? Math.min(25_000, Math.max(0, Math.floor(waitParsed)))
+      : 0;
 
-    if (!clientId || !agent || !roomId) {
-      return NextResponse.json({ error: "Missing clientId, agent, or roomId" }, { status: 400 });
+    const foundById = await db.query.agents.findFirst({ where: eq(agents.id, agentHint) });
+    const foundByLabel = foundById
+      ? null
+      : await db.query.agents.findFirst({ where: eq(agents.label, agentHint), orderBy: [desc(agents.updatedAt)] });
+    const agent = foundById || foundByLabel;
+    if (!agent) return noStoreJson({ commands: [] });
+
+    let commands = pullAgentCommands(agent.id, 5).map((cmd) => ({
+      id: cmd.id,
+      text: cmd.text,
+      workspaceId: cmd.workspaceId,
+      createdAt: cmd.createdAt,
+    }));
+
+    if (commands.length === 0 && waitMs > 0) {
+      await waitForAgentCommand(agent.id, waitMs);
+      commands = pullAgentCommands(agent.id, 5).map((cmd) => ({
+        id: cmd.id,
+        text: cmd.text,
+        workspaceId: cmd.workspaceId,
+        createdAt: cmd.createdAt,
+      }));
     }
 
-    const scopedAgentId = normalizeTelemetryScopedClientId(clientId, agent);
-
-    // Resolution: If sessionId is an external string (e.g. "ses_..."), find its internal UUID
-    if (sessionId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId)) {
-      const session = await db.query.agentSessions.findFirst({
-        where: and(
-          eq(agentSessions.roomId, roomId),
-          eq(agentSessions.scopedAgentId, scopedAgentId),
-          sql`${agentSessions.metadata}->>'externalSessionId' = ${sessionId}`
-        )
-      });
-      sessionId = session?.id || null;
-
-      // If we provided an external ID but found no session, we definitely shouldn't pull random commands.
-      if (!sessionId) {
-        return NextResponse.json({ ok: true, commands: [] });
-      }
-    }
-
-    const commands = await dequeueAgentCommands({ roomId, scopedAgentId, sessionId, limit: 10 });
-    return NextResponse.json({ ok: true, commands });
+    return noStoreJson({ commands, agentId: agent.id });
   } catch (error) {
-    return NextResponse.json(
-      { error: "Internal server error", detail: error instanceof Error ? error.message : String(error) },
-      { status: 500 },
-    );
+    return noStoreJson({ error: "Internal server error", detail: error instanceof Error ? error.message : String(error) }, 500);
   }
 }

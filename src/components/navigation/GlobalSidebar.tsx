@@ -100,6 +100,16 @@ export default function GlobalSidebar() {
         void loadRooms();
     }, [loadRooms]);
 
+    async function handleLogout() {
+        try {
+            const supabase = createSupabaseBrowserClient();
+            await supabase.auth.signOut();
+        } finally {
+            router.push("/");
+            router.refresh();
+        }
+    }
+
     async function createRoom() {
         const trimmed = newRoomName.trim();
         setSavingRoom(true);
@@ -404,7 +414,10 @@ export default function GlobalSidebar() {
                     <Settings className="w-4 h-4 shrink-0" />
                     <span className="text-[14px]">Settings</span>
                 </Link>
-                <button className="flex items-center gap-2.5 w-full text-red-500/80 hover:text-red-400 hover:bg-white/[0.055] px-2 py-1 rounded-[4px] transition-colors">
+                <button
+                    onClick={() => void handleLogout()}
+                    className="flex items-center gap-2.5 w-full text-red-500/80 hover:text-red-400 hover:bg-white/[0.055] px-2 py-1 rounded-[4px] transition-colors"
+                >
                     <LogOut className="w-4 h-4 shrink-0" />
                     <span className="text-[14px]">Log out</span>
                 </button>

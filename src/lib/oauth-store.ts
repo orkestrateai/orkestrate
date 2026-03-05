@@ -1,11 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
-import { deleteObject, readTextObject, writeTextObject } from "./supabase";
+import { deleteObject, ensureBucket, readTextObject, writeTextObject } from "./supabase";
 
 const OAUTH_BUCKET = "agentalk-oauth";
 const CLIENT_PATH = "clients";
 const CODE_PATH = "auth-codes";
 const ACCESS_PATH = "access-tokens";
 const REFRESH_PATH = "refresh-tokens";
+const CLIENT_USER_PATH = "client-users";
 
 const AUTH_CODE_TTL_SEC = 300;
 const ACCESS_TOKEN_TTL_SEC = 3600;
@@ -47,6 +48,10 @@ function accessFile(accessToken: string) {
 
 function refreshFile(refreshToken: string) {
   return `${REFRESH_PATH}/${refreshToken}.json`;
+}
+
+function clientUserFile(clientId: string) {
+  return `${CLIENT_USER_PATH}/${clientId}.json`;
 }
 
 export async function createClientRegistration(client: any, registration: any) {
@@ -122,6 +127,18 @@ export async function issueTokens(client: any, payload: any) {
   await writeJson(client, accessFile(accessToken), accessRecord);
   await writeJson(client, refreshFile(refreshToken), refreshRecord);
 
+  // Best-effort client -> user mapping for telemetry ingestion fallbacks.
+  try {
+    await writeJson(client, clientUserFile(payload.client_id), {
+      client_id: payload.client_id,
+      user_id: payload.user_id,
+      scope: payload.scope || "",
+      updated_at: issuedAt,
+    });
+  } catch {
+    // Do not block token issuance if mapping write fails.
+  }
+
   return {
     token_type: "Bearer",
     access_token: accessToken,
@@ -129,6 +146,70 @@ export async function issueTokens(client: any, payload: any) {
     refresh_token: refreshToken,
     scope: payload.scope || "",
   };
+}
+
+export async function getClientUserMapping(client: any, clientId: string) {
+  if (!clientId) return null;
+  return await readJson(client, clientUserFile(clientId));
+}
+
+export async function discoverAndBackfillClientUserMapping(
+  client: any,
+  clientId: string,
+): Promise<string | null> {
+  if (!clientId) return null;
+
+  await ensureBucket(client, OAUTH_BUCKET);
+  const store = client.storage.from(OAUTH_BUCKET);
+  const pageSize = 100;
+  const maxPages = 5;
+  const now = nowEpoch();
+
+  for (let page = 0; page < maxPages; page += 1) {
+    const { data, error } = await store.list(ACCESS_PATH, {
+      limit: pageSize,
+      offset: page * pageSize,
+      sortBy: { column: "created_at", order: "desc" },
+    });
+
+    if (error) break;
+    if (!Array.isArray(data) || data.length === 0) break;
+
+    for (const entry of data) {
+      const name = typeof entry?.name === "string" ? entry.name : "";
+      if (!name || !name.endsWith(".json")) continue;
+
+      const record = await readJson(client, `${ACCESS_PATH}/${name}`);
+      if (!record || typeof record !== "object") continue;
+
+      const candidateClientId =
+        typeof (record as any).client_id === "string" ? (record as any).client_id : "";
+      const candidateUserId =
+        typeof (record as any).user_id === "string" ? (record as any).user_id : "";
+      const expiresAt =
+        typeof (record as any).expires_at === "number" ? (record as any).expires_at : null;
+
+      if (candidateClientId !== clientId || !candidateUserId) continue;
+      if (expiresAt !== null && expiresAt <= now) continue;
+
+      try {
+        await writeJson(client, clientUserFile(clientId), {
+          client_id: clientId,
+          user_id: candidateUserId,
+          scope: typeof (record as any).scope === "string" ? (record as any).scope : "",
+          updated_at: now,
+        });
+      } catch {
+        // Ignore backfill write failures; caller still gets the discovered user id.
+      }
+
+      return candidateUserId;
+    }
+
+    if (data.length < pageSize) break;
+  }
+
+  return null;
 }
 
 export async function validateAccessToken(client: any, accessToken: string) {

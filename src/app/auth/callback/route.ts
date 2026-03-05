@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { ensureActiveWorkspaceForUser } from '@/lib/workspaces'
+import { ensureActiveWorkspaceForUser } from '@/lib/workspaces-core'
 
 export const runtime = 'nodejs'
 

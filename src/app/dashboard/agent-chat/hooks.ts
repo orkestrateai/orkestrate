@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import useSWR from "swr";
 import { createSupabaseBrowserClient } from "@/utils/supabase/client";
-import type { ActivityLog, DashboardAgent, ParsedEvent, SessionRecord, Workspace } from "./types";
-import { fetcher, getAgentFamily, parseMessage } from "./utils";
+import type { DashboardAgent, SessionRecord, TranscriptEntry, Workspace } from "./types";
+import { fetcher } from "./utils";
 
-/** All data needed by the agent-chat page, driven by SWR polling. */
 export function useAgentChatData(selectedAgentId: string) {
     const { data: wsData, error: wsError } = useSWR("/api/workspaces", fetcher, { refreshInterval: 5000 });
     const workspaces: Workspace[] = Array.isArray(wsData?.workspaces) ? wsData.workspaces : Array.isArray(wsData?.rooms) ? wsData.rooms : [];
@@ -19,44 +18,30 @@ export function useAgentChatData(selectedAgentId: string) {
     );
     const agents: DashboardAgent[] = Array.isArray(contentData?.agents) ? contentData.agents : [];
 
-    const selectedAgent = useMemo(() => {
+    const selectedAgent = (() => {
         if (!agents.length) return null;
-        if (selectedAgentId) return agents.find((a) => a.stateClientId === selectedAgentId) || null;
-        return agents[0] || null;
-    }, [agents, selectedAgentId]);
+        if (selectedAgentId) {
+            const exact = agents.find((a) => a.stateClientId === selectedAgentId);
+            if (exact) return exact;
+            const byLabel = agents.find((a) => a.agentId === selectedAgentId || a.displayName === selectedAgentId);
+            if (byLabel) return byLabel;
+        }
+        return agents.find((a) => a.status === "online") || agents[0] || null;
+    })();
 
-    const sessionsUrl =
+    const activeSessionId = selectedAgent?.activeSessionId || null;
+    const sessions: SessionRecord[] = activeSessionId
+        ? [{ id: activeSessionId, title: "Active Session", createdAt: new Date().toISOString(), status: "active" }]
+        : [];
+
+    const transcriptUrl =
         activeWorkspaceId && selectedAgent
-            ? `/api/agent-sessions?workspaceId=${encodeURIComponent(activeWorkspaceId)}&scopedAgentId=${encodeURIComponent(selectedAgent.stateClientId)}`
+            ? `/api/agent-sessions?workspaceId=${encodeURIComponent(activeWorkspaceId)}&scopedAgentId=${encodeURIComponent(selectedAgent.stateClientId)}&activeOnly=true`
             : null;
-    const { data: sessionsData } = useSWR(sessionsUrl, fetcher, { refreshInterval: 5000 });
-    const sessions: SessionRecord[] = sessionsData?.sessions || [];
+    const { data: transcriptData } = useSWR(transcriptUrl, fetcher, { refreshInterval: 3000 });
+    const logs: TranscriptEntry[] = Array.isArray(transcriptData?.logs) ? transcriptData.logs : [];
 
-    const { data: telemetryData } = useSWR(
-        activeWorkspaceId ? `/api/telemetry-history?workspaceId=${encodeURIComponent(activeWorkspaceId)}&sinceHours=72&includeActivity=true` : null,
-        fetcher,
-        { refreshInterval: 5000 },
-    );
-    const rawLogs: ActivityLog[] = Array.isArray(telemetryData?.logs) ? telemetryData.logs : [];
-
-    const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-
-    const logs: ParsedEvent[] = useMemo(() => {
-        return rawLogs
-            .map((log: any) => {
-                const parsed = parseMessage(log.message);
-                return { ...log, parsedType: parsed.type, payload: parsed.payload, parsedRaw: parsed.raw, sessionId: log.sessionId };
-            })
-            .filter((log) => {
-                if (["ping", "heartbeat", "connect", "disconnect", "system"].includes(log.parsedType)) return false;
-                if (activeSessionId && log.sessionId !== activeSessionId) return false;
-                return true;
-            });
-    }, [rawLogs, activeSessionId]);
-
-    const activeSession = useMemo(() => sessions.find((s) => s.id === activeSessionId) || null, [sessions, activeSessionId]);
-    const activeSessionNum = activeSession ? sessions.length - sessions.findIndex((s) => s.id === activeSessionId) : null;
-    const agentFamily = getAgentFamily(selectedAgent);
+    const activeSession = sessions.find((s) => s.id === activeSessionId) || null;
 
     return {
         loading: !wsData && !wsError,
@@ -65,14 +50,10 @@ export function useAgentChatData(selectedAgentId: string) {
         sessions,
         logs,
         activeSessionId,
-        setActiveSessionId,
         activeSession,
-        activeSessionNum,
-        agentFamily,
     };
 }
 
-/** Sends a prompt to an online agent via the control API. */
 export function useSendPrompt() {
     const [composer, setComposer] = useState("");
     const [sending, setSending] = useState(false);

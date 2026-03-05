@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     title: "Documentation",
 };
 
-const MCP_ENDPOINT = "https://Orkestrate.vercel.app/api/mcp";
+const MCP_ENDPOINT = "https://orkestrate.vercel.app/api/mcp";
 
 export default function DocsPage() {
     return (
@@ -31,8 +31,7 @@ export default function DocsPage() {
             <section id="quickstart" className="scroll-mt-20 mb-16">
                 <h2 className="text-2xl font-semibold mb-4">Quickstart</h2>
                 <p className="text-muted-foreground mb-6 leading-relaxed">
-                    Get up and running in under a minute. Choose your preferred MCP client and run the
-                    setup command.
+                    Get up and running in under a minute. Add the MCP server, then complete OAuth.
                 </p>
 
                 <div className="space-y-4">
@@ -41,7 +40,16 @@ export default function DocsPage() {
                             Claude Code
                         </div>
                         <pre className="px-4 py-3 text-sm font-mono text-foreground/80 overflow-x-auto">
-                            {`claude mcp add --scope project --transport http Orkestrate "${MCP_ENDPOINT}"`}
+                            {`claude mcp add --transport http --scope project Orkestrate "${MCP_ENDPOINT}"`}
+                        </pre>
+                    </div>
+
+                    <div className="rounded-lg border border-white/[0.08] bg-[#0a0a0a] overflow-hidden">
+                        <div className="px-4 py-2.5 border-b border-white/[0.06] text-xs font-mono text-muted-foreground">
+                            OpenCode
+                        </div>
+                        <pre className="px-4 py-3 text-sm font-mono text-foreground/80 overflow-x-auto">
+                            {`opencode mcp add`}
                         </pre>
                     </div>
 
@@ -56,8 +64,13 @@ export default function DocsPage() {
                 </div>
 
                 <p className="text-sm text-muted-foreground mt-4">
-                    For OpenCode, add the configuration to <code className="px-1.5 py-0.5 rounded bg-white/[0.06] text-xs font-mono">~/.config/opencode/opencode.json</code>.
-                    See the <a href="#opencode" className="text-[#D1D3D8] hover:underline">OpenCode setup section</a> for details.
+                    After adding the server:
+                    {" "}
+                    OpenCode uses <code className="px-1.5 py-0.5 rounded bg-white/[0.06] text-xs font-mono">opencode mcp auth Orkestrate</code>,
+                    {" "}
+                    Codex uses <code className="px-1.5 py-0.5 rounded bg-white/[0.06] text-xs font-mono">codex mcp login Orkestrate</code>,
+                    {" "}
+                    and Claude Code authentication is completed from the <code className="px-1.5 py-0.5 rounded bg-white/[0.06] text-xs font-mono">/mcp</code> panel.
                 </p>
             </section>
 
@@ -172,13 +185,17 @@ write_agent_state({
             <section id="claude-code" className="scroll-mt-20 mb-16">
                 <h2 className="text-2xl font-semibold mb-4">Claude Code Setup</h2>
                 <p className="text-muted-foreground mb-6 leading-relaxed">
-                    Add the Orkestrate MCP server to your Claude Code project.
+                    Add the Orkestrate MCP server to your Claude Code project. The default Claude scope is
+                    <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono mx-1">local</code>;
+                    this example uses
+                    <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono mx-1">project</code>
+                    so teammates can share the same MCP config.
                 </p>
 
                 <h3 className="text-lg font-semibold mb-3">CLI (Recommended)</h3>
                 <div className="rounded-lg border border-white/[0.08] bg-[#0a0a0a] overflow-hidden mb-6">
                     <pre className="px-4 py-3 text-sm font-mono text-foreground/80 overflow-x-auto">
-                        {`claude mcp add --scope project --transport http Orkestrate "${MCP_ENDPOINT}"`}
+                        {`claude mcp add --transport http --scope project Orkestrate "${MCP_ENDPOINT}"`}
                     </pre>
                 </div>
 
@@ -200,12 +217,15 @@ write_agent_state({
                 </div>
 
                 <h3 className="text-lg font-semibold mb-3">Authentication</h3>
-                <p className="text-sm text-muted-foreground mb-3">Run in a regular terminal:</p>
+                <p className="text-sm text-muted-foreground mb-3">
+                    Verify the server is registered, then open Claude Code and authenticate from the MCP panel.
+                </p>
                 <div className="rounded-lg border border-white/[0.08] bg-[#0a0a0a] overflow-hidden mb-3">
-                    <pre className="px-4 py-3 text-sm font-mono text-foreground/80">claude /mcp</pre>
+                    <pre className="px-4 py-3 text-sm font-mono text-foreground/80">claude mcp list</pre>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                    Select the &ldquo;Orkestrate&rdquo; server, then &ldquo;Authenticate&rdquo; to begin the OAuth flow.
+                    In an active Claude Code session, run <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono">/mcp</code>, select
+                    &ldquo;Orkestrate&rdquo;, then choose &ldquo;Authenticate&rdquo;.
                 </p>
             </section>
 
@@ -213,30 +233,20 @@ write_agent_state({
             <section id="opencode" className="scroll-mt-20 mb-16">
                 <h2 className="text-2xl font-semibold mb-4">OpenCode Setup</h2>
                 <p className="text-muted-foreground mb-6 leading-relaxed">
-                    Add the configuration to your OpenCode config file.
+                    You can add the MCP server through CLI prompts or by editing your config file directly.
                 </p>
 
-                <h3 className="text-lg font-semibold mb-3">Plugin (Recommended for telemetry)</h3>
-                <p className="text-sm text-muted-foreground mb-3">
-                    Install the Orkestrate OpenCode plugin:
-                </p>
+                <h3 className="text-lg font-semibold mb-3">CLI (Recommended)</h3>
                 <div className="rounded-lg border border-white/[0.08] bg-[#0a0a0a] overflow-hidden mb-3">
-                    <pre className="px-4 py-3 text-sm font-mono text-foreground/80 overflow-x-auto">
-                        {`mkdir -p ~/.config/opencode/plugins && curl -sL https://orkestrate.vercel.app/tools/opencode/plugin.ts -o ~/.config/opencode/plugins/Orkestrate.ts`}
-                    </pre>
+                    <pre className="px-4 py-3 text-sm font-mono text-foreground/80">opencode mcp add</pre>
                 </div>
-                <p className="text-sm text-muted-foreground mb-3">
-                    Then create plugin env config at <code className="px-1.5 py-0.5 rounded bg-white/[0.06] text-xs font-mono">~/.config/opencode/.Orkestrate.env</code>:
+                <p className="text-xs text-muted-foreground mb-6">
+                    In the prompt flow, set Name to <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono">Orkestrate</code>, Type to
+                    <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono mx-1">remote</code>, and URL to
+                    <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono mx-1">{MCP_ENDPOINT}</code>.
                 </p>
-                <div className="rounded-lg border border-white/[0.08] bg-[#0a0a0a] overflow-hidden mb-6">
-                    <pre className="px-4 py-4 text-sm font-mono text-foreground/80 leading-6 overflow-x-auto">
-                        {`Orkestrate_HOST=orkestrate.vercel.app
-Orkestrate_AGENT_ID=main
-Orkestrate_CLIENT=opencode-local
-Orkestrate_ROOM=<your-workspace-id>`}
-                    </pre>
-                </div>
 
+                <h3 className="text-lg font-semibold mb-3">Manual Configuration</h3>
                 <p className="text-sm text-muted-foreground mb-3">
                     Add to <code className="px-1.5 py-0.5 rounded bg-white/[0.06] text-xs font-mono">~/.config/opencode/opencode.json</code>:
                 </p>
@@ -260,10 +270,13 @@ Orkestrate_ROOM=<your-workspace-id>`}
                     <pre className="px-4 py-3 text-sm font-mono text-foreground/80">opencode mcp auth Orkestrate</pre>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                    This will open your browser to complete the OAuth authentication flow.
+                    This opens your browser for OAuth. Verify connection state with
+                    <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono mx-1">opencode mcp auth list</code>
+                    or
+                    <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono mx-1">opencode mcp list</code>.
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">
-                    After auth, run <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono">read_agent_state</code> once in-session so workspace context and telemetry are fully initialized.
+                    After auth, run <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono">join_workspace</code> (or provide <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono">workspaceId</code>) to activate this agent session.
                 </p>
             </section>
 
@@ -285,10 +298,7 @@ Orkestrate_ROOM=<your-workspace-id>`}
                 <div className="rounded-lg border border-white/[0.08] bg-[#0a0a0a] overflow-hidden mb-6">
                     <pre className="px-4 py-4 text-sm font-mono text-foreground/80 leading-6 overflow-x-auto">
                         {`[mcp_servers.Orkestrate]
-    url = "${MCP_ENDPOINT}"
-
-[features]
-    rmcp_client = true`}
+    url = "${MCP_ENDPOINT}"`}
                     </pre>
                 </div>
 
@@ -297,7 +307,8 @@ Orkestrate_ROOM=<your-workspace-id>`}
                     <pre className="px-4 py-3 text-sm font-mono text-foreground/80">codex mcp login Orkestrate</pre>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                    Run <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono">/mcp</code> inside Codex to verify.
+                    Verify with <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono">codex mcp list</code> or run
+                    <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono mx-1">/mcp</code> inside Codex.
                 </p>
             </section>
 
