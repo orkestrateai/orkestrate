@@ -14,6 +14,7 @@ export type DashboardAgent = {
     pluginConnected?: boolean;
     activeSessionId?: string | null;
     canViewChat?: boolean;
+    memberId?: string;
 };
 
 export type TranscriptEntry = {

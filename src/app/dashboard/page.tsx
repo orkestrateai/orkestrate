@@ -1,423 +1,955 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
+import React, { useEffect, useMemo, useState } from "react";
 import {
-    Filter,
+    Search,
+    Clock,
+    Copy,
     Check,
-    MessageSquare,
-    AlertCircle,
-    GitCommit,
-    Bot,
-    MoreHorizontal
-} from 'lucide-react';
-import { createSupabaseBrowserClient } from '@/utils/supabase/client';
+    ChevronRight,
+    FileCode,
+    ListChecks,
+    StickyNote,
+    FolderTree,
+    Target,
+    Sparkles,
+    Users,
+    Terminal,
+    BookOpen,
+    ExternalLink,
+    X,
+    ChevronDown,
+} from "lucide-react";
+import { createSupabaseBrowserClient } from "@/utils/supabase/client";
+import useSWR from "swr";
+import { motion, AnimatePresence } from "motion/react";
 
-interface InboxItem {
+const fetcher = (url: string) => {
+    const supabase = createSupabaseBrowserClient();
+    return supabase.auth.getSession().then(({ data: { session } }) => {
+        return fetch(url, {
+            headers: { Authorization: `Bearer ${session?.access_token}` },
+        }).then((res) => res.json());
+    });
+};
+
+// --- Types ---
+
+type Room = {
     id: string;
-    agent: string;
-    type: 'commit' | 'error' | 'mention' | 'status' | 'log';
-    task: string;
-    title: string;
-    description: string;
-    time: string;
-    icon: any;
-    iconColor: string;
-    unread: boolean;
+    isActive?: boolean;
+    repoUrl?: string | null;
+};
+
+type DashboardAgent = {
+    stateClientId: string;
+    clientBaseId: string;
+    agentId: string;
+    displayName: string;
+    status: "online" | "offline" | "disconnected";
+    lastPingAt: string;
+    agentProfile: string;
+    currentObjective: string;
+    pluginConnected?: boolean;
+    activeSessionId?: string | null;
+    canViewChat?: boolean;
+    memberId?: string;
+    codebaseMatch?: "matched" | "mismatch" | "unknown";
+    stateContent?: {
+        objective?: string;
+        status?: string;
+        claimedPaths?: string[];
+        plan?: string[];
+        completed?: string[];
+        notes?: string;
+        version?: string;
+        updatedAt?: string;
+    };
+};
+
+type WorkspaceMember = {
+    id: string;
+    userId: string;
+    role: string;
+    isCurrentUser: boolean;
+    displayName: string;
+    email: string;
     avatarUrl: string;
-    rawTimestamp: Date;
+    joinedAt: string;
+};
+
+// --- Helpers ---
+
+const AVATAR_POOL = [
+    "https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=64&h=64&fit=crop&crop=faces&auto=format&q=80",
+    "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=64&h=64&fit=crop&crop=entropy&auto=format&q=80",
+    "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=64&h=64&fit=crop&crop=faces&auto=format&q=80",
+    "https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=64&h=64&fit=crop&crop=faces&auto=format&q=80",
+    "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=64&h=64&fit=crop&crop=faces&auto=format&q=80",
+];
+
+function getToolName(agent: DashboardAgent): string {
+    const profile = agent.agentProfile || "";
+    if (/codex/i.test(profile) || /codex/i.test(agent.agentId)) return "Codex";
+    if (/claude/i.test(profile) || /claude/i.test(agent.agentId)) return "Claude Code";
+    if (/cursor/i.test(profile) || /cursor/i.test(agent.agentId)) return "Cursor";
+    if (/opencode/i.test(profile) || /open/i.test(agent.agentId)) return "OpenCode";
+    if (/gemini/i.test(profile) || /gemini/i.test(agent.agentId)) return "Gemini CLI";
+    return "Agent";
 }
 
-interface InboxGroup {
+function getToolIcon(toolName: string): React.ReactNode {
+    const icons: Record<string, React.ReactNode> = {
+        "Claude Code": <Sparkles className="w-4 h-4" />,
+        "Codex": <FileCode className="w-4 h-4" />,
+        "Cursor": <Target className="w-4 h-4" />,
+        "OpenCode": <BookOpen className="w-4 h-4" />,
+        "Gemini CLI": <Target className="w-4 h-4" />,
+        "Agent": <Users className="w-4 h-4" />,
+    };
+    return icons[toolName] || icons["Agent"];
+}
+
+function getToolColor(toolName: string): string {
+    return "bg-gradient-to-tr from-[#0a0a0a] to-[#111214] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] border border-white/[0.1]";
+}
+
+function getToolTextColor(toolName: string): string {
+    return "text-white";
+}
+
+function timeAgo(dateStr: string): string {
+    const d = new Date(dateStr);
+    if (!Number.isFinite(d.getTime())) return "--";
+    const diffMs = Date.now() - d.getTime();
+    const mins = Math.round(diffMs / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.round(hrs / 24);
+    return `${days}d ago`;
+}
+
+// --- MCP Client Configs (mirrors ClientSetup.tsx) ---
+
+const MCP_ENDPOINT = "https://orkestrate.vercel.app/api/mcp";
+
+interface ClientConfig {
     id: string;
-    date: string;
-    items: InboxItem[];
+    name: string;
+    icon: React.ReactNode;
+    configFile: string;
+    docsUrl: string;
+    docsLabel: string;
+    cliCommand?: string;
+    cliDescription?: string;
+    configDescription?: string;
+    authCommand?: string;
+    authDescription?: string;
+    authNote?: string;
+    setupPrompt: string;
+    config: Record<string, unknown>;
+    rawConfig?: string;
 }
 
-function getIconForType(type: InboxItem['type']) {
-    switch (type) {
-        case 'commit': return GitCommit;
-        case 'error': return AlertCircle;
-        case 'mention': return MessageSquare;
-        case 'status': return Bot;
-        default: return Bot;
-    }
+function getClients(): ClientConfig[] {
+    return [
+        {
+            id: "claude-code",
+            name: "Claude Code",
+            icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="8" /></svg>,
+            configFile: ".mcp.json (project scope)",
+            docsUrl: "https://docs.anthropic.com/en/docs/claude-code/mcp",
+            docsLabel: "View Claude Code MCP docs",
+            cliCommand: `claude mcp add --transport http --scope project Orkestrate "${MCP_ENDPOINT}"`,
+            cliDescription: "Add the MCP server to your project scope:",
+            configDescription: "Alternatively, add this configuration to",
+            authCommand: "claude",
+            authDescription: "Then open Claude and run /mcp to authenticate:",
+            authNote: 'In the MCP menu, select "Orkestrate" and choose "Authenticate".',
+            setupPrompt: `I need you to setup the Orkestrate MCP server for this project. Please run: claude mcp add --transport http --scope project Orkestrate "${MCP_ENDPOINT}"`,
+            config: {
+                mcpServers: {
+                    Orkestrate: { type: "http", url: MCP_ENDPOINT },
+                },
+            },
+        },
+        {
+            id: "opencode",
+            name: "OpenCode",
+            icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2" /></svg>,
+            configFile: "~/.config/opencode/opencode.json",
+            docsUrl: "https://opencode.ai/docs/mcp-servers",
+            docsLabel: "View OpenCode MCP docs",
+            cliCommand: "opencode mcp add",
+            cliDescription: "Add a remote server by running the command and following these prompts:\n• Name: orkestrate\n• Type: Remote\n• URL: https://orkestrate.vercel.app/api/mcp\n• OAuth: Yes \n• Client ID: No",
+            authCommand: "opencode mcp auth Orkestrate",
+            authNote: "Run this command to authenticate via browser OAuth.",
+            setupPrompt: `I need you to add the Orkestrate MCP server to my OpenCode configuration. Add this to the 'mcp' object in ~/.config/opencode/opencode.json: "Orkestrate": { "type": "remote", "url": "${MCP_ENDPOINT}", "enabled": true }. Finally, run 'opencode mcp auth Orkestrate' to complete setup.`,
+            config: {
+                "$schema": "https://opencode.ai/config.json",
+                mcp: {
+                    Orkestrate: { type: "remote", url: MCP_ENDPOINT, enabled: true },
+                },
+            },
+        },
+        {
+            id: "codex",
+            name: "Codex",
+            icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="3" /></svg>,
+            configFile: "~/.codex/config.toml",
+            docsUrl: "https://developers.openai.com/codex/cli/docs-mcp",
+            docsLabel: "View Codex MCP docs",
+            cliCommand: `codex mcp add Orkestrate --url ${MCP_ENDPOINT}`,
+            cliDescription: "Add the Orkestrate MCP server to Codex:",
+            configDescription: "Or add this to",
+            rawConfig: `[mcp_servers.Orkestrate]\n    url = "${MCP_ENDPOINT}"`,
+            authCommand: "codex mcp login Orkestrate",
+            authNote: "Verify with `codex mcp list` or run `/mcp` inside Codex.",
+            setupPrompt: `Add the Orkestrate MCP server to Codex by running: codex mcp add Orkestrate --url ${MCP_ENDPOINT}`,
+            config: {},
+        },
+    ];
 }
 
-function getIconColorForType(type: InboxItem['type']) {
-    switch (type) {
-        case 'commit': return "text-emerald-400";
-        case 'error': return "text-rose-400";
-        case 'mention': return "text-blue-400";
-        default: return "text-[#909090]";
-    }
-}
+// --- Onboarding Component ---
 
-function formatGroupDate(date: Date): string {
-    const now = new Date();
-    const isToday = date.toDateString() === now.toDateString();
-    const yesterday = new Date(now);
-    yesterday.setDate(now.getDate() - 1);
-    const isYesterday = date.toDateString() === yesterday.toDateString();
+function OnboardingFlow({ onDismiss }: { onDismiss: () => void }) {
+    const [selectedClient, setSelectedClient] = useState("claude-code");
+    const [dropdownOpen, setDropdownOpen] = useState(false);
+    const [copyStatus, setCopyStatus] = useState<Record<string, boolean>>({});
+    const dropdownRef = React.useRef<HTMLDivElement>(null);
 
-    if (isToday) return "Today";
-    if (isYesterday) return "Yesterday";
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
+    const clients = getClients();
+    const active = clients.find(c => c.id === selectedClient) || clients[0];
 
-export default function InboxPage() {
-    const [filter, setFilter] = useState('All');
-    const [user, setUser] = useState<any>(null);
-    const [checkingAuth, setCheckingAuth] = useState(true);
-    const [showOnboarding, setShowOnboarding] = useState(false);
-    const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
-    const [hasAgentConnected, setHasAgentConnected] = useState(false);
-    const [hasFirstSessionActivity, setHasFirstSessionActivity] = useState(false);
-    const [inboxGroups, setInboxGroups] = useState<InboxGroup[]>([]);
-    const [isLoadingFeed, setIsLoadingFeed] = useState(false);
-    const [readIds, setReadIds] = useState<Set<string>>(new Set());
+    const handleCopy = (text: string, key: string) => {
+        navigator.clipboard.writeText(text);
+        setCopyStatus(prev => ({ ...prev, [key]: true }));
+        setTimeout(() => setCopyStatus(prev => ({ ...prev, [key]: false })), 2000);
+    };
 
-    // Load read IDs from localStorage on mount
-    useEffect(() => {
-        const saved = localStorage.getItem('orkestrate_read_ids');
-        if (saved) {
-            try {
-                setReadIds(new Set(JSON.parse(saved)));
-            } catch (e) {
-                console.error("Failed to parse read IDs", e);
-            }
-        }
+    React.useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setDropdownOpen(false);
+        };
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
     }, []);
 
-    // Save read IDs to localStorage when they change
-    useEffect(() => {
-        localStorage.setItem('orkestrate_read_ids', JSON.stringify(Array.from(readIds)));
-    }, [readIds]);
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+            {/* Backdrop */}
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={onDismiss}
+                className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+            />
 
-    const markAllAsRead = () => {
-        const allIds = inboxGroups.flatMap(g => g.items.map(i => i.id));
-        setReadIds(prev => new Set([...Array.from(prev), ...allIds]));
-    };
-
-    const markAsRead = (id: string) => {
-        setReadIds(prev => {
-            const next = new Set(prev);
-            next.add(id);
-            return next;
-        });
-    };
-
-    useEffect(() => {
-        const supabase = createSupabaseBrowserClient();
-
-        const run = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            setUser(session?.user ?? null);
-            setCheckingAuth(false);
-            const token = session?.access_token;
-            if (!token) return;
-
-            try {
-                // 1. Get workspaces
-                const roomsRes = await fetch("/api/workspaces", {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-                if (!roomsRes.ok) return;
-                const workspacesData = await roomsRes.json();
-                const workspaces = Array.isArray(workspacesData?.workspaces) ? workspacesData.workspaces : (Array.isArray(workspacesData?.rooms) ? workspacesData.rooms : []);
-                const resolvedWorkspaceId = workspaces.find((r: any) => r.isActive)?.id || workspaces[0]?.id;
-                setActiveWorkspaceId(resolvedWorkspaceId || null);
-                if (!resolvedWorkspaceId) {
-                    setShowOnboarding(true);
-                    return;
-                }
-
-                // 2. Get room content (agents metadata)
-                const contentRes = await fetch(`/api/room-content?workspaceId=${encodeURIComponent(resolvedWorkspaceId)}`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-                const agents = contentRes.ok ? (await contentRes.json()).agents || [] : [];
-                const agentsMap = new Map(agents.map((a: any) => [a.id, a]));
-                setHasAgentConnected(agents.length > 0);
-
-                // 3. Static Placeholders (Cleaning out live feed)
-                const mockItems: InboxItem[] = [
-                    {
-                        id: 'm1',
-                        agent: 'Alpha',
-                        type: 'commit',
-                        task: 'O-101 JWT Middleware',
-                        title: 'Committed 4 files to main',
-                        description: 'Implemented basic JWT verification wrapper and added tests.',
-                        time: '10:24 AM',
-                        icon: GitCommit,
-                        iconColor: 'text-emerald-400',
-                        unread: true,
-                        avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alpha',
-                        rawTimestamp: new Date()
-                    },
-                    {
-                        id: 'm2',
-                        agent: 'Charlie',
-                        type: 'error',
-                        task: 'O-102 DB Migrations',
-                        title: 'Encountered a migration conflict',
-                        description: 'Failed to apply 004_add_index.sql due to existing lock.',
-                        time: '9:15 AM',
-                        icon: AlertCircle,
-                        iconColor: 'text-rose-400',
-                        unread: true,
-                        avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Charlie',
-                        rawTimestamp: new Date()
-                    },
-                    {
-                        id: 'm3',
-                        agent: 'System',
-                        type: 'mention',
-                        task: 'O-105 Landing Page',
-                        title: 'Bravo mentioned you',
-                        description: '@pracu I need approval to install the new framer-motion dependency.',
-                        time: '8:42 AM',
-                        icon: MessageSquare,
-                        iconColor: 'text-blue-400',
-                        unread: true,
-                        avatarUrl: 'https://api.dicebear.com/7.x/shapes/svg?seed=System',
-                        rawTimestamp: new Date()
-                    },
-                    {
-                        id: 'm4',
-                        agent: 'Alpha',
-                        type: 'status',
-                        task: 'O-101 JWT Middleware',
-                        title: 'Moved task to In Progress',
-                        description: 'Began reviewing the current authentication architecture.',
-                        time: '4:30 PM',
-                        icon: Bot,
-                        iconColor: 'text-[#909090]',
-                        unread: false,
-                        avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alpha',
-                        rawTimestamp: new Date(Date.now() - 86400000) // Yesterday
-                    }
-                ];
-
-                const groups: InboxGroup[] = [
-                    {
-                        id: 'today',
-                        date: 'Today',
-                        items: mockItems.filter(i => formatGroupDate(i.rawTimestamp) === 'Today')
-                    },
-                    {
-                        id: 'yesterday',
-                        date: 'Yesterday',
-                        items: mockItems.filter(i => formatGroupDate(i.rawTimestamp) === 'Yesterday')
-                    }
-                ];
-
-                setInboxGroups(groups);
-                setHasFirstSessionActivity(true);
-                setShowOnboarding(false);
-            } catch (err) {
-                console.error("Inbox fetch failed", err);
-            } finally {
-                setIsLoadingFeed(false);
-            }
-        };
-
-        void run();
-        const poll = setInterval(() => {
-            void run();
-        }, 10000);
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setUser(session?.user ?? null);
-        });
-        return () => {
-            clearInterval(poll);
-            subscription.unsubscribe();
-        };
-    }, [filter, readIds.size]);
-
-    if (checkingAuth) {
-        return <div className="h-full w-full bg-[#111214] text-[#8A8F98] font-sans flex items-center justify-center">Loading...</div>;
-    }
-
-    if (!user) {
-        return (
-            <div className="h-full w-full bg-[#111214] text-[#EBEBEB] font-sans flex items-center justify-center">
-                <div className="text-center">
-                    <h1 className="text-[18px] font-semibold text-[#F2F2F2] mb-2">Sign in required</h1>
-                    <p className="text-[13px] text-[#8A8F98] mb-4">Please sign in from the landing page to access your dashboard.</p>
-                    <Link href="/" className="inline-flex items-center px-4 py-2 rounded-[6px] bg-[#F2F2F2] text-[#111214] text-[13px] font-semibold hover:bg-white">
-                        Go to landing page
-                    </Link>
+            {/* Modal Container */}
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+                className="relative w-full max-w-lg bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden focus:outline-none"
+            >
+                {/* Modal Header */}
+                <div className="px-6 py-5 border-b border-white/[0.05] bg-white/[0.02] flex items-center justify-between">
+                    <div>
+                        <h3 className="text-[17px] font-bold text-white tracking-tight">Setup Assistant</h3>
+                        <p className="text-[12px] text-zinc-500 mt-0.5 font-medium">Connect your agent to the workspace</p>
+                    </div>
+                    <button
+                        onClick={onDismiss}
+                        className="p-1.5 text-zinc-500 hover:text-white transition-all"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
                 </div>
-            </div>
-        );
-    }
+
+                <div className="p-6 space-y-7">
+                    {/* Client Selection Dropdown */}
+                    <div className="space-y-2.5">
+                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest pl-0.5">Client</label>
+                        <div className="relative" ref={dropdownRef}>
+                            <button
+                                onClick={() => setDropdownOpen(!dropdownOpen)}
+                                className="w-full flex items-center justify-between px-4 py-2.5 bg-white/[0.04] border border-white/10 rounded-xl hover:bg-white/[0.08] transition-all text-[13px] text-white"
+                            >
+                                <div className="flex items-center gap-2.5">
+                                    <span className="text-white/40">{active.icon}</span>
+                                    <span className="font-medium">{active.name}</span>
+                                </div>
+                                <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
+                            </button>
+
+                            {dropdownOpen && (
+                                <div className="absolute top-full left-0 right-0 mt-1.5 py-1 bg-[#111] border border-white/10 rounded-xl shadow-2xl z-[110] overflow-hidden">
+                                    {clients.map(c => (
+                                        <button
+                                            key={c.id}
+                                            onClick={() => { setSelectedClient(c.id); setDropdownOpen(false); }}
+                                            className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] hover:bg-white/[0.06] transition-all ${c.id === selectedClient ? "text-white bg-white/[0.03]" : "text-zinc-500"}`}
+                                        >
+                                            <span className="w-4 h-4 flex items-center justify-center shrink-0 opacity-40">{c.icon}</span>
+                                            <span className="flex-1 text-left font-medium">{c.name}</span>
+                                            {c.id === selectedClient && <Check className="w-3.5 h-3.5 text-white/40" />}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Setup Instructions */}
+                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-1 duration-300">
+                        {/* CLI Section */}
+                        {active.cliCommand && (
+                            <div className="space-y-3">
+                                <p className="text-[12px] font-medium text-zinc-400 pl-0.5">{active.cliDescription || `Run in ${active.name}:`}</p>
+                                <div className="group/code relative">
+                                    <div className="relative bg-black/40 border border-white/[0.06] rounded-xl p-3.5 flex items-center justify-between font-mono text-[12px] text-zinc-200">
+                                        <span className="truncate pr-4 break-all">{active.cliCommand}</span>
+                                        <button
+                                            onClick={() => handleCopy(active.cliCommand!, `cli-${active.id}`)}
+                                            className="p-1.5 text-zinc-500 hover:text-white transition-all shrink-0"
+                                        >
+                                            {copyStatus[`cli-${active.id}`] ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Auth Section */}
+                        {active.authCommand && (
+                            <div className="space-y-3 pt-1">
+                                <p className="text-[12px] font-medium text-zinc-400 pl-0.5">{active.authDescription || "Authentication:"}</p>
+                                <div className="bg-black/40 border border-white/[0.06] rounded-xl p-3.5 flex items-center justify-between font-mono text-[12px] text-zinc-200">
+                                    <span className="truncate pr-4 break-all">{active.authCommand}</span>
+                                    <button
+                                        onClick={() => handleCopy(active.authCommand!, `auth-${active.id}`)}
+                                        className="p-1.5 text-zinc-500 hover:text-white transition-all shrink-0"
+                                    >
+                                        {copyStatus[`auth-${active.id}`] ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                                    </button>
+                                </div>
+                                {active.authNote && (
+                                    <p className="text-[12px] text-zinc-500 leading-relaxed italic pl-0.5">{active.authNote}</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Agent Setup Prompt */}
+                    <div className="pt-2">
+                        <button
+                            onClick={() => handleCopy(active.setupPrompt, `prompt-${active.id}`)}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white/[0.04] border border-white/10 rounded-xl hover:bg-white/[0.08] hover:border-white/20 transition-all group"
+                        >
+                            <span className="text-[13px] font-semibold text-white group-hover:silver">
+                                {copyStatus[`prompt-${active.id}`] ? "Prompt Copied" : "Copy Setup Prompt for Agent"}
+                            </span>
+                            {copyStatus[`prompt-${active.id}`] ? (
+                                <Check className="w-4 h-4 text-zinc-400" />
+                            ) : (
+                                <Sparkles className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
+                            )}
+                        </button>
+                        <p className="text-[11px] text-zinc-500 text-center mt-3 leading-relaxed">
+                            Paste this prompt directly into your agent to automate the MCP setup process
+                        </p>
+                    </div>
+                </div>
+
+                <div className="px-6 py-5 border-t border-white/[0.05] bg-white/[0.01] flex items-center justify-between">
+                    <a href={active.docsUrl} target="_blank" rel="noopener noreferrer" className="text-[12px] text-zinc-500 hover:text-white transition-all font-medium">
+                        Docs
+                    </a>
+                    <button
+                        onClick={onDismiss}
+                        className="px-5 py-2 bg-white text-black text-[13px] font-bold rounded-xl hover:bg-zinc-200 transition-all active:scale-95"
+                    >
+                        Success
+                    </button>
+                </div>
+            </motion.div>
+        </div>
+    );
+}
+
+// --- Members Section ---
+
+function MembersSection({ members }: { members: WorkspaceMember[] }) {
+    if (!members || members.length === 0) return null;
 
     return (
-        <div className="h-full w-full bg-[#111214] text-[#EBEBEB] font-sans flex flex-col">
-            {/* Header */}
-            <div className="px-8 py-5 border-b border-[#232529] flex items-center justify-between shrink-0 bg-[#111214]/80 backdrop-blur-md sticky top-0 z-10">
-                <div className="flex items-center gap-6">
-                    <h1 className="text-[15px] font-semibold tracking-tight text-[#F2F2F2]">Inbox</h1>
-
-                    <div className="flex items-center gap-1">
-                        {['All', 'Unread', 'Mentions', 'Errors'].map(f => (
-                            <button
-                                key={f}
-                                onClick={() => setFilter(f)}
-                                className={`px-2.5 py-1 text-[13px] rounded-[6px] transition-colors font-medium ${filter === f
-                                    ? 'bg-[#232529] text-[#F2F2F2]'
-                                    : 'text-[#8A8F98] hover:text-[#D1D3D8] hover:bg-white/[0.04]'
-                                    }`}
-                            >
-                                {f}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-1">
-                    <button
-                        onClick={() => markAllAsRead()}
-                        className="p-1.5 text-[#8A8F98] hover:text-[#F2F2F2] hover:bg-[#232529] rounded-[6px] transition-colors"
-                        title="Mark all as read"
+        <div className="flex items-center gap-3">
+            <span className="text-[13px] font-medium text-zinc-500">Team</span>
+            <div className="flex items-center">
+                {members.map((member, i) => (
+                    <div
+                        key={member.id}
+                        className="group relative flex items-center justify-center w-7 h-7 rounded-full border-2 border-[#0D0E10] bg-[#1A1C20] text-[10px] font-bold text-zinc-400 shrink-0 select-none transition-transform hover:scale-110 hover:z-20 cursor-default"
+                        style={{ marginLeft: i > 0 ? "-8px" : "0", zIndex: 10 - i }}
+                        title={`${member.displayName} ${member.isCurrentUser ? "(you)" : ""}`}
                     >
-                        <Check className="w-4 h-4" />
-                    </button>
-                    <button className="p-1.5 text-[#8A8F98] hover:text-[#F2F2F2] hover:bg-[#232529] rounded-[6px] transition-colors" title="Filter options">
-                        <Filter className="w-4 h-4" />
-                    </button>
-                </div>
-            </div>
-
-            {/* List View */}
-            <div className="flex-1 overflow-y-auto w-full max-w-5xl mx-auto py-8 px-8">
-                {showOnboarding && !isLoadingFeed && (
-                    <div className="mb-8 rounded-[10px] border border-[#232529] bg-[#16181A] p-5">
-                        <h2 className="text-[15px] font-semibold text-[#F2F2F2] mb-2">Welcome to Orkestrate</h2>
-                        <p className="text-[13px] text-[#8A8F98] mb-4">Your workspace is ready. Complete these steps to start collaborating:</p>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <Link href="/dashboard/settings" className="rounded-[8px] border border-[#232529] bg-[#111214] p-3 hover:border-[#3A3F4A]">
-                                <div className="text-[11px] text-[#5E626B] mb-1">Step 1</div>
-                                <div className="text-[13px] text-[#D1D3D8]">Review workspace settings</div>
-                            </Link>
-                            <Link href="/docs#quickstart" className={`rounded-[8px] border p-3 ${hasAgentConnected ? "border-[#3FB950]/40 bg-[#3FB950]/10" : "border-[#232529] bg-[#111214] hover:border-[#3A3F4A]"}`}>
-                                <div className="text-[11px] text-[#5E626B] mb-1">Step 2</div>
-                                <div className="text-[13px] text-[#D1D3D8]">Connect your first agent {hasAgentConnected ? "✓" : ""}</div>
-                            </Link>
-                            <Link href="/dashboard/agent-chat" className={`rounded-[8px] border p-3 ${hasFirstSessionActivity ? "border-[#3FB950]/40 bg-[#3FB950]/10" : hasAgentConnected ? "border-[#232529] bg-[#111214] hover:border-[#3A3F4A]" : "border-[#232529]/60 bg-[#111214]/60 pointer-events-none opacity-60"}`}>
-                                <div className="text-[11px] text-[#5E626B] mb-1">Step 3</div>
-                                <div className="text-[13px] text-[#D1D3D8]">Start your first session {hasFirstSessionActivity ? "✓" : ""}</div>
-                            </Link>
-                        </div>
-                        <div className="mt-4 text-[11px] text-[#5E626B]">
-                            Workspace: <span className="text-[#8A8F98]">{activeWorkspaceId || "n/a"}</span> · Status refreshes every 10s
-                        </div>
+                        {member.avatarUrl ? (
+                            <img
+                                src={member.avatarUrl}
+                                alt={member.displayName}
+                                className="w-full h-full rounded-full object-cover"
+                                referrerPolicy="no-referrer"
+                            />
+                        ) : (
+                            member.displayName[0]?.toUpperCase() || "?"
+                        )}
                     </div>
-                )}
-                <div className="space-y-8">
-                    {inboxGroups.length === 0 && !isLoadingFeed && (
-                        <div className="flex flex-col items-center justify-center py-20 text-center">
-                            <div className="w-12 h-12 rounded-full bg-[#16181A] border border-[#232529] flex items-center justify-center mb-4">
-                                <MessageSquare className="w-6 h-6 text-[#3A3F4A]" />
-                            </div>
-                            <h3 className="text-[15px] font-medium text-[#D1D3D8]">No activity yet</h3>
-                            <p className="text-[13px] text-[#8A8F98] max-w-[280px] mt-1">
-                                When your agents perform tasks or mention you, they will appear here.
-                            </p>
-                        </div>
-                    )}
-
-                    {isLoadingFeed && inboxGroups.length === 0 && (
-                        <div className="flex items-center justify-center py-20">
-                            <div className="text-[13px] text-[#8A8F98] animate-pulse">Syncing feed...</div>
-                        </div>
-                    )}
-
-                    {inboxGroups.map((group) => (
-                        <div key={group.id}>
-                            <h2 className="text-[11px] font-semibold text-[#8A8F98] mb-2 uppercase tracking-wider px-2">
-                                {group.date}
-                            </h2>
-                            <div className="flex flex-col">
-                                {group.items.map((item) => (
-                                    <div
-                                        key={item.id}
-                                        onClick={() => markAsRead(item.id)}
-                                        className={`flex items-start gap-4 py-3.5 px-3 rounded-[8px] hover:bg-[#1A1C20] cursor-pointer transition-colors group relative`}
-                                    >
-                                        {/* Unread dot */}
-                                        {item.unread && (
-                                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-[#5E6AD2]"></div>
-                                        )}
-
-                                        {/* Avatar / Icon */}
-                                        <div className="relative shrink-0 mt-0.5 ml-1">
-                                            <img
-                                                src={item.avatarUrl}
-                                                alt={item.agent}
-                                                className="w-8 h-8 rounded-full object-cover shadow-inner border border-white/5"
-                                            />
-                                            <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#111214] border-2 border-[#111214] group-hover:bg-[#1A1C20] group-hover:border-[#1A1C20] flex items-center justify-center transition-colors">
-                                                <item.icon className={`w-2 h-2 ${item.iconColor}`} />
-                                            </div>
-                                        </div>
-
-                                        {/* Content */}
-                                        <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                            <div className="flex items-baseline justify-between gap-3 mb-0.5">
-                                                <div className="flex items-center gap-1.5 truncate text-[13px]">
-                                                    <span className={`font-semibold ${item.unread ? 'text-[#F2F2F2]' : 'text-[#D1D3D8]'}`}>
-                                                        {item.agent}
-                                                    </span>
-                                                    <span className="text-[#8A8F98]">·</span>
-                                                    <span className={`truncate ${item.unread ? 'text-[#EBEBEB] font-medium' : 'text-[#A1A1A1]'}`}>
-                                                        {item.title}
-                                                    </span>
-                                                </div>
-                                                <span className="text-[12px] text-[#8A8F98] shrink-0 font-medium">
-                                                    {item.time}
-                                                </span>
-                                            </div>
-
-                                            <div className="flex items-center justify-between gap-4">
-                                                <p className="text-[13px] text-[#8A8F98] truncate leading-relaxed">
-                                                    {item.description}
-                                                </p>
-
-                                                {/* Actions & Badges (Visible on Hover) */}
-                                                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 shrink-0">
-                                                    <div className="text-[11px] font-medium text-[#8A8F98] bg-[#232529] border border-[#33363D] px-2 py-0.5 rounded-[4px] shadow-sm">
-                                                        {item.task}
-                                                    </div>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            markAsRead(item.id);
-                                                        }}
-                                                        className="p-1 text-[#8A8F98] hover:text-[#F2F2F2] hover:bg-[#2A2D32] rounded-[4px] ml-1 transition-colors"
-                                                    >
-                                                        <Check className={`w-3.5 h-3.5 ${!item.unread ? 'text-emerald-400' : ''}`} />
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        className="p-1 text-[#8A8F98] hover:text-[#F2F2F2] hover:bg-[#2A2D32] rounded-[4px] transition-colors"
-                                                    >
-                                                        <MoreHorizontal className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                ))}
             </div>
         </div>
     );
 }
 
+// --- Agent Detail Panel ---
 
+function AgentDetailPanel({ agent, onClose }: { agent: DashboardAgent; onClose: () => void }) {
+    const state = agent.stateContent;
+    const toolName = getToolName(agent);
+    const toolColor = getToolTextColor(toolName);
+    const [activeSection, setActiveSection] = useState<string>("overview");
+
+    const sections = [
+        { id: "overview", label: "Overview", icon: Target },
+        { id: "paths", label: "Paths", icon: FolderTree },
+        { id: "plan", label: "Plan", icon: ListChecks },
+        { id: "completed", label: "Done", icon: Check },
+        { id: "notes", label: "Notes", icon: StickyNote },
+    ];
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+            className="h-full flex flex-col bg-[#050505]/50 backdrop-blur-xl border-l border-white/10"
+        >
+            {/* Panel Header */}
+            <div className="px-5 py-5 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-b from-white/[0.08] to-transparent border border-white/[0.06] flex items-center justify-center text-[13px] font-bold text-white shrink-0 shadow-sm">
+                        {getToolIcon(toolName)}
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[15px] font-semibold text-white tracking-tight">{agent.displayName}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className={`text-[12px] font-bold text-zinc-500`}>{toolName}</span>
+                            <span className="text-zinc-600">·</span>
+                            <span className="text-[12px] font-bold text-zinc-600">{state?.version || "v1.0"}</span>
+                        </div>
+                    </div>
+                </div>
+                <button onClick={onClose} className="p-1.5 text-zinc-500 hover:text-white rounded-md transition-colors hover:bg-white/[0.04]">
+                    <X className="w-4 h-4" />
+                </button>
+            </div>
+
+            <div className="h-[1px] w-full bg-white/[0.06]"></div>
+
+            {/* Section Tabs */}
+            <div className="px-5 py-3 flex items-center gap-1 shrink-0 border-b border-white/[0.03]">
+                {sections.map((s) => (
+                    <button
+                        key={s.id}
+                        onClick={() => setActiveSection(s.id)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-lg transition-all font-medium ${activeSection === s.id
+                            ? "bg-white/[0.08] text-white"
+                            : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.02]"
+                            }`}
+                    >
+                        {s.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Section Content */}
+            <div className="flex-1 overflow-y-auto px-5 py-6 custom-scrollbar">
+                <AnimatePresence mode="wait">
+                    <motion.div
+                        key={activeSection}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                    >
+                        {activeSection === "overview" && (
+                            <div className="space-y-10">
+                                {/* Objective */}
+                                <div>
+                                    <h4 className="text-[11px] font-bold text-zinc-500 uppercase tracking-[0.1em] mb-3 pl-0.5">
+                                        Active Focus
+                                    </h4>
+                                    <div className="text-[15px] font-medium text-white leading-relaxed bg-white/[0.03] p-5 rounded-xl border border-white/[0.05]">
+                                        {state?.objective || agent.currentObjective || "Currently standing by."}
+                                    </div>
+                                </div>
+
+                                {/* Profile */}
+                                {agent.agentProfile && (
+                                    <div>
+                                        <h4 className="text-[11px] font-bold text-zinc-500 uppercase tracking-[0.1em] mb-3 pl-0.5">
+                                            Agent Profile
+                                        </h4>
+                                        <div className="text-[14px] text-zinc-400 bg-black/20 border border-white/[0.04] p-5 rounded-xl leading-relaxed">
+                                            {agent.agentProfile}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Claimed Paths */}
+                                {state?.claimedPaths && state.claimedPaths.length > 0 && (
+                                    <div>
+                                        <h4 className="text-[11px] font-bold text-zinc-500 uppercase tracking-[0.1em] mb-3 pl-0.5">
+                                            Active Paths
+                                        </h4>
+                                        <div className="flex flex-col gap-2">
+                                            {state.claimedPaths.map((path: string, i: number) => (
+                                                <div key={i} className="flex items-start gap-3 text-[13px] font-mono text-zinc-300 bg-white/[0.02] p-3 rounded-lg border border-white/[0.04]">
+                                                    <FolderTree className="w-4 h-4 text-white/40 shrink-0 mt-[1px]" />
+                                                    <span className="break-all">{path}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        {activeSection === "paths" && (
+                            <div className="space-y-6">
+                                <h4 className="text-[11px] font-bold text-zinc-500 uppercase tracking-[0.1em] mb-4 pl-0.5">
+                                    Active Work Paths
+                                </h4>
+                                {state?.claimedPaths && state.claimedPaths.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {state.claimedPaths.map((path, i) => (
+                                            <div key={i} className="flex items-start gap-3 text-[14px] text-zinc-300 bg-white/[0.02] p-3 rounded-lg border border-white/[0.04]">
+                                                <FolderTree className="w-4 h-4 text-indigo-500/60 shrink-0 mt-[2px]" />
+                                                <span className="break-all leading-relaxed font-mono text-[13px]">{path}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-[14px] text-zinc-500 italic bg-white/[0.01] p-10 rounded-xl border border-dashed border-white/[0.05] text-center">
+                                        No active paths at the moment.
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {activeSection === "plan" && (
+                            <div className="space-y-6">
+                                <h4 className="text-[11px] font-bold text-zinc-500 uppercase tracking-[0.1em] mb-4 pl-0.5">
+                                    Current Plan
+                                </h4>
+                                {state?.plan && state.plan.length > 0 ? (
+                                    <div className="space-y-4">
+                                        {state.plan.map((step, i) => (
+                                            <div key={i} className="flex items-start gap-4">
+                                                <div className="w-6 h-6 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-[11px] font-bold text-indigo-400 shrink-0 mt-0.5">
+                                                    {i + 1}
+                                                </div>
+                                                <span className="text-[14px] text-zinc-300 leading-relaxed mt-1">{step}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-[14px] text-zinc-500 italic bg-white/[0.01] p-10 rounded-xl border border-dashed border-white/[0.05] text-center">
+                                        No implementation plan declared.
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {activeSection === "completed" && (
+                            <div className="space-y-6">
+                                <h4 className="text-[11px] font-bold text-zinc-500 uppercase tracking-[0.1em] mb-4 pl-0.5">
+                                    Successfully Completed
+                                </h4>
+                                {state?.completed && state.completed.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {state.completed.map((item, i) => (
+                                            <div key={i} className="flex items-start gap-4 bg-emerald-500/[0.02] border border-emerald-500/[0.05] p-4 rounded-xl">
+                                                <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                                                    <Check className="w-3 h-3 text-emerald-500" />
+                                                </div>
+                                                <span className="text-[14px] text-zinc-300 leading-relaxed break-words">{item}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-[14px] text-zinc-500 italic bg-white/[0.01] p-10 rounded-xl border border-dashed border-white/[0.05] text-center">
+                                        Waiting for first completion.
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {activeSection === "notes" && (
+                            <div className="space-y-6">
+                                <h4 className="text-[11px] font-bold text-zinc-500 uppercase tracking-[0.1em] mb-4 pl-0.5">
+                                    Collaboration Notes
+                                </h4>
+                                {state?.notes ? (
+                                    <div className="text-[14px] text-zinc-300 bg-indigo-500/[0.02] border border-white/[0.04] p-6 rounded-2xl leading-relaxed whitespace-pre-wrap break-words">
+                                        {state.notes}
+                                    </div>
+                                ) : (
+                                    <div className="text-[14px] text-zinc-500 italic bg-white/[0.01] p-10 rounded-xl border border-dashed border-white/[0.05] text-center">
+                                        No internal notes found.
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </motion.div>
+                </AnimatePresence>
+            </div>
+        </motion.div>
+    );
+}
+
+function AgentCard({ agent, idx, toolName, isSelected, state, onSelect }: {
+    agent: DashboardAgent;
+    idx: number;
+    toolName: string;
+    isSelected: boolean;
+    state: any;
+    onSelect: () => void;
+}) {
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: idx * 0.05, ease: [0.23, 1, 0.32, 1] }}
+        >
+            <button
+                onClick={onSelect}
+                className={`w-full h-full min-h-[160px] text-left rounded-[16px] p-5 flex flex-col transition-all duration-300 group relative overflow-hidden border ${isSelected
+                    ? "bg-[#1A1C20] border-white/20 ring-1 ring-white/10 shadow-[0_0_20px_rgba(255,255,255,0.05)]"
+                    : "bg-[#111214] border-white/[0.06] hover:bg-[#16181A] hover:border-white/15 hover:-translate-y-0.5 shadow-sm"
+                    }`}
+            >
+                {/* Header */}
+                <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3.5 flex-1 min-w-0">
+                        {/* Avatar - More personal feel */}
+                        <div className={`w-10 h-10 rounded-xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-center text-white/60 shrink-0 group-hover:scale-105 group-hover:bg-white/[0.05] transition-all duration-300`}>
+                            {getToolIcon(toolName)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <span className="font-bold text-[15px] text-white tracking-tight block truncate mb-0.5">{agent.displayName}</span>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[11px] font-medium text-zinc-500 tracking-wide uppercase px-1.5 py-0.5 bg-white/[0.03] border border-white/[0.05] rounded">
+                                    {toolName}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                {/* Objective text */}
+                <div className="mt-5 flex-1 line-clamp-2">
+                    <p className="text-[13px] text-zinc-400 leading-relaxed font-medium group-hover:text-zinc-300 transition-colors">
+                        {state?.objective || agent.currentObjective || "Standing by for next task."}
+                    </p>
+                </div>
+
+                {/* Bottom Pills */}
+                <div className="flex items-center gap-3 mt-5 pt-4 border-t border-white/[0.04] w-full shrink-0">
+                    <div className="flex-1 flex items-center gap-2">
+                        <div className="flex items-center gap-1 text-[11px] font-semibold text-zinc-500">
+                            <FolderTree className="w-3.5 h-3.5 opacity-40" />
+                            <span>{state?.claimedPaths?.length || 0}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-[11px] font-semibold text-zinc-500">
+                            <Check className="w-3.5 h-3.5 opacity-40 text-white" />
+                            <span>{state?.completed?.length || 0}</span>
+                        </div>
+                    </div>
+                    {state?.version && (
+                        <span className="text-[10px] font-black text-zinc-600 tracking-tighter uppercase opacity-40">{state.version}</span>
+                    )}
+                </div>
+            </button>
+        </motion.div>
+    );
+}
+
+
+// --- Main Dashboard ---
+
+export default function DashboardPage() {
+    const [searchQuery, setSearchQuery] = useState("");
+    const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+    const [showOnboarding, setShowOnboarding] = useState(false);
+    const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+
+    const { data: wsData, error: wsError } = useSWR("/api/workspaces", fetcher, { refreshInterval: 5000 });
+    const rooms: Room[] = Array.isArray(wsData?.rooms) ? wsData.rooms : [];
+    const activeRoom = rooms.find((r) => r.isActive) || rooms[0] || null;
+    const activeRoomId = activeRoom?.id || null;
+
+    const { data: contentData, error: contentError, isLoading: contentLoading } = useSWR(
+        activeRoomId ? `/api/room-content?workspaceId=${encodeURIComponent(activeRoomId)}` : null,
+        fetcher,
+        { refreshInterval: 5000 }
+    );
+    let agents: DashboardAgent[] = Array.isArray(contentData?.agents) ? contentData.agents : [];
+
+    const { data: membersData } = useSWR(
+        activeRoomId ? `/api/workspace-members?workspaceId=${encodeURIComponent(activeRoomId)}` : null,
+        fetcher,
+        { refreshInterval: 10000 }
+    );
+
+    const workspaceMembers: WorkspaceMember[] = Array.isArray(membersData?.members) ? membersData.members : [];
+
+    const loading = (!wsData && !wsError) || contentLoading;
+    const error = wsError || contentError;
+
+    const currentUser = workspaceMembers.find(m => m.isCurrentUser);
+    const currentUserAgents = agents.filter(a => a.memberId === currentUser?.id);
+
+    // Determine if we should show onboarding initially (only if current user has no agents)
+    useEffect(() => {
+        if (!loading && activeRoomId && !onboardingDismissed) {
+            if (currentUserAgents.length === 0) {
+                setShowOnboarding(true);
+            }
+        }
+    }, [loading, currentUserAgents.length, activeRoomId, onboardingDismissed]);
+
+    const filteredAgents = useMemo(() => {
+        if (!searchQuery) return agents;
+        const q = searchQuery.toLowerCase();
+        return agents.filter((a) =>
+            `${a.displayName} ${a.agentProfile} ${a.currentObjective} ${a.agentId}`.toLowerCase().includes(q)
+        );
+    }, [agents, searchQuery]);
+
+    const selectedAgent = selectedAgentId ? agents.find((a) => a.stateClientId === selectedAgentId) : null;
+
+    const groupedAgents = useMemo(() => {
+        const groups: Record<string, DashboardAgent[]> = {};
+        const unassigned: DashboardAgent[] = [];
+
+        filteredAgents.forEach(agent => {
+            const owner = workspaceMembers.find(m => m.id === agent.memberId);
+            if (owner) {
+                if (!groups[owner.id]) groups[owner.id] = [];
+                groups[owner.id].push(agent);
+            } else {
+                unassigned.push(agent);
+            }
+        });
+
+        return { groups, unassigned };
+    }, [filteredAgents, workspaceMembers]);
+
+    return (
+        <div className="h-full w-full bg-[#0E0F11] text-[#F2F2F2] font-sans flex flex-col">
+            {/* Content */}
+            <div className="flex-1 overflow-hidden flex">
+                {/* Main List */}
+                <div className={`flex-1 overflow-y-auto pt-6 px-6 custom-scrollbar transition-all ${selectedAgent ? "max-w-[calc(100%-420px)]" : ""}`}>
+
+                    {/* Top Bar: Team & Search */}
+                    <div className="flex items-center justify-between mb-8">
+                        <div className="flex items-center gap-4">
+                            <MembersSection members={workspaceMembers} />
+                            <div className="h-4 w-px bg-white/10 mx-1" />
+                            <button
+                                onClick={() => setShowOnboarding(true)}
+                                className="w-8 h-8 rounded-full border border-white/10 bg-white/[0.04] flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95"
+                                title="Add Agent"
+                            >
+                                <Sparkles className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="relative">
+                                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                                <input
+                                    type="text"
+                                    placeholder="Search agents..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="bg-white/[0.04] border border-white/10 rounded-full py-2 pl-9 pr-4 text-[13px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20 focus:bg-white/[0.06] w-56 transition-all shadow-sm focus:shadow-[0_0_15px_rgba(255,255,255,0.05)]"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Onboarding */}
+                    <AnimatePresence>
+                        {showOnboarding && !onboardingDismissed && (
+                            <OnboardingFlow
+                                onDismiss={() => {
+                                    setShowOnboarding(false);
+                                    setOnboardingDismissed(true);
+                                }}
+                            />
+                        )}
+                    </AnimatePresence>
+                    {/* Loading */}
+                    {loading && (
+                        <div className="flex items-center justify-center py-24">
+                            <div className="flex flex-col items-center gap-4">
+                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping" />
+                                <span className="text-[14px] font-medium text-zinc-500 tracking-wide">Connecting to workspace...</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Empty State */}
+                    {!loading && !error && filteredAgents.length === 0 && !showOnboarding && (
+                        <div className="flex flex-col items-center justify-center py-32 text-center">
+                            <div className="w-14 h-14 rounded-2xl border border-white/5 bg-white/[0.02] flex items-center justify-center text-zinc-600 mb-6 relative overflow-hidden">
+                                <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/10 to-transparent opacity-50" />
+                                <Users className="w-6 h-6 relative z-10" />
+                            </div>
+                            <h2 className="text-[18px] font-bold text-white tracking-tight mb-2">Your workspace is ready</h2>
+                            <p className="text-[14px] text-zinc-500 max-w-[300px] leading-relaxed mx-auto">
+                                Connect your first agent to start collaborating.<br />Our setup guide will help you get started.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Grouped Agent Grid */}
+                    {!loading && !error && filteredAgents.length > 0 && (
+                        <div className="space-y-12 pb-12">
+                            {/* Current User Group first, then others */}
+                            {[currentUser, ...workspaceMembers.filter(m => m.id !== currentUser?.id)].map(member => {
+                                if (!member) return null;
+                                const memberAgents = groupedAgents.groups[member.id];
+                                if (!memberAgents || memberAgents.length === 0) return null;
+
+                                return (
+                                    <div key={member.id} className="space-y-6">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-9 h-9 rounded-full border border-white/10 bg-[#16181A] p-0.5 shadow-sm">
+                                                {member.avatarUrl ? (
+                                                    <img src={member.avatarUrl} alt={member.displayName} className="w-full h-full rounded-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full rounded-full flex items-center justify-center bg-indigo-500/10 text-indigo-400 font-bold text-[10px] uppercase">
+                                                        {member.displayName[0]}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <h3 className="text-[14px] font-semibold text-white/90 tracking-wide uppercase">
+                                                    {member.isCurrentUser ? "My Active Agents" : `${member.displayName}'s Agents`}
+                                                </h3>
+                                                <div className="flex items-center gap-2 mt-0.5">
+                                                    <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">{member.role}</span>
+                                                    <span className="w-1 h-1 rounded-full bg-zinc-700" />
+                                                    <span className="text-[10px] font-semibold text-indigo-400/80 uppercase tracking-widest">{memberAgents.length} Agents</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex-1 h-px bg-white/[0.04] ml-2" />
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                            {memberAgents.map((agent, idx) => {
+                                                const toolName = getToolName(agent);
+                                                const isSelected = selectedAgentId === agent.stateClientId;
+                                                const state = agent.stateContent;
+                                                return (
+                                                    <AgentCard
+                                                        key={agent.stateClientId}
+                                                        agent={agent}
+                                                        idx={idx}
+                                                        toolName={toolName}
+                                                        isSelected={isSelected}
+                                                        state={state}
+                                                        onSelect={() => setSelectedAgentId(isSelected ? null : agent.stateClientId)}
+                                                    />
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
+                            {/* Unassigned Group */}
+                            {groupedAgents.unassigned.length > 0 && (
+                                <div className="space-y-6">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-lg border border-white/10 bg-white/[0.02] flex items-center justify-center text-zinc-400">
+                                            <Users className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-[13px] font-semibold text-white/90 tracking-wide uppercase">
+                                                Workspace Agents
+                                            </h3>
+                                            <span className="text-[11px] font-semibold text-zinc-500 bg-white/[0.03] px-1.5 py-0.5 rounded border border-white/[0.04]">
+                                                {groupedAgents.unassigned.length}
+                                            </span>
+                                        </div>
+                                        <div className="flex-1 h-px bg-white/[0.04] ml-2" />
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                        {groupedAgents.unassigned.map((agent, idx) => {
+                                            const toolName = getToolName(agent);
+                                            const isSelected = selectedAgentId === agent.stateClientId;
+                                            const state = agent.stateContent;
+                                            return (
+                                                <AgentCard
+                                                    key={agent.stateClientId}
+                                                    agent={agent}
+                                                    idx={idx}
+                                                    toolName={toolName}
+                                                    isSelected={isSelected}
+                                                    state={state}
+                                                    onSelect={() => setSelectedAgentId(isSelected ? null : agent.stateClientId)}
+                                                />
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {/* Detail Panel */}
+                <AnimatePresence>
+                    {selectedAgent && (
+                        <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: 420 }}
+                            exit={{ width: 0 }}
+                            transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+                            className="shrink-0 overflow-hidden"
+                        >
+                            <div className="w-[420px] h-full">
+                                <AgentDetailPanel
+                                    agent={selectedAgent}
+                                    onClose={() => setSelectedAgentId(null)}
+                                />
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+        </div>
+    );
+}

@@ -99,7 +99,7 @@ export default function KnowledgeBasePage() {
     // Track unsaved changes
     useEffect(() => {
         if (selectedDoc && isEditing) {
-            const hasChanges = 
+            const hasChanges =
                 editContent !== originalContentRef.current.content ||
                 editTitle !== originalContentRef.current.title ||
                 editDescription !== originalContentRef.current.description;
@@ -350,108 +350,108 @@ export default function KnowledgeBasePage() {
         return nodes.map(node => {
             if (node.id === excludeId) return null;
             return (
-            <div key={node.id}>
-                {isRenaming === node.id ? (
-                    <div className="flex items-center gap-1 px-2 py-1">
-                        {node.isFolder ? (
-                            <ChevronDown className="w-3.5 h-3.5 text-[#5E626B]" />
-                        ) : (
-                            <FileText className="w-3.5 h-3.5 text-[#5E626B]" />
-                        )}
-                        {node.isFolder && <Folder className="w-3.5 h-3.5 text-[#5E626B]" />}
-                        <input
-                            type="text"
-                            value={renameValue}
-                            onChange={(e) => setRenameValue(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleRename(node.id);
-                                if (e.key === 'Escape') { setIsRenaming(null); setRenameValue(''); }
-                            }}
-                            onBlur={() => handleRename(node.id)}
-                            autoFocus
-                            className="flex-1 bg-[#1A1C20] border border-[#5E6AD2] rounded-[4px] px-2 py-0.5 text-[13px] text-[#F2F2F2] focus:outline-none"
-                        />
-                    </div>
-                ) : (
-                    <div className="flex items-center group">
-                        <button
-                            onClick={() => handleSelectDoc(node)}
-                            className={`flex items-center gap-1.5 flex-1 text-left px-2 py-1.5 text-[13px] rounded-[6px] transition-colors ${selectedDocId === node.id
-                                ? 'bg-[#1A1C20] text-[#F2F2F2] font-medium shadow-sm'
-                                : 'text-[#8A8F98] hover:bg-white/[0.04] hover:text-[#D1D3D8]'
-                                }`}
-                        >
+                <div key={node.id}>
+                    {isRenaming === node.id ? (
+                        <div className="flex items-center gap-1 px-2 py-1">
                             {node.isFolder ? (
-                                expandedFolderIds.has(node.id) ? (
-                                    <ChevronDown className="w-3.5 h-3.5 text-[#5E626B] group-hover:text-[#8A8F98]" />
-                                ) : (
-                                    <ChevronRight className="w-3.5 h-3.5 text-[#5E626B] group-hover:text-[#8A8F98]" />
-                                )
+                                <ChevronDown className="w-3.5 h-3.5 text-[#5E626B]" />
                             ) : (
-                                <FileText className={`w-3.5 h-3.5 ${selectedDocId === node.id ? 'text-[#D1D3D8]' : 'text-[#5E626B]'}`} />
+                                <FileText className="w-3.5 h-3.5 text-[#5E626B]" />
                             )}
-
-                            {node.isFolder && <Folder className="w-3.5 h-3.5 text-[#5E626B] group-hover:text-[#8A8F98]" />}
-                            <span className="truncate">{node.title}</span>
-                        </button>
-                        <button
-                            onClick={(e) => { e.stopPropagation(); startRename(node); }}
-                            className="opacity-0 group-hover:opacity-100 p-1 hover:text-[#F2F2F2] text-[#5E626B] transition-opacity"
-                            title="Rename"
-                        >
-                            <Edit3 className="w-3 h-3" />
-                        </button>
-                        <button
-                            onClick={(e) => { e.stopPropagation(); startMove(node.id); }}
-                            className="opacity-0 group-hover:opacity-100 p-1 hover:text-[#F2F2F2] text-[#5E626B] transition-opacity"
-                            title="Move"
-                        >
-                            <ArrowUpRight className="w-3 h-3" />
-                        </button>
-                    </div>
-                )}
-
-                {/* Move Menu */}
-                {showMoveMenu === node.id && (
-                    <div className="ml-6 mt-1 bg-[#1A1C20] border border-[#232529] rounded-[6px] p-2 text-[12px]">
-                        <div className="text-[#8A8F98] mb-2 px-1">Move to:</div>
-                        <button
-                            onClick={() => handleMove(showMoveMenu, null)}
-                            className="w-full text-left px-2 py-1.5 rounded-[4px] text-[#D1D3D8] hover:bg-[#232529]"
-                        >
-                            Root
-                        </button>
-                        {rawDocs.filter(d => d.isFolder && d.id !== node.id).map(folder => (
+                            {node.isFolder && <Folder className="w-3.5 h-3.5 text-[#5E626B]" />}
+                            <input
+                                type="text"
+                                value={renameValue}
+                                onChange={(e) => setRenameValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleRename(node.id);
+                                    if (e.key === 'Escape') { setIsRenaming(null); setRenameValue(''); }
+                                }}
+                                onBlur={() => handleRename(node.id)}
+                                autoFocus
+                                className="flex-1 bg-[#1A1C20] border border-[#5E6AD2] rounded-[4px] px-2 py-0.5 text-[13px] text-[#F2F2F2] focus:outline-none"
+                            />
+                        </div>
+                    ) : (
+                        <div className="flex items-center group">
                             <button
-                                key={folder.id}
-                                onClick={() => handleMove(showMoveMenu, folder.id)}
-                                className="w-full text-left px-2 py-1.5 rounded-[4px] text-[#D1D3D8] hover:bg-[#232529] flex items-center gap-2"
+                                onClick={() => handleSelectDoc(node)}
+                                className={`flex items-center gap-1.5 flex-1 text-left px-2 py-1.5 text-[13px] rounded-[6px] transition-colors ${selectedDocId === node.id
+                                    ? 'bg-[#1A1C20] text-[#F2F2F2] font-medium shadow-sm'
+                                    : 'text-[#8A8F98] hover:bg-white/[0.04] hover:text-[#D1D3D8]'
+                                    }`}
                             >
-                                <Folder className="w-3 h-3" />
-                                {folder.title}
-                            </button>
-                        ))}
-                        {rawDocs.filter(d => d.isFolder && d.id !== node.id).length === 0 && (
-                            <div className="px-2 py-1 text-[#5E626B]">No folders available</div>
-                        )}
-                    </div>
-                )}
+                                {node.isFolder ? (
+                                    expandedFolderIds.has(node.id) ? (
+                                        <ChevronDown className="w-3.5 h-3.5 text-[#5E626B] group-hover:text-[#8A8F98]" />
+                                    ) : (
+                                        <ChevronRight className="w-3.5 h-3.5 text-[#5E626B] group-hover:text-[#8A8F98]" />
+                                    )
+                                ) : (
+                                    <FileText className={`w-3.5 h-3.5 ${selectedDocId === node.id ? 'text-[#D1D3D8]' : 'text-[#5E626B]'}`} />
+                                )}
 
-                {node.isFolder && expandedFolderIds.has(node.id) && node.children && (
-                    <div className="pl-4 space-y-0.5 mt-0.5 border-l border-[#232529] ml-3">
-                        {renderTree(node.children, excludeId)}
-                    </div>
-                )}
-            </div>
+                                {node.isFolder && <Folder className="w-3.5 h-3.5 text-[#5E626B] group-hover:text-[#8A8F98]" />}
+                                <span className="truncate">{node.title}</span>
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); startRename(node); }}
+                                className="opacity-0 group-hover:opacity-100 p-1 hover:text-[#F2F2F2] text-[#5E626B] transition-opacity"
+                                title="Rename"
+                            >
+                                <Edit3 className="w-3 h-3" />
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); startMove(node.id); }}
+                                className="opacity-0 group-hover:opacity-100 p-1 hover:text-[#F2F2F2] text-[#5E626B] transition-opacity"
+                                title="Move"
+                            >
+                                <ArrowUpRight className="w-3 h-3" />
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Move Menu */}
+                    {showMoveMenu === node.id && (
+                        <div className="ml-6 mt-1 bg-[#1A1C20] border border-[#232529] rounded-[6px] p-2 text-[12px]">
+                            <div className="text-[#8A8F98] mb-2 px-1">Move to:</div>
+                            <button
+                                onClick={() => handleMove(showMoveMenu, null)}
+                                className="w-full text-left px-2 py-1.5 rounded-[4px] text-[#D1D3D8] hover:bg-[#232529]"
+                            >
+                                Root
+                            </button>
+                            {rawDocs.filter(d => d.isFolder && d.id !== node.id).map(folder => (
+                                <button
+                                    key={folder.id}
+                                    onClick={() => handleMove(showMoveMenu, folder.id)}
+                                    className="w-full text-left px-2 py-1.5 rounded-[4px] text-[#D1D3D8] hover:bg-[#232529] flex items-center gap-2"
+                                >
+                                    <Folder className="w-3 h-3" />
+                                    {folder.title}
+                                </button>
+                            ))}
+                            {rawDocs.filter(d => d.isFolder && d.id !== node.id).length === 0 && (
+                                <div className="px-2 py-1 text-[#5E626B]">No folders available</div>
+                            )}
+                        </div>
+                    )}
+
+                    {node.isFolder && expandedFolderIds.has(node.id) && node.children && (
+                        <div className="pl-4 space-y-0.5 mt-0.5 border-l border-[#232529] ml-3">
+                            {renderTree(node.children, excludeId)}
+                        </div>
+                    )}
+                </div>
             );
         });
     };
 
     return (
-        <div className="h-full w-full bg-[#111214] text-[#EBEBEB] font-sans flex overflow-hidden">
+        <div className="h-full w-full bg-[#050505] text-[#F2F2F2] font-sans flex overflow-hidden">
 
             {/* Left Pane: Document Tree */}
-            <div className="w-[280px] bg-[#111214] border-r border-[#232529] flex flex-col shrink-0">
+            <div className="w-[280px] bg-[#050505] border-r border-white/10 flex flex-col shrink-0">
                 <div className="px-5 py-5 flex items-center justify-between shrink-0">
                     <h2 className="text-[15px] font-semibold text-[#F2F2F2]">Knowledge Base</h2>
                     <div className="flex gap-1">
@@ -474,13 +474,13 @@ export default function KnowledgeBasePage() {
 
                 <div className="px-3 pb-3 flex-1 overflow-y-auto">
                     <div className="relative mb-3">
-                        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#8A8F98]" />
+                        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
                         <input
                             type="text"
                             placeholder="Search docs..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full bg-[#1A1C20] border border-[#2A2D32] rounded-[6px] py-1.5 pl-8 pr-3 text-[13px] text-[#F2F2F2] placeholder:text-[#5E626B] focus:outline-none focus:border-[#444853] focus:bg-[#232529] transition-colors shadow-inner"
+                            className="w-full bg-white/[0.04] border border-white/10 rounded-full py-2 pl-9 pr-4 text-[13px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20 focus:bg-white/[0.06] transition-all shadow-sm focus:shadow-[0_0_15px_rgba(255,255,255,0.05)]"
                         />
                     </div>
 
@@ -512,7 +512,7 @@ export default function KnowledgeBasePage() {
             </div>
 
             {/* Right Pane: Document Editor */}
-            <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#16181A]">
+            <div className="flex-1 flex flex-col h-full overflow-hidden bg-transparent">
                 {!selectedDoc ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-[#5E626B]">
                         <FileText className="w-12 h-12 mb-4 opacity-10" />
@@ -521,7 +521,7 @@ export default function KnowledgeBasePage() {
                 ) : (
                     <>
                         {/* Editor Header */}
-                        <div className="px-8 py-5 flex items-center justify-between shrink-0 border-b border-[#232529]">
+                        <div className="px-8 py-5 flex items-center justify-between shrink-0 border-b border-white/10">
                             <div className="text-[13px] text-[#8A8F98] flex items-center gap-2 font-medium flex-1">
                                 <div className="flex flex-col gap-1 flex-1">
                                     <div className="flex items-center gap-2">
@@ -627,7 +627,7 @@ export default function KnowledgeBasePage() {
                                         ref={textareaRef}
                                         value={editContent}
                                         onChange={(e) => setEditContent(e.target.value)}
-                                        className="w-full min-h-[400px] bg-[#111214] border border-[#232529] rounded-[8px] p-6 text-[15px] leading-relaxed text-[#D1D3D8] focus:outline-none focus:border-[#444853] font-mono shadow-inner resize-none"
+                                        className="w-full min-h-[400px] bg-white/[0.02] border border-white/10 rounded-[12px] p-6 text-[15px] leading-relaxed text-[#F2F2F2] focus:outline-none focus:border-white/20 font-mono shadow-inner resize-none transition-colors"
                                         placeholder="Write your markdown here..."
                                     />
                                 ) : (

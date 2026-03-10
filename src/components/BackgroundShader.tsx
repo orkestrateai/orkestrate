@@ -153,7 +153,7 @@ function OrkestrateEnvironment() {
     );
 }
 
-function Experience({ onComplete, onStartReveal }: { onComplete: () => void; onStartReveal: () => void }) {
+function Experience({ onComplete, onStartReveal, hideLogo = false }: { onComplete: () => void; onStartReveal: () => void; hideLogo?: boolean }) {
     const [ballY, setBallY] = useState(-1.5);
     const [showLogo, setShowLogo] = useState(false);
     const [logoOpacity, setLogoOpacity] = useState(0);
@@ -189,7 +189,7 @@ function Experience({ onComplete, onStartReveal }: { onComplete: () => void; onS
             targetY = -3.5;
             if (!completed.current) {
                 completed.current = true;
-                setShowLogo(true);
+                if (!hideLogo) setShowLogo(true);
                 onComplete();
             }
         }
@@ -227,13 +227,14 @@ function Experience({ onComplete, onStartReveal }: { onComplete: () => void; onS
     );
 }
 
-export function BackgroundShader({ onComplete, onStartReveal }: { onComplete?: () => void; onStartReveal?: () => void }) {
+export function BackgroundShader({ onComplete, onStartReveal, hideLogo = false }: { onComplete?: () => void; onStartReveal?: () => void; hideLogo?: boolean }) {
     return (
         <div className="absolute inset-0 z-0 bg-[#050505]">
             <Canvas shadows dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
                 <Experience
                     onComplete={onComplete || (() => { })}
                     onStartReveal={onStartReveal || (() => { })}
+                    hideLogo={hideLogo}
                 />
             </Canvas>
         </div>

@@ -1,11 +1,11 @@
 import { ReactNode } from "react";
-import GlobalSidebar from "@/components/navigation/GlobalSidebar";
+import DashboardTopNav from "@/components/navigation/GlobalSidebar";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
     return (
-        <div className="flex h-screen w-screen bg-[#111214] overflow-hidden">
-            <GlobalSidebar />
-            <div className="flex-1 overflow-hidden relative border-l border-[#232529] flex flex-col">
+        <div className="flex flex-col h-screen w-screen bg-[#050505] text-[#F2F2F2] overflow-hidden">
+            <DashboardTopNav />
+            <div className="flex-1 overflow-hidden relative flex flex-col">
                 {children}
             </div>
         </div>

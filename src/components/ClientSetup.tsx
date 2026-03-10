@@ -54,7 +54,7 @@ function getClients(): ClientConfig[] {
             docsUrl: "https://opencode.ai/docs/mcp-servers",
             docsLabel: "View OpenCode MCP docs",
             cliCommand: "opencode mcp add",
-            cliDescription: "Add a remote MCP server in the CLI prompt flow (name: Orkestrate, URL: endpoint below):",
+            cliDescription: "Add a remote server by running the command and following these prompts:\n• Name: orkestrate\n• Type: Remote\n• URL: (use endpoint below)\n• OAuth: Yes\n• Client ID: No",
             authCommand: "opencode mcp auth Orkestrate",
             authNote: "This opens your browser for OAuth. Verify status with `opencode mcp auth list` or `opencode mcp list`.",
             config: {
@@ -156,7 +156,7 @@ export function ClientSetup({ handleCopy, copyStatus }: { handleCopy: (text: str
                     {/* CLI Install (if available) */}
                     {active.cliCommand && (
                         <div className="mb-6">
-                            <p className="text-sm text-muted-foreground mb-3">{active.cliDescription || 'Install in one click:'}</p>
+                            <p className="text-sm text-muted-foreground mb-3 whitespace-pre-wrap">{active.cliDescription || 'Install in one click:'}</p>
                             <div className="rounded-lg border border-white/[0.08] bg-[#060606] overflow-hidden">
                                 <div className="flex items-center justify-between px-4 py-3">
                                     <pre className="text-xs font-mono text-foreground/80 overflow-x-auto whitespace-pre-wrap break-all">{active.cliCommand}</pre>
