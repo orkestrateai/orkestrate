@@ -7,8 +7,9 @@ import { buildScopedClientId, resolveCanonicalAgentIdentity } from "@/lib/agent-
 import { getToolAdapter } from "@/tools/_base";
 import { getJoinedWorkspaceForAgent, joinWorkspaceForAgent, touchAgentSession } from "@/lib/agents-core";
 import { db } from "@/db";
-import { agentSessions, agentStates, knowledgeDocs } from "@/db/schema";
-import { and, asc, eq, ilike, isNull, or } from "drizzle-orm";
+import { agentScopeClaims, agentSessions, agentStates, knowledgeDocs } from "@/db/schema";
+import { and, asc, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
+import { normalizeGitUrl } from "@/lib/git-context";
 
 type RpcId = string | number | null;
 
@@ -19,12 +20,21 @@ type AgentStateContent = {
   implementationPlan: string[];
   notesForTeam: string;
   pastWorkSummary: string[];
+  status?: "active" | "idle" | "blocked" | "planning" | "handoff" | "done";
+  repo?: {
+    canonicalRemote?: string | null;
+    branch?: string | null;
+    headSha?: string | null;
+    dirty?: boolean | null;
+    aheadBehind?: string | null;
+  };
 };
 
 type StoredAgentState = {
   scopedAgentId: string;
   agentId: string;
-  status: "active" | "idle" | "blocked";
+  toolName: string | null;
+  status: "active" | "idle" | "blocked" | "planning" | "handoff" | "done";
   content: AgentStateContent;
   objective: string;
   claimedPaths: string[];
@@ -40,6 +50,91 @@ type StoredAgentState = {
   };
   updatedAt: string;
 };
+
+type ActiveScopeClaim = {
+  claimId: string;
+  scopedAgentId: string;
+  agentId: string;
+  paths: string[];
+  leaseExpiresAt: string;
+};
+
+const DEFAULT_SCOPE_TTL_SECONDS = 900;
+const MAX_SCOPE_TTL_SECONDS = 3600;
+
+function normalizeScopePath(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  let value = raw.trim().replace(/\\/g, "/");
+  if (!value) return null;
+  value = value.replace(/^\.\/+/, "").replace(/^\/+/, "").replace(/\/{2,}/g, "/");
+  if (!value) return null;
+  return value;
+}
+
+function normalizeScopePaths(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const normalized = value
+    .map((item) => normalizeScopePath(item))
+    .filter((item): item is string => Boolean(item));
+  return Array.from(new Set(normalized));
+}
+
+function normalizePrefix(value: string): string {
+  return value.endsWith("/") ? value : `${value}/`;
+}
+
+function scopePathsOverlap(aRaw: string, bRaw: string): boolean {
+  const a = normalizeScopePath(aRaw);
+  const b = normalizeScopePath(bRaw);
+  if (!a || !b) return false;
+  if (a === b) return true;
+
+  const aGlob = a.endsWith("/**");
+  const bGlob = b.endsWith("/**");
+  const aBase = aGlob ? a.slice(0, -3) : a;
+  const bBase = bGlob ? b.slice(0, -3) : b;
+  const aPrefix = normalizePrefix(aBase);
+  const bPrefix = normalizePrefix(bBase);
+
+  if (aGlob && (b === aBase || b.startsWith(aPrefix))) return true;
+  if (bGlob && (a === bBase || a.startsWith(bPrefix))) return true;
+
+  if (a.startsWith(bPrefix) || b.startsWith(aPrefix)) return true;
+  return false;
+}
+
+function findScopeConflicts(candidatePaths: string[], existingPaths: string[]): boolean {
+  for (const candidate of candidatePaths) {
+    for (const existing of existingPaths) {
+      if (scopePathsOverlap(candidate, existing)) return true;
+    }
+  }
+  return false;
+}
+
+function claimPathCovers(claimPathRaw: string, targetPathRaw: string): boolean {
+  const claimPath = normalizeScopePath(claimPathRaw);
+  const targetPath = normalizeScopePath(targetPathRaw);
+  if (!claimPath || !targetPath) return false;
+  if (claimPath === targetPath) return true;
+
+  const claimGlob = claimPath.endsWith("/**");
+  const targetGlob = targetPath.endsWith("/**");
+  const claimBase = claimGlob ? claimPath.slice(0, -3) : claimPath;
+  const targetBase = targetGlob ? targetPath.slice(0, -3) : targetPath;
+  const claimPrefix = normalizePrefix(claimBase);
+
+  if (claimGlob) {
+    return targetBase === claimBase || targetBase.startsWith(claimPrefix);
+  }
+
+  // Treat exact non-glob claims as file/folder claims.
+  return targetBase.startsWith(claimPrefix);
+}
+
+function isValidHeadSha(value: unknown): value is string {
+  return typeof value === "string" && /^[a-f0-9]{7,64}$/i.test(value.trim());
+}
 
 type StoredKnowledgeDoc = {
   id: string;
@@ -165,6 +260,9 @@ function inferStateStatus(
   implementationPlan: string[],
 ): StoredAgentState["status"] {
   const normalized = String(raw || "").trim().toLowerCase();
+  if (normalized === "planning") return "planning";
+  if (normalized === "handoff") return "handoff";
+  if (normalized === "done") return "done";
   if (normalized === "blocked") return "blocked";
   if (normalized === "idle") return "idle";
   if (normalized === "active") return "active";
@@ -227,6 +325,7 @@ function coerceState(
   return {
     scopedAgentId,
     agentId: canonicalAgentId,
+    toolName: null,
     status,
     content: contentState,
     objective: contentState.currentObjective,
@@ -341,7 +440,14 @@ async function listWorkspaceCoordinationStates(workspaceId: string): Promise<Sto
     rows.push({
       scopedAgentId: session.agentId,
       agentId,
-      status: state.status === "blocked" ? "blocked" : state.status === "idle" ? "idle" : "active",
+      toolName: session.toolNameRaw || null,
+      status:
+        state.status === "planning" ? "planning"
+          : state.status === "handoff" ? "handoff"
+            : state.status === "done" ? "done"
+              : state.status === "blocked" ? "blocked"
+                : state.status === "idle" ? "idle"
+                  : "active",
       content,
       objective: content.currentObjective,
       claimedPaths: content.architectureFootprint,
@@ -350,8 +456,8 @@ async function listWorkspaceCoordinationStates(workspaceId: string): Promise<Sto
       completed: content.pastWorkSummary,
       repo: {
         canonicalRemote: state.gitRemote,
-        branch: state.gitBranch,
-        headSha: state.gitHeadSha,
+        branch: state.gitBranch || session.branchAtJoin,
+        headSha: state.gitHeadSha || session.headShaAtJoin,
         dirty: state.gitUncommittedChanges,
         aheadBehind: state.gitAheadBehind,
       },
@@ -379,8 +485,51 @@ async function workspaceStateHash(workspaceId: string) {
     ].join(":"));
   }
 
+  const now = new Date();
+  const claims = await db.query.agentScopeClaims.findMany({
+    where: and(eq(agentScopeClaims.roomId, workspaceId), eq(agentScopeClaims.status, "active")),
+  });
+  for (const claim of claims) {
+    if (claim.leaseExpiresAt <= now) continue;
+    signatures.push([
+      claim.id,
+      claim.agentId,
+      claim.updatedAt.toISOString(),
+      claim.leaseExpiresAt.toISOString(),
+      JSON.stringify(Array.isArray(claim.paths) ? claim.paths : []),
+    ].join(":"));
+  }
+
   const digest = createHash("sha1").update(signatures.sort().join("|")).digest("hex").slice(0, 12);
   return `v${digest}`;
+}
+
+async function expireStaleScopeClaims(roomId: string, now: Date) {
+  await db
+    .update(agentScopeClaims)
+    .set({ status: "expired", updatedAt: now })
+    .where(and(
+      eq(agentScopeClaims.roomId, roomId),
+      eq(agentScopeClaims.status, "active"),
+      sql`${agentScopeClaims.leaseExpiresAt} <= ${now}`,
+    ));
+}
+
+async function listActiveScopeClaims(roomId: string): Promise<ActiveScopeClaim[]> {
+  const now = new Date();
+  await expireStaleScopeClaims(roomId, now);
+  const rows = await db.query.agentScopeClaims.findMany({
+    where: and(eq(agentScopeClaims.roomId, roomId), eq(agentScopeClaims.status, "active")),
+    orderBy: [desc(agentScopeClaims.updatedAt)],
+  });
+
+  return rows.map((row) => ({
+    claimId: row.id,
+    scopedAgentId: row.agentId,
+    agentId: row.agentId.split("::")[1] || row.agentId,
+    paths: normalizeScopePaths(row.paths),
+    leaseExpiresAt: row.leaseExpiresAt.toISOString(),
+  }));
 }
 
 function buildJoinWorkspaceOrchestrationGuide(roomId: string, canonicalAgentId: string) {
@@ -391,15 +540,16 @@ function buildJoinWorkspaceOrchestrationGuide(roomId: string, canonicalAgentId: 
     "",
     "Coordination loop (run in this order):",
     "1) read_team_state and capture stateHash.",
-    "2) update_my_state with expectedStateHash=stateHash and your current objective/plan/footprint.",
-    "3) Execute your next chunk of work.",
-    "4) Whenever you make progress, run update_my_state again with the latest expectedStateHash.",
-    "5) If update_my_state returns a hash mismatch, immediately run read_team_state, re-evaluate teammate footprints, and retry with the new stateHash.",
-    "6) Repeat steps 3-5 until objective complete.",
-    "7) Finalize with update_my_state using objective='Standing by for next task.' and empty architectureFootprint + implementationPlan.",
+    "2) claim_scope with expectedStateHash=stateHash and your intended paths.",
+    "3) update_my_state with expectedStateHash from latest read and your current objective/plan/footprint.",
+    "4) Execute your next chunk of work.",
+    "5) Whenever you make progress, run update_my_state again with the latest expectedStateHash.",
+    "6) If claim_scope or update_my_state returns hash mismatch, run read_team_state and retry with the new stateHash.",
+    "7) Repeat steps 4-6 until objective complete.",
+    "8) release_scope (or publish idle/done state with empty footprint to auto-release claims).",
     "",
     "Behavior rules:",
-    "- Treat architectureFootprint as a lock: avoid files/modules already claimed by active teammates.",
+    "- claim_scope is strict: overlapping paths are rejected by server.",
     "- Keep implementationPlan concrete and short; update it as soon as priorities change.",
     "- Use notesForTeam for handoffs, risks, and irreversible decisions.",
     "- If you intentionally run parallel slots, use the same agentId slot in both read_team_state and update_my_state.",
@@ -432,11 +582,30 @@ function buildMcpToolList() {
             type: "string",
             description: "Optional agent slot hint. Must match the slot used in read_team_state/update_my_state.",
           },
+          toolName: {
+            type: "string",
+            description: "Optional human-readable tool/client name (for example: Windsurf, Warp, Lovable).",
+          },
           workspaceId: {
             type: "string",
             description: "Optional workspace id. Defaults to current active workspace for the authenticated user.",
           },
+          gitContext: {
+            type: "object",
+            description: "Required git-derived context from local repository.",
+            properties: {
+              remote: { type: "string", description: "git remote get-url origin" },
+              repoRoot: { type: "string", description: "git rev-parse --show-toplevel" },
+              branch: { type: "string", description: "git rev-parse --abbrev-ref HEAD" },
+              headSha: { type: "string", description: "git rev-parse HEAD" },
+              dirty: { type: "boolean", description: "True if working tree has uncommitted changes." },
+              collectedAt: { type: "string", description: "ISO timestamp when git context was captured." },
+            },
+            required: ["remote", "repoRoot", "branch", "headSha", "dirty", "collectedAt"],
+            additionalProperties: false,
+          },
         },
+        required: ["gitContext"],
         additionalProperties: false,
       },
     },
@@ -451,6 +620,54 @@ function buildMcpToolList() {
             description: "Optional slot hint only if running multiple identities from one client. Keep stable per identity.",
           },
         },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "claim_scope",
+      description: "Claim a repo-relative path scope with strict overlap rejection. Requires expectedStateHash from latest read_team_state.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          agentId: {
+            type: "string",
+            description: "Optional slot hint; must match read_team_state if used.",
+          },
+          expectedStateHash: {
+            type: "string",
+            description: "Required hash returned by read_team_state for optimistic concurrency.",
+          },
+          paths: {
+            type: "array",
+            items: { type: "string" },
+            description: "Repo-relative paths/globs to claim.",
+            minItems: 1,
+          },
+          ttlSeconds: {
+            type: "number",
+            description: "Optional lease TTL seconds (default 900, max 3600).",
+          },
+        },
+        required: ["expectedStateHash", "paths"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "release_scope",
+      description: "Release a previously created scope claim.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          agentId: {
+            type: "string",
+            description: "Optional slot hint; must match joined identity if used.",
+          },
+          claimId: {
+            type: "string",
+            description: "Claim id returned by claim_scope.",
+          },
+        },
+        required: ["claimId"],
         additionalProperties: false,
       },
     },
@@ -500,11 +717,32 @@ function buildMcpToolList() {
               },
               status: {
                 type: "string",
-                enum: ["active", "idle", "blocked"],
+                enum: ["active", "idle", "blocked", "planning", "handoff", "done"],
                 description: "Optional explicit status override.",
               },
+              repo: {
+                type: "object",
+                description: "Required repo context for coordination integrity.",
+                properties: {
+                  canonicalRemote: { type: "string" },
+                  branch: { type: "string" },
+                  headSha: { type: "string" },
+                  dirty: { type: "boolean" },
+                  aheadBehind: { type: "string" },
+                },
+                required: ["canonicalRemote", "branch", "headSha"],
+                additionalProperties: false,
+              },
             },
-            required: ["agentProfile", "currentObjective", "architectureFootprint", "implementationPlan", "notesForTeam", "pastWorkSummary"],
+            required: [
+              "agentProfile",
+              "currentObjective",
+              "architectureFootprint",
+              "implementationPlan",
+              "notesForTeam",
+              "pastWorkSummary",
+              "repo",
+            ],
             additionalProperties: true,
           },
         },
@@ -613,6 +851,27 @@ export async function POST(req: NextRequest) {
       ? `Alias mapping: '${rawName}' -> '${aliasName}'.`
       : null;
 
+    const rawScope = String((tokenRecord as any).scope || "").trim();
+    const effectiveScope = rawScope || "mcp:read mcp:write";
+    const scopeSet = new Set(
+      effectiveScope
+        .split(/\s+/)
+        .map((part) => part.trim())
+        .filter((part) => Boolean(part)),
+    );
+    const hasReadScope = scopeSet.has("mcp:read") || scopeSet.has("mcp:write");
+    const hasWriteScope = scopeSet.has("mcp:write");
+
+    const writeTools = new Set(["join_workspace", "claim_scope", "release_scope", "update_my_state", "write_knowledge_base"]);
+    const readTools = new Set(["Orkestrate_initialize", "read_team_state", "read_knowledge_base"]);
+
+    if (writeTools.has(aliasName) && !hasWriteScope) {
+      return json(403, rpcError(id, -32001, "insufficient_scope: requires mcp:write"));
+    }
+    if (readTools.has(aliasName) && !hasReadScope) {
+      return json(403, rpcError(id, -32001, "insufficient_scope: requires mcp:read"));
+    }
+
     if (aliasName === "Orkestrate_initialize") {
       const workspaceId = await ensureActiveWorkspaceForUser(userId);
       const canonicalIdentity = resolveAgentIdentity((args as Record<string, unknown>).agentId);
@@ -669,22 +928,56 @@ export async function POST(req: NextRequest) {
       const canonicalIdentity = resolveAgentIdentity(argsObj.agentId);
       const scopedAgentId = buildScopedClientId(clientId, canonicalIdentity.id);
       const workspaceId = typeof argsObj.workspaceId === "string" ? argsObj.workspaceId : undefined;
+      const rawToolName = typeof argsObj.toolName === "string" ? argsObj.toolName.trim() : "";
+      const toolName = rawToolName ? rawToolName.slice(0, 80) : null;
+      const persistedClientName = toolName || canonicalIdentity.family;
 
       // Extract git context from agent
       const gitContext = argsObj.gitContext && typeof argsObj.gitContext === "object" && !Array.isArray(argsObj.gitContext)
         ? argsObj.gitContext as Record<string, unknown>
         : null;
-      const gitRemote = gitContext && typeof gitContext.remote === "string" ? gitContext.remote : null;
-      const gitBranch = gitContext && typeof gitContext.branch === "string" ? gitContext.branch : null;
+      const gitRemote = gitContext && typeof gitContext.remote === "string" ? gitContext.remote.trim() : "";
+      const repoRoot = gitContext && typeof gitContext.repoRoot === "string" ? gitContext.repoRoot.trim() : "";
+      const gitBranch = gitContext && typeof gitContext.branch === "string" ? gitContext.branch.trim() : "";
+      const gitHeadSha = gitContext && typeof gitContext.headSha === "string" ? gitContext.headSha.trim() : "";
+      const gitDirty = gitContext ? gitContext.dirty : undefined;
+      const collectedAt = gitContext && typeof gitContext.collectedAt === "string" ? gitContext.collectedAt.trim() : "";
+
+      if (!gitContext) {
+        return json(200, rpcResult(id, {
+          content: [{ type: "text", text: "ERROR: join_workspace requires gitContext." }],
+        }));
+      }
+      if (!gitRemote || !repoRoot || !gitBranch || !isValidHeadSha(gitHeadSha)) {
+        return json(200, rpcResult(id, {
+          content: [{ type: "text", text: "ERROR: Invalid gitContext. remote, repoRoot, branch, and valid headSha are required." }],
+        }));
+      }
+      if (typeof gitDirty !== "boolean") {
+        return json(200, rpcResult(id, {
+          content: [{ type: "text", text: "ERROR: Invalid gitContext. dirty must be boolean." }],
+        }));
+      }
+      if (!collectedAt || Number.isNaN(Date.parse(collectedAt))) {
+        return json(200, rpcResult(id, {
+          content: [{ type: "text", text: "ERROR: Invalid gitContext. collectedAt must be an ISO timestamp." }],
+        }));
+      }
+
+      const normalizedRemote = normalizeGitUrl(gitRemote);
 
       const joined = await joinWorkspaceForAgent({
         userId,
         scopedAgentId,
-        client: canonicalIdentity.family,
+        client: persistedClientName,
         label: canonicalIdentity.id,
         workspaceId,
         gitRemote,
         gitBranch,
+        gitHeadSha,
+        repoRoot,
+        toolNameRaw: toolName || null,
+        normalizedGitRemote: normalizedRemote,
       });
 
       if (!joined.ok) {
@@ -709,6 +1002,16 @@ export async function POST(req: NextRequest) {
               sessionId: joined.sessionId,
               canonicalAgentId: canonicalIdentity.id,
               scopedAgentId,
+              toolName: persistedClientName,
+              family: canonicalIdentity.family,
+              repoVerified: true,
+              normalizedRemote,
+              branch: gitBranch,
+              headSha: gitHeadSha,
+              policy: {
+                overlapPolicy: "strict_reject",
+                branchPolicy: "same_repo_any_branch",
+              },
             }, null, 2)
           },
         ],
@@ -734,7 +1037,19 @@ export async function POST(req: NextRequest) {
       const roomId = joined.roomId;
       await touchAgentSession(scopedAgentId, joined.sessionId);
       const agents = await listWorkspaceCoordinationStates(roomId);
+      const activeClaims = await listActiveScopeClaims(roomId);
       const stateHash = await workspaceStateHash(roomId);
+
+      const agentsPayload = agents.map((state) => ({
+        agentId: state.agentId,
+        toolName: state.toolName,
+        status: state.status,
+        objective: state.objective,
+        footprint: state.claimedPaths,
+        branch: state.repo.branch,
+        headSha: state.repo.headSha,
+        updatedAt: state.updatedAt,
+      }));
 
       const summary = agents.length > 0
         ? agents
@@ -755,7 +1070,159 @@ export async function POST(req: NextRequest) {
               canonicalAgentId: canonicalIdentity.id,
               scopedAgentId,
               stateHash,
-              agents,
+              agents: agentsPayload,
+              activeClaims,
+            }, null, 2),
+          },
+        ],
+      }));
+    }
+
+    if (aliasName === "claim_scope") {
+      const argsObj = args as Record<string, unknown>;
+      if (typeof argsObj.expectedStateHash !== "string") {
+        return json(400, rpcError(id, -32602, "Requires string argument 'expectedStateHash'."));
+      }
+      const paths = normalizeScopePaths(argsObj.paths);
+      if (paths.length === 0) {
+        return json(400, rpcError(id, -32602, "Requires non-empty array argument 'paths'."));
+      }
+
+      const { canonicalIdentity, scopedAgentId, joined } = await resolveJoinedContext(argsObj);
+      if (!joined) {
+        return json(200, rpcResult(id, {
+          content: [{ type: "text", text: "ERROR: Agent not joined. Call join_workspace first." }],
+        }));
+      }
+
+      const roomId = joined.roomId;
+      await touchAgentSession(scopedAgentId, joined.sessionId);
+      await expireStaleScopeClaims(roomId, new Date());
+      const currentHash = await workspaceStateHash(roomId);
+      if (argsObj.expectedStateHash !== currentHash) {
+        return json(200, rpcResult(id, {
+          content: [
+            { type: "text", text: "ERROR: Team state changed. Call read_team_state again and retry." },
+            { type: "text", text: `currentStateHash=${currentHash}` },
+          ],
+        }));
+      }
+
+      const activeClaims = await listActiveScopeClaims(roomId);
+      const conflicts = activeClaims
+        .filter((claim) => claim.scopedAgentId !== scopedAgentId && findScopeConflicts(paths, claim.paths))
+        .map((claim) => ({
+          claimId: claim.claimId,
+          agentId: claim.agentId,
+          paths: claim.paths,
+        }));
+
+      if (conflicts.length > 0) {
+        return json(200, rpcResult(id, {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              error: "SCOPE_CONFLICT",
+              conflicts,
+              currentStateHash: await workspaceStateHash(roomId),
+            }, null, 2),
+          }],
+        }));
+      }
+
+      const ttlParsed = typeof argsObj.ttlSeconds === "number" ? argsObj.ttlSeconds : Number(argsObj.ttlSeconds);
+      const ttlSeconds = Number.isFinite(ttlParsed)
+        ? Math.min(MAX_SCOPE_TTL_SECONDS, Math.max(30, Math.floor(ttlParsed)))
+        : DEFAULT_SCOPE_TTL_SECONDS;
+
+      const now = new Date();
+      await db
+        .update(agentScopeClaims)
+        .set({ status: "released", updatedAt: now })
+        .where(and(
+          eq(agentScopeClaims.roomId, roomId),
+          eq(agentScopeClaims.agentId, scopedAgentId),
+          eq(agentScopeClaims.status, "active"),
+        ));
+
+      const claimId = `claim_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+      const leaseExpiresAt = new Date(now.getTime() + (ttlSeconds * 1000));
+      await db.insert(agentScopeClaims).values({
+        id: claimId,
+        roomId,
+        agentId: scopedAgentId,
+        sessionId: joined.sessionId,
+        paths,
+        status: "active",
+        leaseExpiresAt,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      return json(200, rpcResult(id, {
+        content: [
+          ...(aliasNotice ? [{ type: "text", text: aliasNotice }] : []),
+          { type: "text", text: `Scope claimed for ${canonicalIdentity.id}.` },
+          {
+            type: "text",
+            text: JSON.stringify({
+              workspaceId: roomId,
+              roomId,
+              claim: {
+                claimId,
+                agentId: canonicalIdentity.id,
+                paths,
+                leaseExpiresAt: leaseExpiresAt.toISOString(),
+              },
+              stateHash: await workspaceStateHash(roomId),
+            }, null, 2),
+          },
+        ],
+      }));
+    }
+
+    if (aliasName === "release_scope") {
+      const argsObj = args as Record<string, unknown>;
+      const claimId = typeof argsObj.claimId === "string" ? argsObj.claimId.trim() : "";
+      if (!claimId) {
+        return json(400, rpcError(id, -32602, "Requires string argument 'claimId'."));
+      }
+
+      const { canonicalIdentity, scopedAgentId, joined } = await resolveJoinedContext(argsObj);
+      if (!joined) {
+        return json(200, rpcResult(id, {
+          content: [{ type: "text", text: "ERROR: Agent not joined. Call join_workspace first." }],
+        }));
+      }
+
+      const roomId = joined.roomId;
+      await touchAgentSession(scopedAgentId, joined.sessionId);
+      const existing = await db.query.agentScopeClaims.findFirst({
+        where: and(eq(agentScopeClaims.id, claimId), eq(agentScopeClaims.roomId, roomId)),
+      });
+      if (!existing) {
+        return json(404, rpcError(id, -32004, "Scope claim not found."));
+      }
+      if (existing.agentId !== scopedAgentId) {
+        return json(403, rpcError(id, -32003, "Cannot release a claim owned by another agent."));
+      }
+
+      await db
+        .update(agentScopeClaims)
+        .set({ status: "released", updatedAt: new Date() })
+        .where(eq(agentScopeClaims.id, claimId));
+
+      return json(200, rpcResult(id, {
+        content: [
+          ...(aliasNotice ? [{ type: "text", text: aliasNotice }] : []),
+          { type: "text", text: `Released scope claim ${claimId} for ${canonicalIdentity.id}.` },
+          {
+            type: "text",
+            text: JSON.stringify({
+              workspaceId: roomId,
+              roomId,
+              claimId,
+              stateHash: await workspaceStateHash(roomId),
             }, null, 2),
           },
         ],
@@ -792,6 +1259,51 @@ export async function POST(req: NextRequest) {
       }
 
       const next = coerceState(scopedAgentId, canonicalIdentity.id, argsObj.content);
+      const session = await db.query.agentSessions.findFirst({ where: eq(agentSessions.id, joined.sessionId) });
+      if (!session) {
+        return json(500, rpcError(id, -32000, "Joined session not found."));
+      }
+
+      if (!next.repo.canonicalRemote || !next.repo.branch || !next.repo.headSha || !isValidHeadSha(next.repo.headSha)) {
+        return json(400, rpcError(id, -32602, "content.repo.canonicalRemote, content.repo.branch, and valid content.repo.headSha are required."));
+      }
+
+      const expectedRemote = normalizeGitUrl(session.normalizedRemote || "");
+      const providedRemote = normalizeGitUrl(next.repo.canonicalRemote || "");
+      if (expectedRemote && providedRemote !== expectedRemote) {
+        return json(200, rpcResult(id, {
+          content: [{
+            type: "text",
+            text: `ERROR: Repo mismatch. sessionRemote=${session.normalizedRemote || "unknown"} providedRemote=${next.repo.canonicalRemote}`,
+          }],
+        }));
+      }
+
+      if (next.claimedPaths.length > 0) {
+        const ownedActiveClaims = (await listActiveScopeClaims(roomId))
+          .filter((claim) => claim.scopedAgentId === scopedAgentId);
+        if (ownedActiveClaims.length === 0) {
+          return json(200, rpcResult(id, {
+            content: [{ type: "text", text: "ERROR: No active scope claim. Call claim_scope before publishing non-empty architectureFootprint." }],
+          }));
+        }
+
+        const claimPaths = ownedActiveClaims.flatMap((claim) => claim.paths);
+        const missingPaths = next.claimedPaths.filter((path) => !claimPaths.some((claimPath) => claimPathCovers(claimPath, path)));
+        if (missingPaths.length > 0) {
+          return json(200, rpcResult(id, {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                error: "FOOTPRINT_OUTSIDE_CLAIM",
+                missingPaths,
+                claimPaths,
+              }, null, 2),
+            }],
+          }));
+        }
+      }
+
       const bucket = getRoomBucket(roomId);
       bucket.agentMetadata.set(scopedAgentId, {
         agentProfile: next.content.agentProfile,
@@ -844,6 +1356,20 @@ export async function POST(req: NextRequest) {
             updatedAt: now,
           })
           .where(eq(agentStates.id, existing.id));
+      }
+
+      if (
+        next.claimedPaths.length === 0 &&
+        (next.status === "idle" || next.status === "done" || next.status === "handoff")
+      ) {
+        await db
+          .update(agentScopeClaims)
+          .set({ status: "released", updatedAt: new Date() })
+          .where(and(
+            eq(agentScopeClaims.roomId, roomId),
+            eq(agentScopeClaims.agentId, scopedAgentId),
+            eq(agentScopeClaims.status, "active"),
+          ));
       }
 
       return json(200, rpcResult(id, {

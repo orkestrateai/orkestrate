@@ -62,6 +62,11 @@ export const agentSessions = pgTable('agent_sessions', {
   agentId: text('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
   roomId: text('room_id').notNull().references(() => rooms.id, { onDelete: 'cascade' }),
   status: text('status').default('active').notNull(),
+  normalizedRemote: text('normalized_remote'),
+  repoRoot: text('repo_root'),
+  headShaAtJoin: text('head_sha_at_join'),
+  branchAtJoin: text('branch_at_join'),
+  toolNameRaw: text('tool_name_raw'),
   startedAt: timestamp('started_at').defaultNow().notNull(),
   endedAt: timestamp('ended_at'),
   lastMessageAt: timestamp('last_message_at').defaultNow().notNull(),
@@ -75,6 +80,7 @@ export const agentSessions = pgTable('agent_sessions', {
   agentSessionsStatusIdx: index('agent_sessions_status_idx').on(table.status),
   agentSessionsLastMessageIdx: index('agent_sessions_last_message_idx').on(table.lastMessageAt),
   agentSessionsTranscriptUpdatedIdx: index('agent_sessions_transcript_updated_idx').on(table.transcriptUpdatedAt),
+  agentSessionsRoomStatusIdx: index('agent_sessions_room_status_idx').on(table.roomId, table.status),
 }));
 
 export const agentStates = pgTable('agent_states', {
@@ -102,6 +108,22 @@ export const agentStates = pgTable('agent_states', {
   agentStatesSessionIdx: uniqueIndex('agent_states_session_idx').on(table.sessionId),
   agentStatesRoomIdx: index('agent_states_room_idx').on(table.roomId),
   agentStatesGitBranchIdx: index('agent_states_git_branch_idx').on(table.gitBranch),
+}));
+
+export const agentScopeClaims = pgTable('agent_scope_claims', {
+  id: text('id').primaryKey(),
+  roomId: text('room_id').notNull().references(() => rooms.id, { onDelete: 'cascade' }),
+  agentId: text('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  sessionId: text('session_id').notNull().references(() => agentSessions.id, { onDelete: 'cascade' }),
+  paths: jsonb('paths').$type<string[]>().default([]).notNull(),
+  status: text('status').default('active').notNull(),
+  leaseExpiresAt: timestamp('lease_expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  agentScopeClaimsRoomStatusIdx: index('agent_scope_claims_room_status_idx').on(table.roomId, table.status),
+  agentScopeClaimsAgentStatusIdx: index('agent_scope_claims_agent_status_idx').on(table.agentId, table.status),
+  agentScopeClaimsSessionIdx: index('agent_scope_claims_session_idx').on(table.sessionId),
 }));
 
 export const knowledgeDocs = pgTable('knowledge_docs', {

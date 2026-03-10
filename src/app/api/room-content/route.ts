@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
     const allowed = await canAccessWorkspace(user.id, workspaceId);
     if (!allowed) return noStoreJson({ error: "Workspace not accessible" }, 403);
-    await reconcileWorkspaceAgentLiveness(workspaceId);
+    await reconcileWorkspaceAgentLiveness();
 
     const roomAgents = await db.select().from(agents).where(eq(agents.roomId, workspaceId)).orderBy(desc(agents.updatedAt));
 
@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
       return {
         stateClientId: agent.id,
         clientBaseId: agent.id.split("::")[0] || agent.id,
+        memberId: agent.memberId,
         agentId: agent.label,
         displayName: agent.label,
         status,

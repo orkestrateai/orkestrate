@@ -25,8 +25,11 @@ export async function joinWorkspaceForAgent(args: {
   label: string;
   workspaceId?: string | null;
   gitRemote?: string | null;
+  normalizedGitRemote?: string | null;
   gitBranch?: string | null;
   gitHeadSha?: string | null;
+  repoRoot?: string | null;
+  toolNameRaw?: string | null;
 }) {
   const now = new Date();
   const requestedWorkspaceId = (args.workspaceId || "").trim();
@@ -118,6 +121,11 @@ export async function joinWorkspaceForAgent(args: {
     agentId: args.scopedAgentId,
     roomId: workspaceId,
     status: "active",
+    normalizedRemote: args.normalizedGitRemote ?? args.gitRemote,
+    repoRoot: args.repoRoot,
+    headShaAtJoin: args.gitHeadSha,
+    branchAtJoin: args.gitBranch,
+    toolNameRaw: args.toolNameRaw,
     startedAt: now,
     endedAt: null,
     lastMessageAt: now,
@@ -186,7 +194,7 @@ export async function touchAgentSession(scopedAgentId: string, sessionId: string
     .where(and(eq(agentSessions.id, sessionId), eq(agentSessions.agentId, scopedAgentId)));
 }
 
-export async function reconcileWorkspaceAgentLiveness(workspaceId: string, idleMinutes = 10) {
+export async function reconcileWorkspaceAgentLiveness() {
   // Session/activity state now comes from plugin events only.
   // Do not auto-disconnect agents on timeouts.
   return 0;

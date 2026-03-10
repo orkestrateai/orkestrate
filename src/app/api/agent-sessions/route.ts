@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     const workspaceId = workspaceIdParam || await ensureActiveWorkspaceForUser(user.id);
     const allowed = await canAccessWorkspace(user.id, workspaceId);
     if (!allowed) return noStoreJson({ error: "Workspace not accessible" }, 403);
-    await reconcileWorkspaceAgentLiveness(workspaceId);
+    await reconcileWorkspaceAgentLiveness();
 
     const activeOnly = req.nextUrl.searchParams.get("activeOnly") === "true";
     const rows = await db.select().from(agentSessions)
