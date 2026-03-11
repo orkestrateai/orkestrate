@@ -23,7 +23,7 @@ export default async function AuthorizePage({
 
     // Reconstruct the current URL to pass to the login button for return
     const queryString = new URLSearchParams(params as Record<string, string>).toString();
-    const currentUrl = `/oauth/authorize?${queryString}`;
+    const currentUrl = `/oauth/authorize/consent?${queryString}`;
 
     return (
         <AuthorizeClient

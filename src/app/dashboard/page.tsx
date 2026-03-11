@@ -16,6 +16,7 @@ import {
     X,
     ChevronDown,
     Trash2,
+    GitBranch,
 } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/utils/supabase/client";
 import useSWR from "swr";
@@ -181,7 +182,7 @@ function getClients(): ClientConfig[] {
             docsUrl: "https://opencode.ai/docs/mcp-servers",
             docsLabel: "View OpenCode MCP docs",
             cliCommand: "opencode mcp add",
-            cliDescription: "Add a remote server by running the command and following these prompts:\n• Name: orkestrate\n• Type: Remote\n• URL: https://orkestrate.vercel.app/api/mcp\n• OAuth: Yes \n• Client ID: No",
+            cliDescription: "Add a remote server by running the command and following these prompts:\n• Name: orkestrate\n• Type: Remote\n• URL: https://orkestrate.space/api/mcp\n• OAuth: Yes \n• Client ID: No",
             authCommand: "opencode mcp auth Orkestrate",
             authNote: "Run this command to authenticate via browser OAuth.",
             setupPrompt: `I need you to add the Orkestrate MCP server to my OpenCode configuration. Add this to the 'mcp' object in ~/.config/opencode/opencode.json: "Orkestrate": { "type": "remote", "url": "${MCP_ENDPOINT}", "enabled": true }. Finally, run 'opencode mcp auth Orkestrate' to complete setup.`,
@@ -209,6 +210,149 @@ function getClients(): ClientConfig[] {
             config: {},
         },
     ];
+}
+
+// --- Git Repo Setup Modal ---
+
+function GitRepoSetupModal() {
+    const [repoUrl, setRepoUrl] = useState("");
+    const [defaultBranch, setDefaultBranch] = useState("main");
+    const [workspaceName, setWorkspaceName] = useState("");
+    const [isCreating, setIsCreating] = useState(false);
+    const [error, setError] = useState("");
+
+    const handleCreate = async () => {
+        if (!repoUrl.trim()) {
+            setError("Git repository URL is required");
+            return;
+        }
+        if (!defaultBranch.trim()) {
+            setError("Default branch is required");
+            return;
+        }
+
+        setIsCreating(true);
+        setError("");
+
+        try {
+            const supabase = createSupabaseBrowserClient();
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+                setError("Not authenticated");
+                setIsCreating(false);
+                return;
+            }
+
+            const res = await fetch("/api/workspaces", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({
+                    action: "create",
+                    repoUrl: repoUrl.trim(),
+                    defaultBranch: defaultBranch.trim(),
+                    name: workspaceName.trim() || undefined,
+                }),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                setError(data.error || "Failed to create workspace");
+                setIsCreating(false);
+                return;
+            }
+
+            window.location.reload();
+        } catch (err) {
+            setError("Failed to create workspace");
+            setIsCreating(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+            <div className="fixed inset-0 bg-black/90 backdrop-blur-sm" />
+
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+                className="relative w-full max-w-md bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+            >
+                <div className="px-6 py-5 border-b border-white/[0.05] bg-white/[0.02]">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                            <GitBranch className="w-5 h-5 text-indigo-400" />
+                        </div>
+                        <div>
+                            <h2 className="text-[16px] font-bold text-white tracking-tight">Setup Your Workspace</h2>
+                            <p className="text-[12px] text-zinc-500 mt-0.5">Connect a git repository to get started</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="p-6 space-y-4">
+                    <div>
+                        <label className="block text-[13px] font-semibold text-zinc-400 mb-2">
+                            Workspace Name (optional)
+                        </label>
+                        <input
+                            type="text"
+                            value={workspaceName}
+                            onChange={(e) => setWorkspaceName(e.target.value)}
+                            placeholder="My Project"
+                            className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2.5 text-[13px] text-white placeholder:text-white/30 focus:outline-none focus:border-indigo-500/50 focus:bg-white/[0.06] transition-all"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-[13px] font-semibold text-zinc-400 mb-2">
+                            Git Repository URL *
+                        </label>
+                        <input
+                            type="text"
+                            value={repoUrl}
+                            onChange={(e) => setRepoUrl(e.target.value)}
+                            placeholder="https://github.com/username/repo.git"
+                            className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2.5 text-[13px] text-white placeholder:text-white/30 focus:outline-none focus:border-indigo-500/50 focus:bg-white/[0.06] transition-all"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-[13px] font-semibold text-zinc-400 mb-2">
+                            Default Branch *
+                        </label>
+                        <input
+                            type="text"
+                            value={defaultBranch}
+                            onChange={(e) => setDefaultBranch(e.target.value)}
+                            placeholder="main"
+                            className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2.5 text-[13px] text-white placeholder:text-white/30 focus:outline-none focus:border-indigo-500/50 focus:bg-white/[0.06] transition-all"
+                        />
+                    </div>
+
+                    {error && (
+                        <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-[12px] text-red-400">
+                            {error}
+                        </div>
+                    )}
+                </div>
+
+                <div className="px-6 py-4 border-t border-white/[0.05] bg-white/[0.02] flex justify-end">
+                    <button
+                        onClick={handleCreate}
+                        disabled={isCreating}
+                        className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-500/50 text-white text-[13px] font-semibold rounded-lg transition-all active:scale-95 disabled:cursor-not-allowed"
+                    >
+                        {isCreating ? "Creating..." : "Create Workspace"}
+                    </button>
+                </div>
+            </motion.div>
+        </div>
+    );
 }
 
 // --- Onboarding Component ---
@@ -717,6 +861,7 @@ export default function DashboardPage() {
 
     const { data: wsData, error: wsError } = useSWR("/api/workspaces", fetcher, { refreshInterval: 5000 });
     const rooms: Room[] = Array.isArray(wsData?.rooms) ? wsData.rooms : [];
+    const needsSetup = wsData?.needsSetup === true;
     const activeRoom = rooms.find((r) => r.isActive) || rooms[0] || null;
     const activeRoomId = activeRoom?.id || null;
 
@@ -797,6 +942,11 @@ export default function DashboardPage() {
 
     return (
         <div className="h-full w-full bg-[#0E0F11] text-[#F2F2F2] font-sans flex flex-col">
+            {/* Git Repo Setup Required */}
+            {needsSetup && (
+                <GitRepoSetupModal />
+            )}
+
             {/* Content */}
             <div className="flex-1 overflow-hidden flex">
                 {/* Main List */}

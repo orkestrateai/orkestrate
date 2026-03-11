@@ -2,7 +2,7 @@
   "mcpServers": {
     "Orkestrate": {
       "type": "http",
-      "url": "http://localhost:3000/api/mcp"
+      "url": "https://orkestrate.space/api/mcp"
     }
   }
 }

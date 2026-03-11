@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
     const userId = params.get("user_id");
 
     if (!approve) {
-      const frontendUrl = new URL("/oauth/authorize", req.nextUrl.origin);
+      const frontendUrl = new URL("/oauth/authorize/consent", req.nextUrl.origin);
       frontendUrl.search = params.toString();
       return NextResponse.redirect(frontendUrl, { headers: { "Cache-Control": "no-store" } });
     }

@@ -29,7 +29,7 @@ function loadEnv(): Record<string, string> {
 const env = loadEnv();
 const AGENT_ID = env.Orkestrate_AGENT_ID || process.env.Orkestrate_AGENT_ID || "";
 const SECRET = env.Orkestrate_SECRET || process.env.Orkestrate_SECRET || "";
-const HOST = env.Orkestrate_HOST || process.env.Orkestrate_HOST || "orkestrate.vercel.app";
+const HOST = env.Orkestrate_HOST || process.env.Orkestrate_HOST || "orkestrate.space";
 const BASE = /^https?:\/\//i.test(HOST) ? HOST
   : HOST.includes("localhost") || HOST.includes("127.0.0.1") ? `http://${HOST}`
     : `https://${HOST}`;

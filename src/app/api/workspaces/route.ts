@@ -31,8 +31,13 @@ export async function GET(req: NextRequest) {
     const user = await authenticateRequestUser(req);
     if (!user?.id) return noStoreJson({ error: "Unauthorized" }, 401);
 
-    await ensureActiveWorkspaceForUser(user.id);
+    const activeWorkspaceId = await ensureActiveWorkspaceForUser(user.id);
     const workspaces = await listWorkspacesForUser(user.id);
+
+    if (!activeWorkspaceId && workspaces.length === 0) {
+      return noStoreJson({ workspaces: [], rooms: [], needsSetup: true });
+    }
+
     return noStoreJson({ workspaces, rooms: workspaces });
   } catch (error) {
     return noStoreJson({ error: "Internal server error", detail: error instanceof Error ? error.message : String(error) }, 500);

@@ -223,8 +223,7 @@ export async function ensureActiveRoomForUser(userId: string) {
     return fallbackRoomId;
   }
 
-  const created = await createRoomForUser(userId);
-  return created.id;
+  return null;
 }
 
 export async function deleteRoomForUser(userId: string, roomId: string) {
@@ -247,8 +246,6 @@ export async function deleteRoomForUser(userId: string, roomId: string) {
     const fallbackRoomId = await getFallbackMembershipRoomId(userId, roomId);
     if (fallbackRoomId) {
       await setActiveRoomForUser(userId, fallbackRoomId);
-    } else {
-      await createRoomForUser(userId);
     }
   }
 
