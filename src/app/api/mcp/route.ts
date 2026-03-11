@@ -1041,6 +1041,11 @@ export async function POST(req: NextRequest) {
 
     if (aliasName === "Orkestrate_initialize") {
       const workspaceId = await ensureActiveWorkspaceForUser(userId);
+      if (!workspaceId) {
+        return json(200, rpcResult(id, {
+          content: [{ type: "text", text: "ERROR: No active workspace found. Please create one in the dashboard first." }]
+        }));
+      }
       const canonicalIdentity = resolveAgentIdentity((args as Record<string, unknown>).agentId);
       const siteBase = process.env.NEXT_PUBLIC_SITE_URL || baseUrl(req);
       const host = stripUrlToHost(siteBase);

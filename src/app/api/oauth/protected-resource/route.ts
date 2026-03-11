@@ -5,7 +5,10 @@ function noStoreJson(payload: unknown, status = 200) {
 }
 
 export async function GET(req: NextRequest) {
-  const base = req.nextUrl.origin;
+  let base = req.nextUrl.origin;
+  if (base.includes("www.orkestrate.space")) {
+    base = base.replace("www.orkestrate.space", "orkestrate.space");
+  }
   return noStoreJson({
     resource: `${base}/api/mcp`,
     authorization_servers: [base],

@@ -35,6 +35,10 @@ export async function joinWorkspaceForAgent(args: {
   const requestedWorkspaceId = (args.workspaceId || "").trim();
   const workspaceId = requestedWorkspaceId || await ensureActiveWorkspaceForUser(args.userId);
 
+  if (!workspaceId) {
+    return { ok: false as const, reason: "No active workspace found." };
+  }
+
   const canJoin = await canAccessWorkspace(args.userId, workspaceId);
   if (!canJoin) {
     return { ok: false as const, reason: "Workspace not accessible." };

@@ -18,6 +18,10 @@ export async function GET(req: NextRequest) {
     const workspaceIdParam = req.nextUrl.searchParams.get("workspaceId") || "";
     const workspaceId = workspaceIdParam || await ensureActiveWorkspaceForUser(user.id);
 
+    if (!workspaceId) {
+      return noStoreJson({ error: "No workspace available" }, 404);
+    }
+
     const allowed = await canAccessWorkspace(user.id, workspaceId);
     if (!allowed) return noStoreJson({ error: "Workspace not accessible" }, 403);
     await reconcileWorkspaceAgentLiveness();
