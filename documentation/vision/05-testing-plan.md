@@ -19,7 +19,7 @@ We will test the 3 major features of the V2 Architecture: The Admin Mode Dashboa
 1. Open your terminal where `OpenCode` or `Codex` is connected to this repo.
 2. Type: `let's test v2`
 3. **EXPECTED BEHAVIOR**:
-   - The agent should instantly call `agentalk_initialize_session`.
+   - The agent should instantly call `Orkestrate_initialize_session`.
    - It will see the injected identity and your Master Behavior Rules.
    - It will start scaffolding the Login Component and use `publish_status` to announce it to the ledger.
    - You should see these events streaming *live* onto your Web Dashboard!

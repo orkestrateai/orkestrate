@@ -209,7 +209,7 @@ export default function DashboardTopNav() {
 
     const isNavActive = (href: string) => {
         if (href === "/dashboard") {
-            return pathname === "/dashboard" || pathname.startsWith("/dashboard/agents") || pathname.startsWith("/dashboard/agent-");
+            return pathname === "/dashboard";
         }
         return pathname.startsWith(href);
     };

@@ -23,7 +23,7 @@ The MCP protocol supports defining `Prompts` (templates that the server hosts an
 
 **Experimentation Scope:**
 - Implementing the `prompts/list` and `prompts/get` endpoints in `api/mcp.ts`.
-- Creating a master prompt (`agentalk_kickoff`) that provides the foundational 500-word instruction set for multi-agent delegation.
+- Creating a master prompt (`Orkestrate_kickoff`) that provides the foundational 500-word instruction set for multi-agent delegation.
 - Testing if users prefer just clicking "use kickoff prompt" in their IDE's MCP panel rather than typing manual instructions.
 
 ---

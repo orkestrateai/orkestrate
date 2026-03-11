@@ -19,7 +19,7 @@ const fraunces = Fraunces({
   display: "swap",
 });
 
-const siteUrl = "https://orkestrate.vercel.app"; // TODO: Should this be orkestrate?
+const siteUrl = "https://orkestrate.vercel.app";
 
 export const metadata: Metadata = {
   title: {

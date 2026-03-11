@@ -1,97 +1,83 @@
 # Orkestrate
 
-**Multi-agent coordination protocol for the autonomous era.**
+**The ultimate coordination layer for autonomous AI coding agents.**
 
-Orkestrate is a framework and platform designed to enable multiple independent AI agents to coordinate on complex coding tasks within a shared workspace. It solves the "context shift" and "overwrite" problems by providing a structured protocol for agents to negotiate, plan, and execute changes.
-
----
-
-## 🚀 The Orkestrate Protocol
-
-Orkestrate operates through a series of progressive phases that ensure reliable coordination without a central "master" orchestrator.
-
-### Phase 1: Shared Coordination
-Agents read and write to a shared coordination state via the MCP server.
-- **Intent**: Agents broadcast their current objective.
-- **Footprint**: Agents declare which files they are currently analyzing or modifying.
-
-### Phase 2: Planning & Conflict Resolution
-Agents negotiate overlapping footprints before making major changes.
-- **Peer Review**: Agents can "see" each other's plans in the coordination dashboard.
-- **Locking**: Strict-locking mechanism to prevent duplicate work on the same module.
+Orkestrate provides a robust protocol and real-time dashboard for multi-agent collaboration on shared codebases. By leveraging the Model Context Protocol (MCP), it enables independent agents (like Claude Code, OpenCode, and Codex) to negotiate footprints, broadcast intents, and execute complex workflows without collisions.
 
 ---
 
-## 🛠 Architecture
+## 🏗 Architecture
 
-Orkestrate is built on a modern, event-driven stack:
+Orkestrate is designed for high-concurrency, low-latency coordination:
 
-- **Frontend**: Next.js 15 (App Router) + Tailwind CSS + Lucide Icons.
-- **Backend**: Next.js API Routes + Supabase (PostgreSQL + Realtime).
-- **Coordination**: Model Context Protocol (MCP) as the bridge between IDEs and the Orkestrate server.
-- **Persistence**: Drizzle ORM for structured state management.
-- **Security**: Centralized CSP and Rate Limiting via `src/proxy.ts`.
+- **Core**: Next.js 15 (App Router) + TypeScript.
+- **Coordination Engine**: MCP-compliant server handles state synchronization and resource locking.
+- **Persistence**: Supabase (PostgreSQL) + Drizzle ORM for schema-safe data management.
+- **Real-time**: Supabase Realtime for instant dashboard updates.
+- **Security**: Built-in Content Security Policy (CSP) with nonces and Rate Limiting via integrated middleware.
 
 ---
 
 ## 📂 Project Structure
 
-- `src/app/api/mcp/route.ts`: The primary MCP server endpoint.
-- `src/tools/`: Tool-specific adapters (Codex, OpenCode, Claude).
-- `src/app/dashboard/`: Real-time monitoring and coordination UI.
-- `src/db/schema.ts`: Drizzle ORM schema definitions.
-- `src/proxy.ts`: Security and request middleware.
+- `src/app/api/mcp/route.ts`: Central MCP coordination endpoint.
+- `src/app/dashboard/`: Management UI for monitoring agents and knowledge base.
+- `src/lib/intent-workflows/`: Catalog and runtime for complex agent operations.
+- `src/middleware.ts`: Request proxy handling security, CSP, and rate limiting.
+- `src/db/schema.ts`: Database definitions for rooms, agents, and state.
 
 ---
 
-## ⚡ Setup
+## ⚡ Quick Start
 
-1. **Environment**: Copy `.env.example` to `.env` and fill in your Supabase credentials.
-2. **Install Dependencies**:
-   ```bash
-   bun install
-   ```
-3. **Database Migration**:
-   ```bash
-   bunx drizzle-kit push
-   ```
-4. **Development Server**:
-   ```bash
-   bun dev
-   ```
+### 1. Prerequisites
+- [Bun](https://bun.sh) runtime installed.
+- Supabase project for database and authentication.
 
----
+### 2. Setup
+```bash
+# Clone and install
+git clone https://github.com/system1970/Orkestrate.git
+cd Orkestrate
+bun install
 
-## 🔌 Tool Integration
+# Environment setup
+cp .env.example .env
+# Edit .env with your Supabase credentials
 
-### Orkestrate MCP Endpoint
-
-```text
-https://orkestrate.vercel.app/api/mcp
+# Prepare database
+bun run db:push
 ```
 
-### Claude Code
+### 3. Run Development Server
+```bash
+bun dev
+```
+The dashboard will be available at [http://localhost:3000/dashboard](http://localhost:3000/dashboard).
 
+---
+
+## 🔌 Integrating Agents
+
+Orkestrate exposes a standardized MCP endpoint that can be added to any compatible IDE or CLI tool.
+
+**Endpoint:** `https://orkestrate.vercel.app/api/mcp`
+
+### Claude Code
 ```bash
 claude mcp add --transport http --scope project Orkestrate "https://orkestrate.vercel.app/api/mcp"
 ```
 
 ### OpenCode
-
-```bash
-opencode mcp add
-```
-- Name: `Orkestrate`
-- Type: `remote`
-- URL: `https://orkestrate.vercel.app/api/mcp`
+Add a new `remote` tool with the URL above.
 
 ---
 
-## 🛡 Security & Safety
-Orkestrate handles sensitive coordination data with several layers of security:
-- **Rate Limiting**: Integrated OAuth endpoint protection in `proxy.ts`.
-- **Content Security Policy**: Strict CSP enforcement for all dashboard routes.
-- **Optimistic Concurrency**: State updates use a `stateHash` (CAS) mechanism to prevent race conditions between agents.
+## 🛡 Security & Reliability
+
+- **Optimistic Concurrency**: Agents must provide a `stateHash` to update state, preventing race conditions.
+- **Strict Scoping**: Resource locking prevents agents from modifying the same files simultaneously.
+- **Telemetry**: Full audit trail of agent commands and tool usage.
 
 ---
-© 2026 Orkestrate Team. Early-stage single-builder mode.
+© 2026 Orkestrate. Built for the autonomous age.
