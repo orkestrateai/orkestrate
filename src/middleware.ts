@@ -48,7 +48,7 @@ export function middleware(request: NextRequest) {
 
     const cspHeaderName = 'content-security-policy';
     
-    // Updated CSP to allow Google Fonts and Supabase
+    // Updated CSP to allow Google Fonts, Supabase, and Vercel internal tools
     const cspHeaderVersion = `
         default-src 'self';
         script-src 'self' 'nonce-${nonce}' 'unsafe-inline' ${isDev ? "'unsafe-eval'" : ""} https:;
@@ -57,8 +57,9 @@ export function middleware(request: NextRequest) {
         style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
         img-src 'self' data: blob: https:;
         font-src 'self' data: https: https://fonts.gstatic.com;
-        connect-src 'self' wss: https: vitals.vercel-insights.com;
-        frame-ancestors 'none';
+        connect-src 'self' wss: https: vitals.vercel-insights.com *.vercel.live *.vercel.com;
+        frame-src 'self' https://vercel.live https://*.vercel.live https://vercel.com https://*.vercel.com;
+        frame-ancestors 'self' https://vercel.live https://*.vercel.live https://vercel.com https://*.vercel.com;
     `.replace(/\s{2,}/g, ' ').trim();
 
     const requestHeaders = new Headers(request.headers);
