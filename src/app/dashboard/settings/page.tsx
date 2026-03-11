@@ -29,9 +29,11 @@ const SETTINGS_CATEGORIES = [
     { id: 'billing', label: 'Billing', icon: CreditCard },
 ];
 
+import { Session } from '@supabase/supabase-js';
+
 const settingsFetcher = (url: string) => {
     const supabase = createSupabaseBrowserClient();
-    return supabase.auth.getSession().then(({ data: { session } }) => {
+    return supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
         return fetch(url, {
             headers: { Authorization: `Bearer ${session?.access_token}` },
         }).then((res) => res.json());

@@ -1,8 +1,8 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import type { User } from '@supabase/supabase-js';
+import type { User, Session } from '@supabase/supabase-js';
 import { Logo } from '@/components/brand/Logo';
 import { ArrowRight } from 'lucide-react';
 import { BackgroundShader } from '@/components/BackgroundShader';
@@ -17,12 +17,12 @@ export default function VisualLabHome() {
     const [showNavBg, setShowNavBg] = useState(false);
 
     useEffect(() => {
-        supabase.auth.getSession().then(({ data: { session } }) => {
+        supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
             setUser(session?.user ?? null);
         });
         const {
             data: { subscription },
-        } = supabase.auth.onAuthStateChange((_event, session) => {
+        } = supabase.auth.onAuthStateChange((_event: any, session: Session | null) => {
             setUser(session?.user ?? null);
         });
         return () => subscription.unsubscribe();
