@@ -1,100 +1,100 @@
 Great question. It looks big because auth + MCP OAuth + workspace bootstrap span a few layers.
 
 **Core Auth + Workspace Files (must-know)**
-1. [src/app/page.tsx](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/app/page.tsx)  
+1. [src/app/page.tsx](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/app/page.tsx)  
 Role: Landing/login UI. Starts Google OAuth (`supabase.auth.signInWithOAuth`) and handles sign-out.  
 UX: User clicks “Sign in with Google”.
 
-2. [src/app/auth/callback/route.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/app/auth/callback/route.ts)  
+2. [src/app/auth/callback/route.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/app/auth/callback/route.ts)  
 Role: Handles OAuth callback, exchanges code for session, ensures active workspace for user.  
 UX: After Google login, user is redirected to dashboard and already has a workspace.
 
-3. [src/lib/auth-user.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/lib/auth-user.ts)  
+3. [src/lib/auth-user.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/lib/auth-user.ts)  
 Role: API auth guard for bearer tokens (used by API routes).  
 UX: Invisible; ensures APIs only work for authenticated users.
 
-4. [src/lib/workspaces-core.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/lib/workspaces-core.ts)  
+4. [src/lib/workspaces-core.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/lib/workspaces-core.ts)  
 Role: Workspace-named service API (create/list/switch/delete/rename/ensure active).  
 UX: Invisible; this is the backend workspace business layer.
 
-5. [src/lib/rooms-core.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/lib/rooms-core.ts)  
+5. [src/lib/rooms-core.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/lib/rooms-core.ts)  
 Role: Actual DB implementation currently backed by `rooms` tables.  
 UX: Invisible; workspaces-core maps to this.
 
-6. [src/pages/api/workspaces.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/pages/api/workspaces.ts)  
+6. [src/pages/api/workspaces.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/pages/api/workspaces.ts)  
 Role: Workspace REST endpoint (`GET`, `POST` actions: create/switch/delete/rename).  
 UX: Drives workspace dropdown/state in dashboard flows.
 
 ---
 
 **MCP OAuth/Auth Files (agent auth path)**
-1. [src/pages/api/oauth/authorize.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/pages/api/oauth/authorize.ts)  
+1. [src/pages/api/oauth/authorize.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/pages/api/oauth/authorize.ts)  
 Role: OAuth authorize endpoint for MCP clients.
 
-2. [src/pages/api/oauth/token.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/pages/api/oauth/token.ts)  
+2. [src/pages/api/oauth/token.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/pages/api/oauth/token.ts)  
 Role: Exchanges auth code/refresh token for access token.
 
-3. [src/pages/api/oauth/register.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/pages/api/oauth/register.ts)  
+3. [src/pages/api/oauth/register.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/pages/api/oauth/register.ts)  
 Role: Dynamic client registration.
 
-4. [src/pages/api/oauth/authorization-server.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/pages/api/oauth/authorization-server.ts)  
+4. [src/pages/api/oauth/authorization-server.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/pages/api/oauth/authorization-server.ts)  
 Role: OAuth metadata discovery endpoint.
 
-5. [src/pages/api/oauth/protected-resource.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/pages/api/oauth/protected-resource.ts)  
+5. [src/pages/api/oauth/protected-resource.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/pages/api/oauth/protected-resource.ts)  
 Role: Protected resource metadata for MCP auth.
 
-6. [src/lib/oauth-store.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/lib/oauth-store.ts)  
+6. [src/lib/oauth-store.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/lib/oauth-store.ts)  
 Role: Persists OAuth clients/codes/tokens and validation helpers.
 
-7. [src/pages/api/mcp.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/pages/api/mcp.ts)  
+7. [src/pages/api/mcp.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/pages/api/mcp.ts)  
 Role: MCP server endpoint; validates OAuth token, then ensures active workspace and serves tools.
 
-8. [src/app/oauth/authorize/page.tsx](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/app/oauth/authorize/page.tsx)  
+8. [src/app/oauth/authorize/page.tsx](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/app/oauth/authorize/page.tsx)  
 Role: Consent/login UI for OAuth authorize flow.
 
-9. [src/app/oauth/authorize/LoginButton.tsx](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/app/oauth/authorize/LoginButton.tsx)  
+9. [src/app/oauth/authorize/LoginButton.tsx](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/app/oauth/authorize/LoginButton.tsx)  
 Role: Button that triggers login during OAuth consent path.
 
 ---
 
 **DB + Infra Files**
-1. [src/db/schema.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/db/schema.ts)  
+1. [src/db/schema.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/db/schema.ts)  
 Role: Defines `members`, `rooms`, `room_memberships` and auth-linked relations.
 
-2. [drizzle/0008_members_active_room.sql](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/drizzle/0008_members_active_room.sql)  
+2. [drizzle/0008_members_active_room.sql](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/drizzle/0008_members_active_room.sql)  
 Role: Adds active-room tracking.
 
-3. [drizzle/0009_phase1_nuke_legacy.sql](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/drizzle/0009_phase1_nuke_legacy.sql)  
+3. [drizzle/0009_phase1_nuke_legacy.sql](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/drizzle/0009_phase1_nuke_legacy.sql)  
 Role: Cleans legacy tables for phase-1 baseline.
 
-4. [src/lib/supabase.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/lib/supabase.ts)  
+4. [src/lib/supabase.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/lib/supabase.ts)  
 Role: Service client factory for server-side Supabase usage.
 
-5. [src/utils/supabase/client.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/utils/supabase/client.ts)  
+5. [src/utils/supabase/client.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/utils/supabase/client.ts)  
 Role: Browser Supabase client.
 
-6. [src/utils/supabase/server.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/utils/supabase/server.ts)  
+6. [src/utils/supabase/server.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/utils/supabase/server.ts)  
 Role: Server Supabase helper.
 
-7. [src/middleware.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/middleware.ts)  
+7. [src/middleware.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/middleware.ts)  
 Role: Route protection behavior and auth-related request gating.
 
 ---
 
 **Setup/Docs UX Files**
-1. [src/components/ClientSetup.tsx](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/components/ClientSetup.tsx)  
+1. [src/components/ClientSetup.tsx](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/components/ClientSetup.tsx)  
 Role: UI showing Claude/OpenCode/Codex MCP setup + auth commands.
 
-2. [src/app/docs/page.tsx](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/app/docs/page.tsx)  
+2. [src/app/docs/page.tsx](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/app/docs/page.tsx)  
 Role: End-user docs for MCP + OAuth flow.
 
 ---
 
 **End-to-end UX flow (who does what)**
-1. User signs in on landing page -> [src/app/page.tsx](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/app/page.tsx).  
-2. Callback exchanges code and creates/ensures active workspace -> [src/app/auth/callback/route.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/app/auth/callback/route.ts), [src/lib/workspaces-core.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/lib/workspaces-core.ts).  
-3. Dashboard/workspace UI uses workspace API -> [src/pages/api/workspaces.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/pages/api/workspaces.ts).  
-4. MCP client is configured/authenticated from docs/setup UI -> [src/components/ClientSetup.tsx](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/components/ClientSetup.tsx), [src/app/docs/page.tsx](/C:/Users/pracu/OneDrive/Desktop/2026/Agentalk/src/app/docs/page.tsx).  
+1. User signs in on landing page -> [src/app/page.tsx](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/app/page.tsx).  
+2. Callback exchanges code and creates/ensures active workspace -> [src/app/auth/callback/route.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/app/auth/callback/route.ts), [src/lib/workspaces-core.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/lib/workspaces-core.ts).  
+3. Dashboard/workspace UI uses workspace API -> [src/pages/api/workspaces.ts](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/pages/api/workspaces.ts).  
+4. MCP client is configured/authenticated from docs/setup UI -> [src/components/ClientSetup.tsx](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/components/ClientSetup.tsx), [src/app/docs/page.tsx](/C:/Users/pracu/OneDrive/Desktop/2026/Orkestrate/src/app/docs/page.tsx).  
 5. MCP OAuth handshake runs through OAuth endpoints -> `authorize -> token -> mcp`, and MCP binds agent actions to user’s active workspace.  
 
 If you want, next I can give you a “safe-delete list” split into `keep now` vs `delete for simplification` for this exact auth+workspace scope.

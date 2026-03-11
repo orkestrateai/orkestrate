@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { deleteObject, ensureBucket, readTextObject, writeTextObject } from "./supabase";
 
-const OAUTH_BUCKET = "agentalk-oauth";
+const OAUTH_BUCKET = "orkestrate-oauth";
 const CLIENT_PATH = "clients";
 const CODE_PATH = "auth-codes";
 const ACCESS_PATH = "access-tokens";
@@ -55,7 +55,7 @@ function clientUserFile(clientId: string) {
 }
 
 export async function createClientRegistration(client: any, registration: any) {
-  const clientId = `agentalk_${randomToken(16)}`;
+  const clientId = `orkestrate_${randomToken(16)}`;
   const created = nowEpoch();
   const record = {
     client_id: clientId,

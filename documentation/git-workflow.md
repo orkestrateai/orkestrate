@@ -16,7 +16,7 @@ This document provides detailed git workflows, best practices, and troubleshooti
 
 ## Repository Overview
 
-**Repository**: `https://github.com/system1970/Agentalk.git`
+**Repository**: `https://github.com/system1970/Orkestrate.git`
 
 **Main Branch**: `main` - Production-ready code
 
@@ -29,7 +29,7 @@ This document provides detailed git workflows, best practices, and troubleshooti
 ### Repository Structure
 
 ```
-Agentalk/
+Orkestrate/
 ├── src/
 │   ├── app/              # Next.js App Router pages
 │   ├── components/       # React components
@@ -552,8 +552,8 @@ git reset --hard abc1234
 
 ```bash
 # Setup
-git clone https://github.com/system1970/Agentalk.git
-git remote add upstream https://github.com/system1970/Agentalk.git
+git clone https://github.com/system1970/Orkestrate.git
+git remote add upstream https://github.com/system1970/Orkestrate.git
 
 # Daily workflow
 git checkout main && git pull origin main

@@ -54,7 +54,7 @@ Contract decision:
 
 ## 5) Scoped Agent ID
 - Canonical format: `<client_base_id>::<agent_id>`
-- Example: `agentalk_KUlQuD0WX5_ZhIQSmMogNw::opencode-8x23`
+- Example: `orkestrate_KUlQuD0WX5_ZhIQSmMogNw::opencode-8x23`
 - Must be produced by shared normalization function everywhere.
 - Never hand-build with string concat outside shared helper.
 

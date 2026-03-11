@@ -5,8 +5,8 @@ Thank you for your interest in contributing to Orkestrate! This document provide
 ## 🎯 Quick Start
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/Agentalk.git`
-3. Add upstream remote: `git remote add upstream https://github.com/system1970/Agentalk.git`
+2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/Orkestrate.git`
+3. Add upstream remote: `git remote add upstream https://github.com/system1970/Orkestrate.git`
 4. Create a feature branch: `git checkout -b feat/your-feature-name`
 5. Make your changes and commit
 6. Push to your fork and create a Pull Request
@@ -162,7 +162,7 @@ git push --force-with-lease origin feat/your-feature-name
 
 ### 6. Create Pull Request
 
-1. Go to GitHub and create a PR from your fork to `system1970/Agentalk:main`
+1. Go to GitHub and create a PR from your fork to `system1970/Orkestrate:main`
 2. Fill out the PR template with:
    - Clear description of changes
    - Related issue numbers

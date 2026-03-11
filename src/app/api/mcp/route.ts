@@ -318,7 +318,7 @@ function json(
 function sendOAuthChallenge(req: NextRequest, description = "Valid OAuth bearer token required.") {
   const base = baseUrl(req);
   const resourceMeta = `${base}/.well-known/oauth-protected-resource/api/mcp`;
-  const challenge = `Bearer realm="agentalk", error="invalid_token", error_description="${description}", resource_metadata="${resourceMeta}"`;
+  const challenge = `Bearer realm="orkestrate", error="invalid_token", error_description="${description}", resource_metadata="${resourceMeta}"`;
   return json({ error: "unauthorized", error_description: description }, 401, {
     "WWW-Authenticate": challenge,
   });
