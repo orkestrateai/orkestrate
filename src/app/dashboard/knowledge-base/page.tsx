@@ -21,10 +21,11 @@ import {
 import useSWR from 'swr';
 import { createSupabaseBrowserClient } from '@/utils/supabase/client';
 import ReactMarkdown from 'react-markdown';
+import { Session } from '@supabase/supabase-js';
 
 const fetcher = (url: string) => {
     const supabase = createSupabaseBrowserClient();
-    return supabase.auth.getSession().then(({ data: { session } }) => {
+    return supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
         return fetch(url, {
             headers: { Authorization: `Bearer ${session?.access_token}` },
         }).then((res) => res.json());

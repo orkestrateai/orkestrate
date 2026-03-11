@@ -17,6 +17,7 @@ import {
     MoreHorizontal,
 } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/utils/supabase/client";
+import { Session } from "@supabase/supabase-js";
 import { Logo } from "@/components/brand/Logo";
 
 type Room = {
@@ -53,7 +54,7 @@ export default function DashboardTopNav() {
     // Load user
     useEffect(() => {
         const supabase = createSupabaseBrowserClient();
-        supabase.auth.getSession().then(({ data: { session } }) => {
+        supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
             if (session?.user) {
                 setUser({
                     email: session.user.email || undefined,
