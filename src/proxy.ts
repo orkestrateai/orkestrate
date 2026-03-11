@@ -19,7 +19,7 @@ function isRateLimited(ip: string, limit: number, windowMs: number) {
     return state.count > limit;
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
     const nonce = crypto.randomUUID();
 
     // Basic CSP: scripts strict nonce or hash (default to 'self'), frames default 'none', images data/self

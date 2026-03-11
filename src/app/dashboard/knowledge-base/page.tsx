@@ -10,13 +10,11 @@ import {
     Plus,
     Clock,
     History,
-    MessageSquare,
     Folder,
     Trash2,
     Save,
     AlertTriangle,
     Edit3,
-    FolderInput,
     ArrowUpRight
 } from 'lucide-react';
 

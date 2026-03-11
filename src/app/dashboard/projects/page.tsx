@@ -6,7 +6,6 @@ import {
     Plus,
     Search,
     MoreHorizontal,
-    Clock,
     CheckCircle2,
     Circle,
     CircleDot,

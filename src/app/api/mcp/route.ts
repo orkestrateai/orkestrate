@@ -3,13 +3,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
 import { getClientRegistration, validateAccessToken } from "@/lib/oauth-store";
 import { ensureActiveWorkspaceForUser } from "@/lib/workspaces-core";
-import { buildScopedClientId, resolveCanonicalAgentIdentity } from "@/lib/agent-identity";
+import { resolveAgentFingerprint } from "@/lib/agent-identity";
 import { getToolAdapter } from "@/tools/_base";
 import { getJoinedWorkspaceForAgent, joinWorkspaceForAgent, touchAgentSession } from "@/lib/agents-core";
 import { db } from "@/db";
 import { agentScopeClaims, agentSessions, agentStates, knowledgeDocs } from "@/db/schema";
-import { and, asc, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, isNull, lte, or } from "drizzle-orm";
 import { normalizeGitUrl } from "@/lib/git-context";
+import { getIntentDefinition } from "@/lib/intent-workflows/catalog";
+import { enforceWriteToolGuard } from "@/lib/intent-workflows/guards";
+import { normalizeIntentChain, resolveIntent } from "@/lib/intent-workflows/resolver";
+import { createWorkflowRun, pruneExpiredRuns, setRunPhase, touchRun, workflowRunKey } from "@/lib/intent-workflows/runtime";
+import type { IntentId, WorkflowPhase, WorkflowRunContext } from "@/lib/intent-workflows/types";
 
 type RpcId = string | number | null;
 
@@ -150,6 +155,7 @@ type StoredKnowledgeDoc = {
 
 type RoomBucket = {
   agentMetadata: Map<string, { agentProfile: string; pastWorkSummary: string[] }>;
+  workflowRuns: Map<string, WorkflowRunContext>;
 };
 
 const READ_KNOWLEDGE_BASE_ENABLED = false;
@@ -172,9 +178,85 @@ function getRoomBucket(roomId: string): RoomBucket {
 
   const bucket: RoomBucket = {
     agentMetadata: new Map<string, { agentProfile: string; pastWorkSummary: string[] }>(),
+    workflowRuns: new Map<string, WorkflowRunContext>(),
   };
   store.set(roomId, bucket);
   return bucket;
+}
+
+function getSessionWorkflowRun(
+  bucket: RoomBucket,
+  scopedAgentId: string,
+  sessionId: string,
+): WorkflowRunContext | null {
+  pruneExpiredRuns(bucket.workflowRuns);
+  return bucket.workflowRuns.get(workflowRunKey(scopedAgentId, sessionId)) || null;
+}
+
+function setSessionWorkflowRun(
+  bucket: RoomBucket,
+  run: WorkflowRunContext,
+) {
+  bucket.workflowRuns.set(workflowRunKey(run.scopedAgentId, run.sessionId), run);
+}
+
+function workflowLine(phase: WorkflowPhase | "none", nextRequiredTool: string, why: string) {
+  return `Workflow phase=${phase}. Next required tool: ${nextRequiredTool}. Reason: ${why}`;
+}
+
+function workflowInstructionPayload(input: {
+  ok: boolean;
+  intentId?: IntentId | null;
+  phase: WorkflowPhase | "none";
+  nextRequiredTool: string;
+  why: string;
+  recommendedArgs?: Record<string, unknown>;
+  recoverySteps?: string[];
+  errorCode?: string;
+  allowedToolsNow?: string[];
+}) {
+  const payload: Record<string, unknown> = {
+    ok: input.ok,
+    intentId: input.intentId || null,
+    phase: input.phase,
+    workflowPhase: input.phase,
+    nextRequiredTool: input.nextRequiredTool,
+    why: input.why,
+    recommendedArgs: input.recommendedArgs || {},
+  };
+
+  if (!input.ok) {
+    payload.errorCode = input.errorCode || "WORKFLOW_ERROR";
+    payload.recoverySteps = input.recoverySteps || [];
+    payload.recovery = input.recoverySteps || [];
+    payload.allowedToolsNow = input.allowedToolsNow || [];
+  }
+
+  return payload;
+}
+
+function workflowContentEntries(input: {
+  ok: boolean;
+  intentId?: IntentId | null;
+  phase: WorkflowPhase | "none";
+  nextRequiredTool: string;
+  why: string;
+  recommendedArgs?: Record<string, unknown>;
+  recoverySteps?: string[];
+  errorCode?: string;
+  allowedToolsNow?: string[];
+}) {
+  return [
+    { type: "text" as const, text: workflowLine(input.phase, input.nextRequiredTool, input.why) },
+    { type: "text" as const, text: JSON.stringify(workflowInstructionPayload(input), null, 2) },
+  ];
+}
+
+function hasNonEmptyArchitectureFootprint(content: unknown): boolean {
+  const obj = content && typeof content === "object" && !Array.isArray(content)
+    ? content as Record<string, unknown>
+    : {};
+  return firstStringList(obj, ["architectureFootprint", "claimedPaths"]).length > 0;
 }
 
 function rpcResult(id: RpcId, result: unknown) {
@@ -424,29 +506,32 @@ async function listWorkspaceCoordinationStates(workspaceId: string): Promise<Sto
     const state = await db.query.agentStates.findFirst({
       where: eq(agentStates.sessionId, session.id),
     });
-    if (!state) continue;
 
     const agentId = session.agentId.split("::")[1] || session.agentId;
     const metadata = bucket.agentMetadata.get(session.agentId);
+    
+    // Provide safe fallbacks if the agent hasn't published state yet
     const content: AgentStateContent = {
       agentProfile: metadata?.agentProfile || `${agentId} - coordination agent`,
-      currentObjective: state.objective || "Standing by for next task.",
-      architectureFootprint: Array.isArray(state.claimedPaths) ? state.claimedPaths : [],
-      implementationPlan: Array.isArray(state.plan) ? state.plan : [],
-      notesForTeam: state.notes || "",
-      pastWorkSummary: metadata?.pastWorkSummary || (Array.isArray(state.completed) ? state.completed : []),
+      currentObjective: state?.objective || "Standing by for next task.",
+      architectureFootprint: state && Array.isArray(state.claimedPaths) ? state.claimedPaths : [],
+      implementationPlan: state && Array.isArray(state.plan) ? state.plan : [],
+      notesForTeam: state?.notes || "",
+      pastWorkSummary: metadata?.pastWorkSummary || (state && Array.isArray(state.completed) ? state.completed : []),
     };
+
+    const statusValue = state?.status;
 
     rows.push({
       scopedAgentId: session.agentId,
       agentId,
       toolName: session.toolNameRaw || null,
       status:
-        state.status === "planning" ? "planning"
-          : state.status === "handoff" ? "handoff"
-            : state.status === "done" ? "done"
-              : state.status === "blocked" ? "blocked"
-                : state.status === "idle" ? "idle"
+        statusValue === "planning" ? "planning"
+          : statusValue === "handoff" ? "handoff"
+            : statusValue === "done" ? "done"
+              : statusValue === "blocked" ? "blocked"
+                : statusValue === "idle" ? "idle"
                   : "active",
       content,
       objective: content.currentObjective,
@@ -455,13 +540,13 @@ async function listWorkspaceCoordinationStates(workspaceId: string): Promise<Sto
       notes: content.notesForTeam,
       completed: content.pastWorkSummary,
       repo: {
-        canonicalRemote: state.gitRemote,
-        branch: state.gitBranch || session.branchAtJoin,
-        headSha: state.gitHeadSha || session.headShaAtJoin,
-        dirty: state.gitUncommittedChanges,
-        aheadBehind: state.gitAheadBehind,
+        canonicalRemote: state?.gitRemote || "",
+        branch: state?.gitBranch || session.branchAtJoin,
+        headSha: state?.gitHeadSha || session.headShaAtJoin,
+        dirty: state?.gitUncommittedChanges || false,
+        aheadBehind: state?.gitAheadBehind || null,
       },
-      updatedAt: state.updatedAt.toISOString(),
+      updatedAt: (state?.updatedAt || session.updatedAt).toISOString(),
     });
   }
 
@@ -511,7 +596,7 @@ async function expireStaleScopeClaims(roomId: string, now: Date) {
     .where(and(
       eq(agentScopeClaims.roomId, roomId),
       eq(agentScopeClaims.status, "active"),
-      sql`${agentScopeClaims.leaseExpiresAt} <= ${now}`,
+      lte(agentScopeClaims.leaseExpiresAt, now),
     ));
 }
 
@@ -539,20 +624,22 @@ function buildJoinWorkspaceOrchestrationGuide(roomId: string, canonicalAgentId: 
     `- canonicalAgentId: ${canonicalAgentId}`,
     "",
     "Coordination loop (run in this order):",
-    "1) read_team_state and capture stateHash.",
-    "2) claim_scope with expectedStateHash=stateHash and your intended paths.",
-    "3) update_my_state with expectedStateHash from latest read and your current objective/plan/footprint.",
-    "4) Execute your next chunk of work.",
-    "5) Whenever you make progress, run update_my_state again with the latest expectedStateHash.",
-    "6) If claim_scope or update_my_state returns hash mismatch, run read_team_state and retry with the new stateHash.",
-    "7) Repeat steps 4-6 until objective complete.",
-    "8) release_scope (or publish idle/done state with empty footprint to auto-release claims).",
+    "1) identify_intent for the current task prompt.",
+    "2) read_team_state and capture stateHash.",
+    "3) claim_scope with expectedStateHash=stateHash and your intended paths (editable intents only).",
+    "4) update_my_state with expectedStateHash from latest read and your current objective/plan/footprint.",
+    "5) Execute your next chunk of work.",
+    "6) Whenever you make progress, run update_my_state again with the latest expectedStateHash.",
+    "7) If claim_scope or update_my_state returns hash mismatch/conflict, run read_team_state and retry with the new stateHash.",
+    "8) release_scope (or publish idle/done/handoff state with empty footprint to auto-release claims).",
     "",
     "Behavior rules:",
+    "- identify_intent is required before write coordination tools.",
+    "- non-edit intents cannot claim scope and must publish empty footprint.",
     "- claim_scope is strict: overlapping paths are rejected by server.",
     "- Keep implementationPlan concrete and short; update it as soon as priorities change.",
     "- Use notesForTeam for handoffs, risks, and irreversible decisions.",
-    "- If you intentionally run parallel slots, use the same agentId slot in both read_team_state and update_my_state.",
+    "- IMPORTANT: If your state is empty (e.g., this is a new session), run update_my_state with a solid agentProfile and short currentObjective as soon as possible to announce yourself to the dashboard.",
   ].join("\n");
 }
 
@@ -573,15 +660,45 @@ function buildMcpToolList() {
     //   },
     // },
     {
-      name: "join_workspace",
-      description: "Join the active workspace (or provided workspaceId). REQUIRED before all coordination tools. Returns the orchestration loop + behavior instructions for multi-agent collaboration. Call again after reconnect/new session.",
+      name: "identify_intent",
+      description: "Classify the current user request into an intent and return the required coordination workflow. WHEN: call first for every new task-like prompt. WHY: it selects a safe execution pattern and unlocks write tools in the correct order.",
       inputSchema: {
         type: "object",
         properties: {
-          agentId: {
+          userPrompt: {
             type: "string",
-            description: "Optional agent slot hint. Must match the slot used in read_team_state/update_my_state.",
+            description: "Current user task request in plain language.",
           },
+          targetAgentId: {
+            type: "string",
+            description: "Optional target agent hint for delegate/assist intents.",
+          },
+          scopeHints: {
+            type: "array",
+            items: { type: "string" },
+            description: "Optional candidate paths to include in returned recommendations.",
+          },
+          forceIntent: {
+            type: "string",
+            enum: ["implement", "assist", "delegate", "observe", "review", "handoff"],
+            description: "Optional explicit intent override.",
+          },
+          chain: {
+            type: "array",
+            items: { type: "string", enum: ["implement", "assist", "delegate", "observe", "review", "handoff"] },
+            description: "Optional simple intent chain queue for this session.",
+          },
+        },
+        required: ["userPrompt"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "join_workspace",
+      description: "Join the workspace and verify repository identity. WHEN: call at session start or reconnect. WHY: coordination tools are invalid until a verified session exists.",
+      inputSchema: {
+        type: "object",
+        properties: {
           toolName: {
             type: "string",
             description: "Optional human-readable tool/client name (for example: Windsurf, Warp, Lovable).",
@@ -611,28 +728,19 @@ function buildMcpToolList() {
     },
     {
       name: "read_team_state",
-      description: "Read all active agents' coordination state in the joined room. ALWAYS call before update_my_state. Returns stateHash; pass it as expectedStateHash to prevent stale writes.",
+      description: "Read authoritative team state and stateHash. WHEN: call after identify_intent and after any mismatch/conflict. WHY: provides fresh CAS context and active claims before write actions.",
       inputSchema: {
         type: "object",
-        properties: {
-          agentId: {
-            type: "string",
-            description: "Optional slot hint only if running multiple identities from one client. Keep stable per identity.",
-          },
-        },
+        properties: {},
         additionalProperties: false,
       },
     },
     {
       name: "claim_scope",
-      description: "Claim a repo-relative path scope with strict overlap rejection. Requires expectedStateHash from latest read_team_state.",
+      description: "Reserve repo paths with strict overlap rejection. WHEN: call before editing files for editable intents. WHY: prevents concurrent edits on intersecting paths.",
       inputSchema: {
         type: "object",
         properties: {
-          agentId: {
-            type: "string",
-            description: "Optional slot hint; must match read_team_state if used.",
-          },
           expectedStateHash: {
             type: "string",
             description: "Required hash returned by read_team_state for optimistic concurrency.",
@@ -654,14 +762,10 @@ function buildMcpToolList() {
     },
     {
       name: "release_scope",
-      description: "Release a previously created scope claim.",
+      description: "Release one active claim. WHEN: call on completion, handoff, or scope change. WHY: unblocks teammates and closes claim lifecycle cleanly.",
       inputSchema: {
         type: "object",
         properties: {
-          agentId: {
-            type: "string",
-            description: "Optional slot hint; must match joined identity if used.",
-          },
           claimId: {
             type: "string",
             description: "Claim id returned by claim_scope.",
@@ -673,14 +777,10 @@ function buildMcpToolList() {
     },
     {
       name: "update_my_state",
-      description: "Publish your current coordination intent (objective, footprint, plan, notes). MUST include expectedStateHash from latest read_team_state. On mismatch, read_team_state and retry.",
+      description: "Publish objective, footprint, plan, notes, and repo context. WHEN: call after claim and at progress checkpoints; non-edit intents must use empty footprint. WHY: keeps shared state consistent and auditable.",
       inputSchema: {
         type: "object",
         properties: {
-          agentId: {
-            type: "string",
-            description: "Optional slot hint; must match read_team_state if used.",
-          },
           expectedStateHash: {
             type: "string",
             description: "Required hash returned by read_team_state for optimistic concurrency.",
@@ -814,7 +914,11 @@ export async function POST(req: NextRequest) {
     const clientName = clientRegistration?.client_name || null;
 
     const resolveAgentIdentity = (requestedAgentId: unknown) =>
-      resolveCanonicalAgentIdentity({ requestedAgentId, clientId, clientName });
+      resolveAgentFingerprint({
+        explicitAgentId: requestedAgentId,
+        accessToken: token || "",
+        familyHint: clientName || clientId,
+      });
 
     if (method === "initialize") {
       return json(200, rpcResult(id, {
@@ -863,7 +967,7 @@ export async function POST(req: NextRequest) {
     const hasWriteScope = scopeSet.has("mcp:write");
 
     const writeTools = new Set(["join_workspace", "claim_scope", "release_scope", "update_my_state", "write_knowledge_base"]);
-    const readTools = new Set(["Orkestrate_initialize", "read_team_state", "read_knowledge_base"]);
+    const readTools = new Set(["Orkestrate_initialize", "identify_intent", "read_team_state", "read_knowledge_base"]);
 
     if (writeTools.has(aliasName) && !hasWriteScope) {
       return json(403, rpcError(id, -32001, "insufficient_scope: requires mcp:write"));
@@ -926,7 +1030,7 @@ export async function POST(req: NextRequest) {
     if (aliasName === "join_workspace") {
       const argsObj = args as Record<string, unknown>;
       const canonicalIdentity = resolveAgentIdentity(argsObj.agentId);
-      const scopedAgentId = buildScopedClientId(clientId, canonicalIdentity.id);
+      const scopedAgentId = canonicalIdentity.id;
       const workspaceId = typeof argsObj.workspaceId === "string" ? argsObj.workspaceId : undefined;
       const rawToolName = typeof argsObj.toolName === "string" ? argsObj.toolName.trim() : "";
       const toolName = rawToolName ? rawToolName.slice(0, 80) : null;
@@ -945,22 +1049,76 @@ export async function POST(req: NextRequest) {
 
       if (!gitContext) {
         return json(200, rpcResult(id, {
-          content: [{ type: "text", text: "ERROR: join_workspace requires gitContext." }],
+          content: [
+            { type: "text", text: "ERROR: join_workspace requires gitContext." },
+            ...workflowContentEntries({
+              ok: false,
+              intentId: null,
+              phase: "none",
+              nextRequiredTool: "join_workspace",
+              why: "Repository verification requires gitContext in join request.",
+              recoverySteps: [
+                "Collect git remote, repoRoot, branch, headSha, dirty, and collectedAt.",
+                "Retry join_workspace with complete gitContext.",
+              ],
+              errorCode: "WORKFLOW_STEP_VIOLATION",
+              allowedToolsNow: ["join_workspace"],
+            }),
+          ],
         }));
       }
       if (!gitRemote || !repoRoot || !gitBranch || !isValidHeadSha(gitHeadSha)) {
         return json(200, rpcResult(id, {
-          content: [{ type: "text", text: "ERROR: Invalid gitContext. remote, repoRoot, branch, and valid headSha are required." }],
+          content: [
+            { type: "text", text: "ERROR: Invalid gitContext. remote, repoRoot, branch, and valid headSha are required." },
+            ...workflowContentEntries({
+              ok: false,
+              intentId: null,
+              phase: "none",
+              nextRequiredTool: "join_workspace",
+              why: "join_workspace requires complete git identity fields.",
+              recoverySteps: [
+                "Verify git commands return non-empty values.",
+                "Retry join_workspace with valid gitContext payload.",
+              ],
+              errorCode: "WORKFLOW_STEP_VIOLATION",
+              allowedToolsNow: ["join_workspace"],
+            }),
+          ],
         }));
       }
       if (typeof gitDirty !== "boolean") {
         return json(200, rpcResult(id, {
-          content: [{ type: "text", text: "ERROR: Invalid gitContext. dirty must be boolean." }],
+          content: [
+            { type: "text", text: "ERROR: Invalid gitContext. dirty must be boolean." },
+            ...workflowContentEntries({
+              ok: false,
+              intentId: null,
+              phase: "none",
+              nextRequiredTool: "join_workspace",
+              why: "dirty flag type must be boolean for deterministic repo checks.",
+              recoverySteps: ["Set gitContext.dirty to true/false and retry join_workspace."],
+              errorCode: "WORKFLOW_STEP_VIOLATION",
+              allowedToolsNow: ["join_workspace"],
+            }),
+          ],
         }));
       }
       if (!collectedAt || Number.isNaN(Date.parse(collectedAt))) {
         return json(200, rpcResult(id, {
-          content: [{ type: "text", text: "ERROR: Invalid gitContext. collectedAt must be an ISO timestamp." }],
+          content: [
+            { type: "text", text: "ERROR: Invalid gitContext. collectedAt must be an ISO timestamp." },
+            ...workflowContentEntries({
+              ok: false,
+              intentId: null,
+              phase: "none",
+              nextRequiredTool: "join_workspace",
+              why: "join_workspace requires parseable ISO timestamp in gitContext.collectedAt.",
+              recoverySteps: ["Provide an ISO timestamp string and retry join_workspace."],
+              errorCode: "WORKFLOW_STEP_VIOLATION",
+              allowedToolsNow: ["join_workspace"],
+            }),
+          ],
         }));
       }
 
@@ -985,7 +1143,22 @@ export async function POST(req: NextRequest) {
           ? `\n\nDetails:\n- Agent repo: ${joined.details.agentRepo || 'none'}\n- Room repo: ${joined.details.roomRepo || 'none'}`
           : '';
         return json(200, rpcResult(id, {
-          content: [{ type: "text", text: `ERROR: ${joined.reason}${errorDetails}` }],
+          content: [
+            { type: "text", text: `ERROR: ${joined.reason}${errorDetails}` },
+            ...workflowContentEntries({
+              ok: false,
+              intentId: null,
+              phase: "none",
+              nextRequiredTool: "join_workspace",
+              why: "Join guard rejected this session context.",
+              recoverySteps: [
+                "Match local repo remote with workspace repo binding.",
+                "Retry join_workspace with corrected gitContext.",
+              ],
+              errorCode: "WORKFLOW_STEP_VIOLATION",
+              allowedToolsNow: ["join_workspace"],
+            }),
+          ],
         }));
       }
       const orchestrationGuide = buildJoinWorkspaceOrchestrationGuide(joined.roomId, canonicalIdentity.id);
@@ -994,6 +1167,14 @@ export async function POST(req: NextRequest) {
         content: [
           ...(aliasNotice ? [{ type: "text", text: aliasNotice }] : []),
           { type: "text", text: `Joined workspace ${joined.roomId} as ${canonicalIdentity.id}.` },
+          ...workflowContentEntries({
+            ok: true,
+            intentId: null,
+            phase: "none",
+            nextRequiredTool: "identify_intent",
+            why: "Session is verified. Identify the current task intent before write coordination calls.",
+            recommendedArgs: { userPrompt: "Describe current task." },
+          }),
           { type: "text", text: orchestrationGuide },
           {
             type: "text", text: JSON.stringify({
@@ -1020,17 +1201,141 @@ export async function POST(req: NextRequest) {
 
     const resolveJoinedContext = async (argsObj: Record<string, unknown>) => {
       const canonicalIdentity = resolveAgentIdentity(argsObj.agentId);
-      const scopedAgentId = buildScopedClientId(clientId, canonicalIdentity.id);
+      const scopedAgentId = canonicalIdentity.id;
       const joined = await getJoinedWorkspaceForAgent(userId, scopedAgentId);
       return { canonicalIdentity, scopedAgentId, joined };
     };
+
+    if (aliasName === "identify_intent") {
+      const argsObj = args as Record<string, unknown>;
+      const userPrompt = typeof argsObj.userPrompt === "string" ? argsObj.userPrompt.trim() : "";
+      if (!userPrompt) {
+        return json(400, rpcError(id, -32602, "Requires string argument 'userPrompt'."));
+      }
+
+      const { canonicalIdentity, scopedAgentId, joined } = await resolveJoinedContext(argsObj);
+      if (!joined) {
+        return json(200, rpcResult(id, {
+          content: [
+            { type: "text", text: "ERROR: Agent not joined. Call join_workspace first." },
+            ...workflowContentEntries({
+              ok: false,
+              intentId: null,
+              phase: "none",
+              errorCode: "WORKFLOW_REQUIRED",
+              nextRequiredTool: "join_workspace",
+              why: "identify_intent requires an active joined session to create workflow run state.",
+              recoverySteps: [
+                "Call join_workspace with gitContext.",
+                "Retry identify_intent for this task prompt.",
+              ],
+              allowedToolsNow: ["join_workspace"],
+            }),
+          ],
+        }));
+      }
+
+      const roomId = joined.roomId;
+      await touchAgentSession(scopedAgentId, joined.sessionId);
+
+      const chainQueue = normalizeIntentChain(argsObj.chain);
+      const resolution = resolveIntent(userPrompt, argsObj.forceIntent);
+      const intentDef = getIntentDefinition(resolution.intentId);
+      const bucket = getRoomBucket(roomId);
+      const run = createWorkflowRun({
+        sessionId: joined.sessionId,
+        scopedAgentId,
+        intentId: resolution.intentId,
+        editable: resolution.editable,
+        chainQueue,
+      });
+      setSessionWorkflowRun(bucket, run);
+
+      const targetAgentId = typeof argsObj.targetAgentId === "string" ? argsObj.targetAgentId.trim() : "";
+      const scopeHints = normalizeScopePaths(argsObj.scopeHints);
+
+      const instructions = [
+        {
+          tool: "read_team_state",
+          when: "Immediately after identify_intent.",
+          why: "Fetch the latest stateHash and active claims before any write.",
+        },
+        ...(resolution.editable
+          ? [{
+            tool: "claim_scope",
+            when: "After read_team_state, before editing files.",
+            why: "Reserve non-overlapping scope and enforce deterministic ownership.",
+          }, {
+            tool: "update_my_state",
+            when: "After claim_scope and at progress checkpoints.",
+            why: "Broadcast objective/footprint and keep team state consistent.",
+          }]
+          : [{
+            tool: "update_my_state",
+            when: "After read_team_state with empty architectureFootprint.",
+            why: "Publish non-edit intent updates without claiming paths.",
+          }]),
+      ];
+
+      return json(200, rpcResult(id, {
+        content: [
+          ...(aliasNotice ? [{ type: "text", text: aliasNotice }] : []),
+          { type: "text", text: `Identified intent '${resolution.intentId}' for ${canonicalIdentity.id}.` },
+          ...workflowContentEntries({
+            ok: true,
+            intentId: resolution.intentId,
+            phase: run.phase,
+            nextRequiredTool: "read_team_state",
+            why: "Workflow starts with a fresh team-state read for CAS-safe execution.",
+            recommendedArgs: { agentId: canonicalIdentity.id },
+          }),
+          {
+            type: "text",
+            text: JSON.stringify({
+              intentId: resolution.intentId,
+              confidence: resolution.confidence,
+              editable: intentDef.editable,
+              phase: run.phase,
+              nextRequiredTool: "read_team_state",
+              forbiddenTools: intentDef.forbiddenTools,
+              instructions,
+              run: {
+                runId: run.runId,
+                sessionId: run.sessionId,
+                intentId: run.intentId,
+                phase: run.phase,
+                chainRemaining: run.chainQueue,
+                expiresAt: run.expiresAt,
+              },
+              targetAgentId: targetAgentId || null,
+              scopeHints,
+            }, null, 2),
+          },
+        ],
+      }));
+    }
 
     if (aliasName === "read_team_state") {
       const argsObj = args as Record<string, unknown>;
       const { canonicalIdentity, scopedAgentId, joined } = await resolveJoinedContext(argsObj);
       if (!joined) {
         return json(200, rpcResult(id, {
-          content: [{ type: "text", text: "ERROR: Agent not joined. Call join_workspace first." }],
+          content: [
+            { type: "text", text: "ERROR: Agent not joined. Call join_workspace first." },
+            ...workflowContentEntries({
+              ok: false,
+              intentId: null,
+              phase: "none",
+              nextRequiredTool: "join_workspace",
+              why: "A verified session is required before team state can be read.",
+              recoverySteps: [
+                "Call join_workspace with valid gitContext.",
+                "Retry read_team_state.",
+              ],
+              errorCode: "WORKFLOW_REQUIRED",
+              allowedToolsNow: ["join_workspace"],
+            }),
+          ],
         }));
       }
 
@@ -1039,6 +1344,12 @@ export async function POST(req: NextRequest) {
       const agents = await listWorkspaceCoordinationStates(roomId);
       const activeClaims = await listActiveScopeClaims(roomId);
       const stateHash = await workspaceStateHash(roomId);
+      const bucket = getRoomBucket(roomId);
+      const existingRun = getSessionWorkflowRun(bucket, scopedAgentId, joined.sessionId);
+      const run = existingRun
+        ? touchRun(existingRun, { phase: "read", lastReadStateHash: stateHash })
+        : null;
+      if (run) setSessionWorkflowRun(bucket, run);
 
       const agentsPayload = agents.map((state) => ({
         agentId: state.agentId,
@@ -1061,6 +1372,18 @@ export async function POST(req: NextRequest) {
         content: [
           ...(aliasNotice ? [{ type: "text", text: aliasNotice }] : []),
           { type: "text", text: summary },
+          ...workflowContentEntries({
+            ok: true,
+            intentId: run?.intentId || null,
+            phase: run?.phase || "none",
+            nextRequiredTool: run ? (run.editable ? "claim_scope" : "update_my_state") : "identify_intent",
+            why: run
+              ? "Team state is fresh. Continue the active intent workflow with the next required tool."
+              : "No active intent run found. Identify intent before attempting write coordination tools.",
+            recommendedArgs: run
+              ? { expectedStateHash: stateHash }
+              : { userPrompt: "Describe your current task." },
+          }),
           { type: "text", text: `stateHash=${stateHash}` },
           {
             type: "text",
@@ -1091,19 +1414,73 @@ export async function POST(req: NextRequest) {
       const { canonicalIdentity, scopedAgentId, joined } = await resolveJoinedContext(argsObj);
       if (!joined) {
         return json(200, rpcResult(id, {
-          content: [{ type: "text", text: "ERROR: Agent not joined. Call join_workspace first." }],
+          content: [
+            { type: "text", text: "ERROR: Agent not joined. Call join_workspace first." },
+            ...workflowContentEntries({
+              ok: false,
+              intentId: null,
+              phase: "none",
+              nextRequiredTool: "join_workspace",
+              why: "Scope claims are invalid until a verified workspace session exists.",
+              recoverySteps: [
+                "Call join_workspace with valid gitContext.",
+                "Call identify_intent, then read_team_state, then retry claim_scope.",
+              ],
+              errorCode: "WORKFLOW_REQUIRED",
+              allowedToolsNow: ["join_workspace"],
+            }),
+          ],
         }));
       }
 
       const roomId = joined.roomId;
       await touchAgentSession(scopedAgentId, joined.sessionId);
+      const bucket = getRoomBucket(roomId);
+      const existingRun = getSessionWorkflowRun(bucket, scopedAgentId, joined.sessionId);
+      const guard = enforceWriteToolGuard({
+        toolName: "claim_scope",
+        run: existingRun,
+      });
+      if (!guard.ok) {
+        return json(200, rpcResult(id, {
+          content: [
+            { type: "text", text: `ERROR: ${guard.errorCode}.` },
+            ...workflowContentEntries({
+              ok: false,
+              intentId: existingRun?.intentId || null,
+              phase: guard.currentPhase,
+              nextRequiredTool: guard.nextRequiredTool,
+              why: guard.why,
+              recoverySteps: guard.recoverySteps,
+              errorCode: guard.errorCode,
+              allowedToolsNow: guard.allowedToolsNow,
+            }),
+          ],
+        }));
+      }
       await expireStaleScopeClaims(roomId, new Date());
       const currentHash = await workspaceStateHash(roomId);
       if (argsObj.expectedStateHash !== currentHash) {
+        if (existingRun) {
+          setSessionWorkflowRun(bucket, setRunPhase(existingRun, "resync"));
+        }
         return json(200, rpcResult(id, {
           content: [
             { type: "text", text: "ERROR: Team state changed. Call read_team_state again and retry." },
             { type: "text", text: `currentStateHash=${currentHash}` },
+            ...workflowContentEntries({
+              ok: false,
+              intentId: existingRun?.intentId || null,
+              phase: "resync",
+              nextRequiredTool: "read_team_state",
+              why: "Hash mismatch indicates stale coordination view.",
+              recoverySteps: [
+                "Call read_team_state and capture new stateHash.",
+                "Retry claim_scope with expectedStateHash from the fresh read.",
+              ],
+              errorCode: "WORKFLOW_RESYNC_REQUIRED",
+              allowedToolsNow: ["read_team_state"],
+            }),
           ],
         }));
       }
@@ -1118,6 +1495,9 @@ export async function POST(req: NextRequest) {
         }));
 
       if (conflicts.length > 0) {
+        if (existingRun) {
+          setSessionWorkflowRun(bucket, setRunPhase(existingRun, "resync"));
+        }
         return json(200, rpcResult(id, {
           content: [{
             type: "text",
@@ -1126,7 +1506,20 @@ export async function POST(req: NextRequest) {
               conflicts,
               currentStateHash: await workspaceStateHash(roomId),
             }, null, 2),
-          }],
+          },
+          ...workflowContentEntries({
+            ok: false,
+            intentId: existingRun?.intentId || null,
+            phase: "resync",
+            nextRequiredTool: "read_team_state",
+            why: "Scope conflict requires a fresh read and re-scope attempt.",
+            recoverySteps: [
+              "Call read_team_state to inspect active claims.",
+              "Pick non-overlapping paths and retry claim_scope.",
+            ],
+            errorCode: "WORKFLOW_RESYNC_REQUIRED",
+            allowedToolsNow: ["read_team_state"],
+          })],
         }));
       }
 
@@ -1158,11 +1551,22 @@ export async function POST(req: NextRequest) {
         createdAt: now,
         updatedAt: now,
       });
+      if (existingRun) {
+        setSessionWorkflowRun(bucket, setRunPhase(existingRun, "claimed"));
+      }
 
       return json(200, rpcResult(id, {
         content: [
           ...(aliasNotice ? [{ type: "text", text: aliasNotice }] : []),
           { type: "text", text: `Scope claimed for ${canonicalIdentity.id}.` },
+          ...workflowContentEntries({
+            ok: true,
+            intentId: existingRun?.intentId || null,
+            phase: "claimed",
+            nextRequiredTool: "update_my_state",
+            why: "Scope is reserved. Publish state next before or while editing files.",
+            recommendedArgs: { expectedStateHash: await workspaceStateHash(roomId) },
+          }),
           {
             type: "text",
             text: JSON.stringify({
@@ -1191,12 +1595,50 @@ export async function POST(req: NextRequest) {
       const { canonicalIdentity, scopedAgentId, joined } = await resolveJoinedContext(argsObj);
       if (!joined) {
         return json(200, rpcResult(id, {
-          content: [{ type: "text", text: "ERROR: Agent not joined. Call join_workspace first." }],
+          content: [
+            { type: "text", text: "ERROR: Agent not joined. Call join_workspace first." },
+            ...workflowContentEntries({
+              ok: false,
+              intentId: null,
+              phase: "none",
+              nextRequiredTool: "join_workspace",
+              why: "Scope release requires a verified workspace session.",
+              recoverySteps: [
+                "Call join_workspace with valid gitContext.",
+                "Retry release_scope with your claimId.",
+              ],
+              errorCode: "WORKFLOW_REQUIRED",
+              allowedToolsNow: ["join_workspace"],
+            }),
+          ],
         }));
       }
 
       const roomId = joined.roomId;
       await touchAgentSession(scopedAgentId, joined.sessionId);
+      const bucket = getRoomBucket(roomId);
+      const existingRun = getSessionWorkflowRun(bucket, scopedAgentId, joined.sessionId);
+      const guard = enforceWriteToolGuard({
+        toolName: "release_scope",
+        run: existingRun,
+      });
+      if (!guard.ok) {
+        return json(200, rpcResult(id, {
+          content: [
+            { type: "text", text: `ERROR: ${guard.errorCode}.` },
+            ...workflowContentEntries({
+              ok: false,
+              intentId: existingRun?.intentId || null,
+              phase: guard.currentPhase,
+              nextRequiredTool: guard.nextRequiredTool,
+              why: guard.why,
+              recoverySteps: guard.recoverySteps,
+              errorCode: guard.errorCode,
+              allowedToolsNow: guard.allowedToolsNow,
+            }),
+          ],
+        }));
+      }
       const existing = await db.query.agentScopeClaims.findFirst({
         where: and(eq(agentScopeClaims.id, claimId), eq(agentScopeClaims.roomId, roomId)),
       });
@@ -1212,10 +1654,41 @@ export async function POST(req: NextRequest) {
         .set({ status: "released", updatedAt: new Date() })
         .where(eq(agentScopeClaims.id, claimId));
 
+      let nextPhase: WorkflowPhase = "done";
+      let nextIntentId: IntentId | null = existingRun?.intentId || null;
+      if (existingRun) {
+        const queue = [...existingRun.chainQueue];
+        if (queue.length > 0) {
+          const nextIntent = queue.shift()!;
+          const def = getIntentDefinition(nextIntent);
+          const nextRun = touchRun(existingRun, {
+            intentId: nextIntent,
+            editable: def.editable,
+            phase: "identified",
+            chainQueue: queue,
+            lastReadStateHash: null,
+          });
+          setSessionWorkflowRun(bucket, nextRun);
+          nextPhase = "identified";
+          nextIntentId = nextIntent;
+        } else {
+          setSessionWorkflowRun(bucket, setRunPhase(existingRun, "done"));
+        }
+      }
+
       return json(200, rpcResult(id, {
         content: [
           ...(aliasNotice ? [{ type: "text", text: aliasNotice }] : []),
           { type: "text", text: `Released scope claim ${claimId} for ${canonicalIdentity.id}.` },
+          ...workflowContentEntries({
+            ok: true,
+            intentId: nextIntentId,
+            phase: nextPhase,
+            nextRequiredTool: nextPhase === "identified" ? "read_team_state" : "identify_intent",
+            why: nextPhase === "identified"
+              ? "Next chained intent is queued and ready for a fresh team-state read."
+              : "Claim released and workflow is complete.",
+          }),
           {
             type: "text",
             text: JSON.stringify({
@@ -1241,19 +1714,74 @@ export async function POST(req: NextRequest) {
       const { canonicalIdentity, scopedAgentId, joined } = await resolveJoinedContext(argsObj);
       if (!joined) {
         return json(200, rpcResult(id, {
-          content: [{ type: "text", text: "ERROR: Agent not joined. Call join_workspace first." }],
+          content: [
+            { type: "text", text: "ERROR: Agent not joined. Call join_workspace first." },
+            ...workflowContentEntries({
+              ok: false,
+              intentId: null,
+              phase: "none",
+              nextRequiredTool: "join_workspace",
+              why: "State updates are invalid until a verified workspace session exists.",
+              recoverySteps: [
+                "Call join_workspace with valid gitContext.",
+                "Call identify_intent and continue workflow before retrying update_my_state.",
+              ],
+              errorCode: "WORKFLOW_REQUIRED",
+              allowedToolsNow: ["join_workspace"],
+            }),
+          ],
         }));
       }
 
       const roomId = joined.roomId;
       await touchAgentSession(scopedAgentId, joined.sessionId);
+      const bucket = getRoomBucket(roomId);
+      const existingRun = getSessionWorkflowRun(bucket, scopedAgentId, joined.sessionId);
+      const guard = enforceWriteToolGuard({
+        toolName: "update_my_state",
+        run: existingRun,
+        hasNonEmptyFootprint: hasNonEmptyArchitectureFootprint(argsObj.content),
+      });
+      if (!guard.ok) {
+        return json(200, rpcResult(id, {
+          content: [
+            { type: "text", text: `ERROR: ${guard.errorCode}.` },
+            ...workflowContentEntries({
+              ok: false,
+              intentId: existingRun?.intentId || null,
+              phase: guard.currentPhase,
+              nextRequiredTool: guard.nextRequiredTool,
+              why: guard.why,
+              recoverySteps: guard.recoverySteps,
+              errorCode: guard.errorCode,
+              allowedToolsNow: guard.allowedToolsNow,
+            }),
+          ],
+        }));
+      }
       const currentHash = await workspaceStateHash(roomId);
 
       if (argsObj.expectedStateHash !== currentHash) {
+        if (existingRun) {
+          setSessionWorkflowRun(bucket, setRunPhase(existingRun, "resync"));
+        }
         return json(200, rpcResult(id, {
           content: [
             { type: "text", text: "ERROR: Team state changed. Call read_team_state again and retry." },
             { type: "text", text: `currentStateHash=${currentHash}` },
+            ...workflowContentEntries({
+              ok: false,
+              intentId: existingRun?.intentId || null,
+              phase: "resync",
+              nextRequiredTool: "read_team_state",
+              why: "Hash mismatch indicates stale team-state context for update.",
+              recoverySteps: [
+                "Call read_team_state to fetch new stateHash.",
+                "Retry update_my_state with expectedStateHash from that read.",
+              ],
+              errorCode: "WORKFLOW_RESYNC_REQUIRED",
+              allowedToolsNow: ["read_team_state"],
+            }),
           ],
         }));
       }
@@ -1272,10 +1800,25 @@ export async function POST(req: NextRequest) {
       const providedRemote = normalizeGitUrl(next.repo.canonicalRemote || "");
       if (expectedRemote && providedRemote !== expectedRemote) {
         return json(200, rpcResult(id, {
-          content: [{
-            type: "text",
-            text: `ERROR: Repo mismatch. sessionRemote=${session.normalizedRemote || "unknown"} providedRemote=${next.repo.canonicalRemote}`,
-          }],
+          content: [
+            {
+              type: "text",
+              text: `ERROR: Repo mismatch. sessionRemote=${session.normalizedRemote || "unknown"} providedRemote=${next.repo.canonicalRemote}`,
+            },
+            ...workflowContentEntries({
+              ok: false,
+              intentId: existingRun?.intentId || null,
+              phase: existingRun?.phase || "none",
+              nextRequiredTool: "join_workspace",
+              why: "Repo context no longer matches joined session identity.",
+              recoverySteps: [
+                "Ensure your local repository remote matches the workspace canonical remote.",
+                "Re-run join_workspace with fresh gitContext, then continue workflow.",
+              ],
+              errorCode: "WORKFLOW_STEP_VIOLATION",
+              allowedToolsNow: ["join_workspace"],
+            }),
+          ],
         }));
       }
 
@@ -1283,8 +1826,27 @@ export async function POST(req: NextRequest) {
         const ownedActiveClaims = (await listActiveScopeClaims(roomId))
           .filter((claim) => claim.scopedAgentId === scopedAgentId);
         if (ownedActiveClaims.length === 0) {
+          if (existingRun) {
+            setSessionWorkflowRun(bucket, setRunPhase(existingRun, "resync"));
+          }
           return json(200, rpcResult(id, {
-            content: [{ type: "text", text: "ERROR: No active scope claim. Call claim_scope before publishing non-empty architectureFootprint." }],
+            content: [
+              { type: "text", text: "ERROR: No active scope claim. Call claim_scope before publishing non-empty architectureFootprint." },
+              ...workflowContentEntries({
+                ok: false,
+                intentId: existingRun?.intentId || null,
+                phase: "resync",
+                nextRequiredTool: "read_team_state",
+                why: "Footprint update requires an active claim and fresh state synchronization.",
+                recoverySteps: [
+                  "Call read_team_state to refresh hash.",
+                  "Call claim_scope for the intended paths.",
+                  "Retry update_my_state with non-empty footprint.",
+                ],
+                errorCode: "WORKFLOW_STEP_VIOLATION",
+                allowedToolsNow: ["read_team_state", "claim_scope"],
+              }),
+            ],
           }));
         }
 
@@ -1299,12 +1861,24 @@ export async function POST(req: NextRequest) {
                 missingPaths,
                 claimPaths,
               }, null, 2),
-            }],
+            },
+            ...workflowContentEntries({
+              ok: false,
+              intentId: existingRun?.intentId || null,
+              phase: existingRun?.phase || "none",
+              nextRequiredTool: "claim_scope",
+              why: "Footprint includes paths that are not covered by active claim.",
+              recoverySteps: [
+                "Adjust architectureFootprint to claimed paths, or",
+                "Claim broader/non-overlapping paths first, then retry.",
+              ],
+              errorCode: "WORKFLOW_STEP_VIOLATION",
+              allowedToolsNow: ["claim_scope", "update_my_state"],
+            })],
           }));
         }
       }
 
-      const bucket = getRoomBucket(roomId);
       bucket.agentMetadata.set(scopedAgentId, {
         agentProfile: next.content.agentProfile,
         pastWorkSummary: next.content.pastWorkSummary,
@@ -1372,10 +1946,58 @@ export async function POST(req: NextRequest) {
           ));
       }
 
+      let nextWorkflowPhase: WorkflowPhase = next.claimedPaths.length > 0 ? "active" : "active";
+      let nextIntentId: IntentId | null = existingRun?.intentId || null;
+      if (next.claimedPaths.length === 0 && (next.status === "done" || next.status === "handoff")) {
+        nextWorkflowPhase = "done";
+      }
+      if (existingRun) {
+        if (nextWorkflowPhase === "done" && existingRun.chainQueue.length > 0) {
+          const queue = [...existingRun.chainQueue];
+          const chainedIntent = queue.shift()!;
+          const chainedDef = getIntentDefinition(chainedIntent);
+          const chainedRun = touchRun(existingRun, {
+            intentId: chainedIntent,
+            editable: chainedDef.editable,
+            phase: "identified",
+            chainQueue: queue,
+            lastReadStateHash: null,
+          });
+          setSessionWorkflowRun(bucket, chainedRun);
+          nextWorkflowPhase = "identified";
+          nextIntentId = chainedIntent;
+        } else {
+          setSessionWorkflowRun(bucket, setRunPhase(existingRun, nextWorkflowPhase));
+        }
+      }
+
+      const nextRequiredTool = nextWorkflowPhase === "identified"
+        ? "read_team_state"
+        : nextWorkflowPhase === "done"
+          ? "identify_intent"
+          : "update_my_state";
+      const nextWhy = nextWorkflowPhase === "identified"
+        ? "Chained intent is queued. Refresh team state before continuing."
+        : nextWorkflowPhase === "done"
+          ? "Current intent is complete."
+          : "Continue publishing progress updates for the active intent.";
+
       return json(200, rpcResult(id, {
         content: [
           ...(aliasNotice ? [{ type: "text", text: aliasNotice }] : []),
           { type: "text", text: `Successfully updated state for ${canonicalIdentity.id}.` },
+          ...workflowContentEntries({
+            ok: true,
+            intentId: nextIntentId,
+            phase: nextWorkflowPhase,
+            nextRequiredTool,
+            why: nextWhy,
+            recommendedArgs: nextRequiredTool === "read_team_state"
+              ? {}
+              : nextRequiredTool === "identify_intent"
+                ? { userPrompt: "Describe the next task." }
+                : { expectedStateHash: await workspaceStateHash(roomId) },
+          }),
           { type: "text", text: `stateHash=${await workspaceStateHash(roomId)}` },
           { type: "text", text: JSON.stringify({ workspaceId: roomId, roomId, state: next }, null, 2) },
         ],

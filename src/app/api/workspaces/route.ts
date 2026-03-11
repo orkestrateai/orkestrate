@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequestUser } from "@/lib/auth-user-request";
-import { db } from "@/db";
-import { rooms } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
 import {
   createWorkspaceForUser,
   deleteWorkspaceForUser,
@@ -53,7 +50,17 @@ export async function POST(req: NextRequest) {
     const name = typeof payload.name === "string" ? payload.name : "";
 
     if (action === "create") {
-      const workspace = await createWorkspaceForUser(user.id, name || undefined);
+      const repoUrl = typeof payload.repoUrl === "string" ? payload.repoUrl.trim() : "";
+      const defaultBranch = typeof payload.defaultBranch === "string" ? payload.defaultBranch.trim() : "";
+
+      if (!repoUrl) {
+        return noStoreJson({ error: "Git repository URL is required. Please provide a repoUrl." }, 400);
+      }
+      if (!defaultBranch) {
+        return noStoreJson({ error: "Default branch is required. Please provide a defaultBranch." }, 400);
+      }
+
+      const workspace = await createWorkspaceForUser(user.id, name || undefined, repoUrl, defaultBranch);
       return noStoreJson({ workspace, room: workspace });
     }
 

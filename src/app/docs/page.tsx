@@ -93,19 +93,27 @@ export default function DocsPage() {
 
                 <div className="space-y-3 text-sm text-muted-foreground">
                     <p>
-                        <strong className="text-foreground">1. Connect</strong> â€” Each agent adds the Orkestrate MCP endpoint. The server exposes tools like
-                        <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono mx-1">read_agent_state</code>,
-                        <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono mx-1">write_agent_state</code>, and
-                        <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono mx-1">read_knowledge_base</code>.
+                        <strong className="text-foreground">1. Connect</strong> - Each agent adds the Orkestrate MCP endpoint and authenticates.
                     </p>
                     <p>
-                        <strong className="text-foreground">2. Authenticate</strong> â€” Agents authenticate via OAuth 2.1. Each gets a scoped token tied to their identity.
+                        <strong className="text-foreground">2. Join</strong> - Agent calls
+                        <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono mx-1">join_workspace</code>
+                        with git-derived repo context.
                     </p>
                     <p>
-                        <strong className="text-foreground">3. Join a Room</strong> â€” Agents join a room by ID. All agents in the same room share the same key-value workspace.
+                        <strong className="text-foreground">3. Identify Intent</strong> - For each new task, agent calls
+                        <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono mx-1">identify_intent</code>
+                        and receives workflow instructions.
                     </p>
                     <p>
-                        <strong className="text-foreground">4. Collaborate</strong> â€” Reads and writes are synchronized. No polling â€” state is always consistent.
+                        <strong className="text-foreground">4. Execute Safely</strong> - Agent follows
+                        <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono mx-1">nextRequiredTool</code>
+                        responses, using
+                        <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono mx-1">read_team_state</code>,
+                        <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono mx-1">claim_scope</code>,
+                        and
+                        <code className="px-1 py-0.5 rounded bg-white/[0.06] text-xs font-mono mx-1">update_my_state</code>
+                        in enforced order.
                     </p>
                 </div>
             </section>
@@ -158,23 +166,38 @@ export default function DocsPage() {
 
                 <div className="rounded-lg border border-white/[0.08] bg-[#0a0a0a] overflow-hidden mb-6">
                     <div className="px-4 py-2.5 border-b border-white/[0.06] text-xs font-mono text-muted-foreground">
-                        Example: read then write with expectedStateHash
+                        Example: intent-first coordination flow
                     </div>
                     <pre className="px-4 py-4 text-sm font-mono text-foreground/80 leading-6 overflow-x-auto">
-                        {`// 1) Read declared team state
-const snapshot = read_agent_state()
+                        {`// 1) Classify current task
+const intent = identify_intent({
+  userPrompt: "Add reset password flow"
+})
 
-// 2) Write your declared objective and claims
-write_agent_state({
+// 2) Read authoritative state
+const snapshot = read_team_state()
+
+// 3) Claim scope (editable intents)
+claim_scope({
+  expectedStateHash: snapshot.stateHash,
+  paths: ["src/auth/**"]
+})
+
+// 4) Publish progress with repo context
+update_my_state({
   expectedStateHash: snapshot.stateHash,
   content: {
-    status: "active",
-    objective: "Implement auth module",
-    claimedPaths: ["src/auth/*"],
-    plan: ["Create JWT service", "Add middleware", "Add tests"],
-    notes: "Will push after tests pass",
-    completed: [],
-    repo: { canonicalRemote: "github.com/org/repo", branch: "orkestrate/agent-a/auth" }
+    agentProfile: "Auth engineer",
+    currentObjective: "Implement reset password flow",
+    architectureFootprint: ["src/auth/**"],
+    implementationPlan: ["Add token model", "Add reset endpoint"],
+    notesForTeam: "Auth scope reserved",
+    pastWorkSummary: [],
+    repo: {
+      canonicalRemote: "github.com/org/repo",
+      branch: "feature/reset-password",
+      headSha: "abc1234"
+    }
   }
 })`}
                     </pre>
@@ -348,28 +371,52 @@ write_agent_state({
                 <div className="space-y-6">
                     {[
                         {
-                            name: "read_agent_state",
-                            description: "Read declared team states, observed activity, collision warnings, and codebase-match status.",
+                            name: "identify_intent",
+                            description: "Classify current task and create workflow run context.",
+                            when: "Call first for every new task-like prompt.",
+                            why: "Selects safe workflow and unlocks write tools in order.",
+                            params: "userPrompt: string, agentId?: string, forceIntent?: intent, chain?: intent[]",
+                            returns: "intentId, confidence, phase, nextRequiredTool, run context",
+                        },
+                        {
+                            name: "join_workspace",
+                            description: "Join active workspace and verify repository identity.",
+                            when: "Call at session start or reconnect.",
+                            why: "Coordination is blocked until session + repo are verified.",
+                            params: "workspaceId?: string, agentId?: string, toolName?: string, gitContext: object",
+                            returns: "session id, verified repo metadata, policy, nextRequiredTool",
+                        },
+                        {
+                            name: "read_team_state",
+                            description: "Read authoritative team state, claims, and CAS hash.",
+                            when: "Call after identify_intent and after any mismatch/conflict.",
+                            why: "Provides fresh stateHash and active-claim visibility before writes.",
                             params: "agentId?: string",
-                            returns: "Team snapshot + stateHash",
+                            returns: "agents, activeClaims, stateHash, nextRequiredTool",
                         },
                         {
-                            name: "write_agent_state",
-                            description: "Write status/objective/claims/plan/notes/completed/repo with optimistic concurrency.",
+                            name: "claim_scope",
+                            description: "Claim repo paths with hard overlap rejection.",
+                            when: "Call before editing files for editable intents.",
+                            why: "Prevents concurrent edits on intersecting paths.",
+                            params: "expectedStateHash: string, paths: string[], ttlSeconds?: number, agentId?: string",
+                            returns: "claim id, lease expiry, updated workflow phase",
+                        },
+                        {
+                            name: "update_my_state",
+                            description: "Publish objective, footprint, plan, notes, and repo context.",
+                            when: "Call after claim and at progress checkpoints.",
+                            why: "Keeps shared state auditable and resolves stale intent ambiguity.",
                             params: "content: object, expectedStateHash: string, agentId?: string",
-                            returns: "Write confirmation + codebase match status",
+                            returns: "state write confirmation, new stateHash, nextRequiredTool",
                         },
                         {
-                            name: "read_knowledge_base",
-                            description: "Read workspace knowledge docs and folders by id, parent, or query.",
-                            params: "id?: string, parentId?: string, query?: string, includeContent?: boolean",
-                            returns: "Matching doc(s)",
-                        },
-                        {
-                            name: "write_knowledge_base",
-                            description: "Create, update, or move knowledge docs/folders (delete is dashboard-only in V1).",
-                            params: "action + id/title/description/content/parentId/isFolder",
-                            returns: "Created/updated doc",
+                            name: "release_scope",
+                            description: "Release one active claim.",
+                            when: "Call on completion, handoff, or scope change.",
+                            why: "Unblocks teammates and completes claim lifecycle.",
+                            params: "claimId: string, agentId?: string",
+                            returns: "release confirmation and updated workflow phase",
                         },
                     ].map((tool) => (
                         <Card key={tool.name} className="border-[#232529] bg-[#111214] shadow-none">
@@ -381,6 +428,16 @@ write_agent_state({
                             </CardHeader>
                             <CardContent className="pt-0">
                                 <p className="text-[13px] text-[#8A8F98] mb-4">{tool.description}</p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                                    <div className="rounded-[8px] border border-[#232529] bg-[#16181A] p-3">
+                                        <div className="text-[11px] uppercase tracking-wider text-[#5E626B] mb-1">When</div>
+                                        <p className="text-[13px] text-[#D1D3D8]">{tool.when}</p>
+                                    </div>
+                                    <div className="rounded-[8px] border border-[#232529] bg-[#16181A] p-3">
+                                        <div className="text-[11px] uppercase tracking-wider text-[#5E626B] mb-1">Why</div>
+                                        <p className="text-[13px] text-[#D1D3D8]">{tool.why}</p>
+                                    </div>
+                                </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <div className="rounded-[8px] border border-[#232529] bg-[#16181A] p-3">
                                         <div className="text-[11px] uppercase tracking-wider text-[#5E626B] mb-1">Params</div>

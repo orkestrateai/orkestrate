@@ -3,10 +3,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
     Search,
-    Clock,
     Copy,
     Check,
-    ChevronRight,
     FileCode,
     ListChecks,
     StickyNote,
@@ -14,11 +12,10 @@ import {
     Target,
     Sparkles,
     Users,
-    Terminal,
     BookOpen,
-    ExternalLink,
     X,
     ChevronDown,
+    Trash2,
 } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/utils/supabase/client";
 import useSWR from "swr";
@@ -624,23 +621,39 @@ function AgentDetailPanel({ agent, onClose }: { agent: DashboardAgent; onClose: 
     );
 }
 
-function AgentCard({ agent, idx, toolName, isSelected, state, onSelect }: {
+function AgentCard({ agent, idx, toolName, isSelected, state, onSelect, onDelete }: {
     agent: DashboardAgent;
     idx: number;
     toolName: string;
     isSelected: boolean;
     state: any;
     onSelect: () => void;
+    onDelete?: () => void;
 }) {
     return (
         <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: idx * 0.05, ease: [0.23, 1, 0.32, 1] }}
+            className="group relative"
         >
+            {onDelete && (
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`Are you sure you want to delete ${agent.displayName}?`)) {
+                            onDelete();
+                        }
+                    }}
+                    className="absolute top-4 right-4 p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white opacity-0 group-hover:opacity-100 transition-all duration-200 z-10 border border-red-500/20"
+                    title="Delete Agent"
+                >
+                    <Trash2 className="w-3.5 h-3.5" />
+                </button>
+            )}
             <button
                 onClick={onSelect}
-                className={`w-full h-full min-h-[160px] text-left rounded-[16px] p-5 flex flex-col transition-all duration-300 group relative overflow-hidden border ${isSelected
+                className={`w-full h-full min-h-[160px] text-left rounded-[16px] p-5 flex flex-col transition-all duration-300 relative overflow-hidden border ${isSelected
                     ? "bg-[#1A1C20] border-white/20 ring-1 ring-white/10 shadow-[0_0_20px_rgba(255,255,255,0.05)]"
                     : "bg-[#111214] border-white/[0.06] hover:bg-[#16181A] hover:border-white/15 hover:-translate-y-0.5 shadow-sm"
                     }`}
@@ -706,7 +719,7 @@ export default function DashboardPage() {
     const activeRoom = rooms.find((r) => r.isActive) || rooms[0] || null;
     const activeRoomId = activeRoom?.id || null;
 
-    const { data: contentData, error: contentError, isLoading: contentLoading } = useSWR(
+    const { data: contentData, error: contentError, isLoading: contentLoading, mutate: mutateAgents } = useSWR(
         activeRoomId ? `/api/room-content?workspaceId=${encodeURIComponent(activeRoomId)}` : null,
         fetcher,
         { refreshInterval: 5000 }
@@ -718,6 +731,24 @@ export default function DashboardPage() {
         fetcher,
         { refreshInterval: 10000 }
     );
+
+    const handleAgentDelete = async (agentId: string) => {
+        const supabase = createSupabaseBrowserClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        try {
+            const res = await fetch(`/api/agents?agentId=${encodeURIComponent(agentId)}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${session.access_token}` },
+            });
+            if (res.ok) {
+                mutateAgents();
+            }
+        } catch (err) {
+            console.error("Failed to delete agent:", err);
+        }
+    };
 
     const workspaceMembers: WorkspaceMember[] = Array.isArray(membersData?.members) ? membersData.members : [];
 
@@ -880,6 +911,7 @@ export default function DashboardPage() {
                                                         isSelected={isSelected}
                                                         state={state}
                                                         onSelect={() => setSelectedAgentId(isSelected ? null : agent.stateClientId)}
+                                                        onDelete={member.isCurrentUser ? () => handleAgentDelete(agent.stateClientId) : undefined}
                                                     />
                                                 );
                                             })}

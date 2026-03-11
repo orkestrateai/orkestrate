@@ -156,6 +156,37 @@ mkdir -p ~/.config/opencode/plugins && curl -sL https://orkestrate.vercel.app/to
 
 ---
 
+## 🚀 Deployment
+
+### Vercel
+
+This project is configured for deployment on Vercel with bun as the package manager.
+
+1. **Connect Repository**: Import your GitHub repository in the Vercel dashboard.
+2. **Configure Build Settings**: Vercel will automatically detect the configuration from `vercel.json`.
+3. **Environment Variables**: Add your environment variables in the Vercel project settings:
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - Any other required environment variables from `.env.example`
+4. **Deploy**: Push to `main` branch to trigger automatic deployment.
+
+The project uses:
+- Build command: `bun run build`
+- Install command: `bun install`
+- Output directory: `.next`
+
+### CI/CD
+
+GitHub Actions automatically runs on every push and pull request:
+- **Lint**: Code quality checks with ESLint
+- **Type Check**: TypeScript type validation
+- **Build**: Production build verification
+
+All checks must pass before merging to main.
+
+---
+
 ## 🛡 Security & Safety
 Orkestrate handles sensitive telemetry data.
 - **Shell Sanitization**: Automated escaping of shell values in prompt generation.

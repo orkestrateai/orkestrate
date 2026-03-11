@@ -21,7 +21,12 @@ export const canAccessWorkspace = canAccessRoom;
 export const setActiveWorkspaceForUser = setActiveRoomForUser;
 export const getActiveWorkspaceIdForUser = getActiveRoomIdForUser;
 export const resolveReadableWorkspaceIdForUser = resolveReadableRoomIdForUser;
-export const createWorkspaceForUser = createRoomForUser;
+export const createWorkspaceForUser = (
+  userId: string,
+  name?: string,
+  repoUrl?: string,
+  defaultBranch?: string
+) => createRoomForUser(userId, name, repoUrl, defaultBranch);
 export const renameWorkspaceForUser = renameRoomForUser;
 export const bindRepoToWorkspaceForUser = bindRepoToRoomForUser;
 export const ensureActiveWorkspaceForUser = ensureActiveRoomForUser;

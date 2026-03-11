@@ -139,7 +139,12 @@ export async function resolveReadableRoomIdForUser(
   return { roomId: await getActiveRoomIdForUser(userId), requestedWasAccessible: true };
 }
 
-export async function createRoomForUser(userId: string, name?: string) {
+export async function createRoomForUser(
+  userId: string,
+  name?: string,
+  repoUrl?: string,
+  defaultBranch?: string
+) {
   const now = new Date();
   const id = generateRoomId();
   const fallbackName = `Room ${id.slice(-4)}`;
@@ -150,6 +155,8 @@ export async function createRoomForUser(userId: string, name?: string) {
       id,
       name: resolvedName,
       ownerUserId: userId,
+      repoUrl: repoUrl || null,
+      defaultBranch: defaultBranch || "main",
       createdAt: now,
       updatedAt: now,
     });
@@ -170,7 +177,7 @@ export async function createRoomForUser(userId: string, name?: string) {
     });
   });
 
-  return { id, name: resolvedName };
+  return { id, name: resolvedName, repoUrl: repoUrl || null, defaultBranch: defaultBranch || "main" };
 }
 
 export async function renameRoomForUser(userId: string, roomId: string, name: string) {

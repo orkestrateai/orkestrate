@@ -7,12 +7,26 @@ const claudeAdapter: ToolAdapter = {
         return `**Claude Code Setup:**
 
 1. Ensure Orkestrate MCP is added and authenticated.
-2. Call \`join_workspace\` now for workspace \`${ctx.roomId}\`.
-   - Argument: \`{ "workspaceId": "${ctx.roomId}", "agentId": "${ctx.agentId}" }\`
+2. Call \`join_workspace\` now with your current git-derived context:
 
-After joining, coordination tools (\`read_agent_state\`, \`write_agent_state\`) will be active for this session.
+\`\`\`json
+{
+  "workspaceId": "${ctx.roomId}",
+  "agentId": "${ctx.agentId}",
+  "toolName": "Claude Code",
+  "gitContext": {
+    "remote": "<git remote get-url origin>",
+    "repoRoot": "<git rev-parse --show-toplevel>",
+    "branch": "<git rev-parse --abbrev-ref HEAD>",
+    "headSha": "<git rev-parse HEAD>",
+    "dirty": false,
+    "collectedAt": "<ISO timestamp>"
+  }
+}
+\`\`\`
 
-Note: Since you are not using a telemetry script, live chat activity will not be visible on the dashboard, but your coordination state (objectives and plans) will still be synchronized with the team.`;
+3. For every new user task, call \`identify_intent\` first.
+4. After every coordination call, follow returned \`nextRequiredTool\` exactly.`;
     },
 };
 
