@@ -19,18 +19,14 @@ function isRateLimited(ip: string, limit: number, windowMs: number) {
     return state.count > limit;
 }
 
-export function proxy(request: NextRequest) {
+export function middleware(request: NextRequest) {
     const nonce = crypto.randomUUID();
-
-    // Basic CSP: scripts strict nonce or hash (default to 'self'), frames default 'none', images data/self
-    // Support Next.jsx development environment
-    // Remove nonces locally for app stability, but enforce in staging/prod. OR enforce loosely:
 
     const isDev = process.env.NODE_ENV === 'development';
     const forwarded = request.headers.get('x-forwarded-for');
     const ip = forwarded ? forwarded.split(',')[0] : '127.0.0.1';
 
-    // F23: Rate limit OAuth endpoints
+    // Rate limit OAuth endpoints
     if (request.nextUrl.pathname.startsWith('/api/oauth/')) {
         if (isRateLimited(ip, 20, 60000)) { // 20 requests per minute
             return new NextResponse(JSON.stringify({ error: 'Too many requests' }), {
@@ -40,42 +36,42 @@ export function proxy(request: NextRequest) {
         }
     }
 
+    // Skip CSP in dev for HMR stability if requested, but generally better to keep it
     if (isDev && !request.nextUrl.pathname.startsWith('/api/')) {
-        return NextResponse.next(); // skip strictly setting csp to bypass NextJs default dev-errors when HMR
+        // We still want to provide the nonce for scripts that use it
+        const reqHeaders = new Headers(request.headers);
+        reqHeaders.set('x-nonce', nonce);
+        return NextResponse.next({
+            request: { headers: reqHeaders }
+        });
     }
 
     const cspHeaderName = 'content-security-policy';
-    const cspHeaderVersion = 'script-src \'self\' \'nonce-' + nonce + '\' ' + '\'unsafe-inline\' ' + (isDev ? '\'unsafe-eval\'' : '') + ' https:; ' +
-        'object-src \'none\'; ' +
-        'base-uri \'none\'; ' +
-        'style-src \'self\' \'unsafe-inline\'; ' +
-        'img-src \'self\' data: blob: https:; ' +
-        'font-src \'self\' data: https:;' +
-        'connect-src \'self\' wss: https: vitals.vercel-insights.com;' +
-        'frame-ancestors \'none\';';
+    
+    // Updated CSP to allow Google Fonts and Supabase
+    const cspHeaderVersion = `
+        default-src 'self';
+        script-src 'self' 'nonce-${nonce}' 'unsafe-inline' ${isDev ? "'unsafe-eval'" : ""} https:;
+        object-src 'none';
+        base-uri 'none';
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+        img-src 'self' data: blob: https:;
+        font-src 'self' data: https: https://fonts.gstatic.com;
+        connect-src 'self' wss: https: vitals.vercel-insights.com;
+        frame-ancestors 'none';
+    `.replace(/\s{2,}/g, ' ').trim();
 
-    // Replace newline characters and spaces
-    const contentSecurityPolicyHeaderValue = cspHeaderVersion
-        .replace(/\s{2,}/g, ' ')
-        .trim()
-
-    const requestHeaders = new Headers(request.headers)
-    requestHeaders.set('x-nonce', nonce)
-    requestHeaders.set(
-        cspHeaderName,
-        contentSecurityPolicyHeaderValue
-    )
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set('x-nonce', nonce);
+    requestHeaders.set(cspHeaderName, cspHeaderVersion);
 
     const response = NextResponse.next({
         request: {
             headers: requestHeaders,
         },
-    })
+    });
 
-    response.headers.set(
-        cspHeaderName,
-        contentSecurityPolicyHeaderValue
-    )
+    response.headers.set(cspHeaderName, cspHeaderVersion);
 
     return response;
 }
@@ -84,17 +80,17 @@ export const config = {
     matcher: [
         /*
          * Match all request paths except for the ones starting with:
-         * - api (except oauth)
          * - _next/static (static files)
          * - _next/image (image optimization files)
          * - favicon.ico (favicon file)
+         * - public files (images, etc)
          */
         {
-            source: '/((?!_next/static|_next/image|favicon.ico).*)',
+            source: '/((?!_next/static|_next/image|favicon.ico|logo.svg|icon.svg).*)',
             missing: [
                 { type: 'header', key: 'next-router-prefetch' },
                 { type: 'header', key: 'purpose', value: 'prefetch' },
             ],
         },
     ],
-}
+};
