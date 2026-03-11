@@ -153,9 +153,19 @@ type StoredKnowledgeDoc = {
   updatedAt: string;
 };
 
+export type AgentMessage = {
+  id: string;
+  fromAgentId: string;
+  toAgentId: string;
+  content: string;
+  timestamp: string;
+};
+
 type RoomBucket = {
   agentMetadata: Map<string, { agentProfile: string; pastWorkSummary: string[] }>;
   workflowRuns: Map<string, WorkflowRunContext>;
+  messages: AgentMessage[];
+  readReceipts: Map<string, Set<string>>;
 };
 
 const READ_KNOWLEDGE_BASE_ENABLED = false;
@@ -179,6 +189,8 @@ function getRoomBucket(roomId: string): RoomBucket {
   const bucket: RoomBucket = {
     agentMetadata: new Map<string, { agentProfile: string; pastWorkSummary: string[] }>(),
     workflowRuns: new Map<string, WorkflowRunContext>(),
+    messages: [],
+    readReceipts: new Map<string, Set<string>>(),
   };
   store.set(roomId, bucket);
   return bucket;
@@ -617,6 +629,27 @@ async function listActiveScopeClaims(roomId: string): Promise<ActiveScopeClaim[]
   }));
 }
 
+function getUnreadMessagesAlert(bucket: RoomBucket, agentId: string): string[] {
+  if (!bucket.readReceipts) bucket.readReceipts = new Map();
+  if (!bucket.messages) bucket.messages = [];
+
+  let receipts = bucket.readReceipts.get(agentId);
+  if (!receipts) {
+    receipts = new Set();
+    bucket.readReceipts.set(agentId, receipts);
+  }
+  let unreadCount = 0;
+  for (const msg of bucket.messages) {
+    if ((msg.toAgentId === agentId || msg.toAgentId === "@everyone") && !receipts.has(msg.id)) {
+      unreadCount++;
+    }
+  }
+  if (unreadCount > 0) {
+    return [`You have ${unreadCount} unread message(s). Call read_messages immediately to read them.`];
+  }
+  return [];
+}
+
 function buildJoinWorkspaceOrchestrationGuide(roomId: string, canonicalAgentId: string) {
   return [
     "Orkestrate coordination instructions:",
@@ -640,6 +673,7 @@ function buildJoinWorkspaceOrchestrationGuide(roomId: string, canonicalAgentId: 
     "- Keep implementationPlan concrete and short; update it as soon as priorities change.",
     "- Use notesForTeam for handoffs, risks, and irreversible decisions.",
     "- IMPORTANT: If your state is empty (e.g., this is a new session), run update_my_state with a solid agentProfile and short currentObjective as soon as possible to announce yourself to the dashboard.",
+    "- You can send messages to other agents via send_message. You can use @everyone to broadcast.",
   ].join("\n");
 }
 
@@ -850,6 +884,34 @@ function buildMcpToolList() {
         additionalProperties: false,
       },
     },
+    {
+      name: "send_message",
+      description: "Send a message to another agent or broadcast to all agents. Use this to coordinate, ask for help, or share information directly.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          toAgentId: {
+            type: "string",
+            description: "The targeted agentId (e.g., 'frontend-1'), or '@everyone' to broadcast to the whole team.",
+          },
+          message: {
+            type: "string",
+            description: "The message content.",
+          },
+        },
+        required: ["toAgentId", "message"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "read_messages",
+      description: "Read all unread messages addressed to you or broadcasted to @everyone. Also marks them as read.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      },
+    },
     // {
     //   name: "read_knowledge_base",
     //   description: "Read room-scoped knowledge docs stored in Postgres. Use id for direct read, parentId for folder traversal (parentId:null = root), or query for search.",
@@ -916,7 +978,8 @@ export async function POST(req: NextRequest) {
     const resolveAgentIdentity = (requestedAgentId: unknown) =>
       resolveAgentFingerprint({
         explicitAgentId: requestedAgentId,
-        accessToken: token || "",
+        clientId,
+        userId,
         familyHint: clientName || clientId,
       });
 
@@ -1309,6 +1372,7 @@ export async function POST(req: NextRequest) {
               },
               targetAgentId: targetAgentId || null,
               scopeHints,
+              systemAlerts: getUnreadMessagesAlert(getRoomBucket(roomId), canonicalIdentity.id),
             }, null, 2),
           },
         ],
@@ -1395,6 +1459,7 @@ export async function POST(req: NextRequest) {
               stateHash,
               agents: agentsPayload,
               activeClaims,
+              systemAlerts: getUnreadMessagesAlert(bucket, canonicalIdentity.id),
             }, null, 2),
           },
         ],
@@ -1999,7 +2064,101 @@ export async function POST(req: NextRequest) {
                 : { expectedStateHash: await workspaceStateHash(roomId) },
           }),
           { type: "text", text: `stateHash=${await workspaceStateHash(roomId)}` },
-          { type: "text", text: JSON.stringify({ workspaceId: roomId, roomId, state: next }, null, 2) },
+          {
+            type: "text",
+            text: JSON.stringify({
+              workspaceId: roomId,
+              roomId,
+              state: next,
+              systemAlerts: getUnreadMessagesAlert(bucket, canonicalIdentity.id),
+            }, null, 2),
+          },
+        ],
+      }));
+    }
+
+    if (aliasName === "send_message") {
+      const argsObj = args as Record<string, unknown>;
+      const toAgentId = typeof argsObj.toAgentId === "string" ? argsObj.toAgentId.trim() : "";
+      const messageContent = typeof argsObj.message === "string" ? argsObj.message.trim() : "";
+      if (!toAgentId || !messageContent) {
+        return json(400, rpcError(id, -32602, "Requires string arguments 'toAgentId' and 'message'."));
+      }
+
+      const { canonicalIdentity, scopedAgentId, joined } = await resolveJoinedContext(argsObj);
+      if (!joined) {
+        return json(200, rpcResult(id, {
+          content: [{ type: "text", text: "ERROR: Agent not joined. Call join_workspace first." }],
+        }));
+      }
+
+      const roomId = joined.roomId;
+      await touchAgentSession(scopedAgentId, joined.sessionId);
+      const bucket = getRoomBucket(roomId);
+      if (!bucket.messages) bucket.messages = [];
+      if (!bucket.readReceipts) bucket.readReceipts = new Map();
+      
+      const msgId = `msg_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+      bucket.messages.push({
+        id: msgId,
+        fromAgentId: canonicalIdentity.id,
+        toAgentId,
+        content: messageContent,
+        timestamp: new Date().toISOString(),
+      });
+      // Limit to last 200 messages in memory to prevent leak
+      if (bucket.messages.length > 200) {
+        bucket.messages.shift();
+      }
+
+      return json(200, rpcResult(id, {
+        content: [
+          { type: "text", text: `Message sent to ${toAgentId}. They will be notified via systemAlerts on their next state update or read.` },
+        ],
+      }));
+    }
+
+    if (aliasName === "read_messages") {
+      const argsObj = args as Record<string, unknown>;
+      const { canonicalIdentity, scopedAgentId, joined } = await resolveJoinedContext(argsObj);
+      if (!joined) {
+        return json(200, rpcResult(id, {
+          content: [{ type: "text", text: "ERROR: Agent not joined. Call join_workspace first." }],
+        }));
+      }
+
+      const roomId = joined.roomId;
+      await touchAgentSession(scopedAgentId, joined.sessionId);
+      const bucket = getRoomBucket(roomId);
+      if (!bucket.messages) bucket.messages = [];
+      if (!bucket.readReceipts) bucket.readReceipts = new Map();
+      
+      let receipts = bucket.readReceipts.get(canonicalIdentity.id);
+      if (!receipts) {
+        receipts = new Set();
+        bucket.readReceipts.set(canonicalIdentity.id, receipts);
+      }
+
+      const unread: AgentMessage[] = [];
+      for (const msg of bucket.messages) {
+        if ((msg.toAgentId === canonicalIdentity.id || msg.toAgentId === "@everyone") && !receipts.has(msg.id)) {
+          unread.push(msg);
+          receipts.add(msg.id);
+        }
+      }
+
+      return json(200, rpcResult(id, {
+        content: [
+          { 
+            type: "text", 
+            text: unread.length === 0 
+              ? "You have no unread messages." 
+              : `You have ${unread.length} new message(s).` 
+          },
+          ...(unread.length > 0 ? [{
+            type: "text",
+            text: JSON.stringify({ messages: unread }, null, 2),
+          }] : []),
         ],
       }));
     }

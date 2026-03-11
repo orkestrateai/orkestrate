@@ -7,7 +7,8 @@ import { createHash } from "node:crypto";
  */
 export function resolveAgentFingerprint(input: {
   explicitAgentId?: unknown; // Ignored to force deterministic identity
-  accessToken: string;
+  clientId: string;
+  userId: string;
   familyHint?: string;
 }) {
   let family = typeof input.familyHint === "string" ? input.familyHint.trim() : "agent";
@@ -16,10 +17,11 @@ export function resolveAgentFingerprint(input: {
     family = "agent";
   }
 
-  // Create a stable hash based directly on the MCP Auth Token.
-  // This token is universally unique to the tool's connection to your server!
+  // Create a stable hash based on the client + user, NOT the access token.
+  // This guarantees that if a client reconnects and gets a new access token,
+  // it doesn't spin up a "ghost" duplicate agent in the team state.
   const hash = createHash("sha256")
-    .update(input.accessToken)
+    .update(`${input.clientId}:${input.userId}`)
     .digest("hex")
     .slice(0, 10);
 
