@@ -48,7 +48,8 @@ export async function GET(request: Request) {
                     console.error("Failed to ensure active room during auth callback:", provisionError)
                 }
             }
-            const target = next === "/" ? "/dashboard" : next
+            // Preserve OAuth flow - don't redirect to dashboard if coming from /oauth/authorize
+            const target = next.startsWith('/oauth/authorize') ? next : (next === "/" ? "/dashboard" : next)
             return NextResponse.redirect(`${origin}${target}`)
         }
     }
