@@ -498,7 +498,7 @@ function nextVersionFrom(current: string | null | undefined) {
 
 function stripUrlToHost(urlOrHost: string): string {
   const raw = String(urlOrHost || "").trim();
-  if (!raw) return "orkestrate.vercel.app";
+  if (!raw) return "orkestrate.space";
 
   try {
     return new URL(raw).host;

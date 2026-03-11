@@ -131,7 +131,7 @@ function timeAgo(dateStr: string): string {
 
 // --- MCP Client Configs (mirrors ClientSetup.tsx) ---
 
-const MCP_ENDPOINT = "https://orkestrate.vercel.app/api/mcp";
+const MCP_ENDPOINT = "https://orkestrate.space/api/mcp";
 
 interface ClientConfig {
     id: string;

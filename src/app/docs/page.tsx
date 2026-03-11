@@ -1,4 +1,4 @@
-﻿import DocsLayout from "@/components/DocsLayout";
+import DocsLayout from "@/components/DocsLayout";
 import type { Metadata } from "next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     title: "Documentation",
 };
 
-const MCP_ENDPOINT = "https://orkestrate.vercel.app/api/mcp";
+const MCP_ENDPOINT = "https://orkestrate.space/api/mcp";
 
 export default function DocsPage() {
     return (

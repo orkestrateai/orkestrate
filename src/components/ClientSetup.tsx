@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Copy, Check, ChevronDown, ExternalLink } from "lucide-react";
 
-const MCP_ENDPOINT = "https://orkestrate.vercel.app/api/mcp";
+const MCP_ENDPOINT = "https://orkestrate.space/api/mcp";
 
 interface ClientConfig {
     id: string;

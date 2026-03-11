@@ -61,11 +61,11 @@ The dashboard will be available at [http://localhost:3000/dashboard](http://loca
 
 Orkestrate exposes a standardized MCP endpoint that can be added to any compatible IDE or CLI tool.
 
-**Endpoint:** `https://orkestrate.vercel.app/api/mcp`
+**Endpoint:** `https://orkestrate.space/api/mcp`
 
 ### Claude Code
 ```bash
-claude mcp add --transport http --scope project Orkestrate "https://orkestrate.vercel.app/api/mcp"
+claude mcp add --transport http --scope project Orkestrate "https://orkestrate.space/api/mcp"
 ```
 
 ### OpenCode

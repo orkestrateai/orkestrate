@@ -1,6 +1,6 @@
 import { registerToolAdapter, type AgentContext, type ToolAdapter } from "../_base";
 
-const TELEMETRY_HOST = "orkestrate.vercel.app";
+const TELEMETRY_HOST = "orkestrate.space";
 
 const codexAdapter: ToolAdapter = {
     family: "codex",
