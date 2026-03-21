@@ -1,7 +1,15 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Search, Plus, FolderKanban, Loader2, Globe, Lock } from "lucide-react";
+import {
+  Search,
+  Plus,
+  FolderKanban,
+  Loader2,
+  Globe,
+  Lock,
+  Github,
+} from "lucide-react";
 import { createSupabaseBrowserClient } from "@/utils/supabase/client";
 import Link from "next/link";
 
@@ -278,26 +286,38 @@ export default function DashboardPage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState<any>(null);
 
   useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    supabase.auth
+      .getSession()
+      .then(({ data }: any) => setSession(data.session));
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_: any, session: any) =>
+      setSession(session),
+    );
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!session) {
+      setLoading(false);
+      return;
+    }
     const load = async () => {
-      const supabase = createSupabaseBrowserClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session) {
-        const res = await fetch("/api/workspaces", {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setWorkspaces(data.workspaces || []);
-        }
+      const res = await fetch("/api/workspaces", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWorkspaces(data.workspaces || []);
       }
       setLoading(false);
     };
     load();
-  }, []);
+  }, [session]);
 
   const filteredWorkspaces = workspaces.filter((ws) =>
     ws.name.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -311,6 +331,44 @@ export default function DashboardPage() {
     if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
     if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
     return `${Math.floor(diff / 86400)} days ago`;
+  }
+
+  if (!session && !loading) {
+    return (
+      <div className="flex-1 bg-[#050505] min-h-screen">
+        <div className="max-w-4xl mx-auto px-8 pt-16">
+          <div className="flex flex-col items-center justify-center py-24 gap-6 text-center">
+            <div className="w-16 h-16 rounded-full bg-white/[0.03] border border-white/[0.06] flex items-center justify-center">
+              <FolderKanban className="w-8 h-8 text-zinc-700" />
+            </div>
+            <div>
+              <p className="text-lg font-medium text-zinc-300 mb-1">
+                Sign in to continue
+              </p>
+              <p className="text-sm text-zinc-600">
+                Connect your GitHub account to create workspaces and
+                collaborate.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                const supabase = createSupabaseBrowserClient();
+                supabase.auth.signInWithOAuth({
+                  provider: "github",
+                  options: {
+                    redirectTo: window.location.origin + "/dashboard",
+                  },
+                });
+              }}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-white text-black text-sm font-medium hover:bg-zinc-200 transition-colors"
+            >
+              <Github className="w-4 h-4" />
+              Sign in with GitHub
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
