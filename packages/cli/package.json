@@ -1,0 +1,50 @@
+{
+  "name": "orkestrate",
+  "version": "0.1.12",
+  "description": "CLI for Orkestrate — the coordination layer for autonomous AI coding agents",
+  "type": "module",
+  "bin": {
+    "orkestrate": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepublishOnly": "tsup"
+  },
+  "keywords": [
+    "orkestrate",
+    "mcp",
+    "ai-agents",
+    "multi-agent",
+    "coordination",
+    "claude",
+    "opencode",
+    "cursor",
+    "codex",
+    "cli"
+  ],
+  "author": "system1970",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/system1970/Orkestrate.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://orkestrate.space",
+  "dependencies": {
+    "commander": "^13.1.0",
+    "conf": "^13.1.0",
+    "open": "^10.1.2",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.0"
+  }
+}

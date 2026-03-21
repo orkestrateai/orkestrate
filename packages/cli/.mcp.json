@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "Orkestrate": {
+      "type": "stdio",
+      "command": "orkestrate",
+      "args": [
+        "mcp"
+      ],
+      "env": {}
+    }
+  }
+}

@@ -77,6 +77,12 @@ scratch.*
 TODO.md
 notes.md
 
+# Razorpay
+rzp*.csv
+
+# Orkestrate
+.orkestrate.json
+
 # Turbo
 .turbo
 
@@ -104,3 +110,18 @@ lerna-debug.log*
 ehthumbs.db
 Thumbs.db
 Desktop.ini
+
+# 3D Models and Materials
+*.glb
+*.gltf
+*.fbx
+*.obj
+*.mtl
+*.blend
+*.bin
+*.dae
+*.stl
+*.mat
+public/models/
+public/images/grass-generic-sm_*
+public/images/simple-waves-oce_*
