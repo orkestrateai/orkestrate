@@ -13,7 +13,7 @@ const program = new Command();
 program
   .name("orkestrate")
   .description("The coordination layer for autonomous AI coding agents")
-  .version("0.1.12")
+  .version("0.1.14")
   .hook("preAction", () => {
     // Show banner on all commands
   });
@@ -39,7 +39,9 @@ program
 // --- connect ---
 program
   .command("connect [tool]")
-  .description("Configure MCP endpoint for an AI coding tool (claude, opencode, cursor, windsurf, codex)")
+  .description(
+    "Configure MCP endpoint for an AI coding tool (claude, opencode, cursor, windsurf, codex)",
+  )
   .action(async (tool?: string) => {
     const { connectCommand } = await import("./commands/connect.js");
     await connectCommand(tool);
@@ -83,7 +85,9 @@ program
       const { mcpCommand } = await import("./commands/mcp.js");
       await mcpCommand();
     } catch (err) {
-      process.stderr.write(`[Orkestrate-MCP] ${err instanceof Error ? err.message : String(err)}\n`);
+      process.stderr.write(
+        `[Orkestrate-MCP] ${err instanceof Error ? err.message : String(err)}\n`,
+      );
       process.exit(1);
     }
   });

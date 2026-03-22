@@ -5,3 +5,19 @@ node_modules
 .agent
 tmp
 *.log
+packages
+
+# 3D Models and Materials
+*.glb
+*.gltf
+*.fbx
+*.obj
+*.mtl
+*.blend
+*.bin
+*.dae
+*.stl
+*.mat
+public/models/
+public/images/grass-generic-sm_*
+public/images/simple-waves-oce_*

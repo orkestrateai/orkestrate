@@ -409,8 +409,11 @@ export async function performLogin(): Promise<{
       headers: { Authorization: `Bearer ${tokens.access_token}` },
     });
     if (meRes.ok) {
-      const me = (await meRes.json()) as { id?: string };
-      userId = me.id || "";
+      const me = (await meRes.json()) as {
+        id?: string;
+        user?: { id?: string };
+      };
+      userId = me.user?.id || me.id || "";
     }
   } catch {
     // Non-fatal

@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
         const allowed = await canAccessWorkspace(user.id, workspaceId);
         if (!allowed) return noStoreJson({ error: "Workspace not accessible" }, 403);
 
-        const workspaceMembers = await db.select().from(members).where(eq(members.roomId, workspaceId));
+        const workspaceMembers = await db.select().from(members).where(eq(members.workspaceId, workspaceId));
 
         // Try to get user details from Supabase admin API
         const admin = getAdminClient();

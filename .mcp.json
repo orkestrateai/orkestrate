@@ -1,8 +1,12 @@
 {
   "mcpServers": {
     "Orkestrate": {
-      "type": "http",
-      "url": "https://orkestrate.space/api/mcp"
+      "type": "stdio",
+      "command": "orkestrate",
+      "args": [
+        "mcp"
+      ],
+      "env": {}
     }
   }
 }

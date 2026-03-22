@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     const docs = await db
       .select()
       .from(knowledgeDocs)
-      .where(eq(knowledgeDocs.roomId, workspaceId))
+      .where(eq(knowledgeDocs.workspaceId, workspaceId))
       .orderBy(desc(knowledgeDocs.updatedAt));
 
     return noStoreJson({ docs });
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
       .insert(knowledgeDocs)
       .values({
         id,
-        roomId: workspaceId,
+        workspaceId,
         title: title.trim(),
         description: description.trim(),
         content,
@@ -99,7 +99,7 @@ export async function PUT(req: NextRequest) {
     const [doc] = await db
       .update(knowledgeDocs)
       .set(updates)
-      .where(and(eq(knowledgeDocs.id, id), eq(knowledgeDocs.roomId, workspaceId)))
+      .where(and(eq(knowledgeDocs.id, id), eq(knowledgeDocs.workspaceId, workspaceId)))
       .returning();
 
     if (!doc) return noStoreJson({ error: "Document not found" }, 404);
@@ -127,7 +127,7 @@ export async function DELETE(req: NextRequest) {
     const [doc] = await db
       .select()
       .from(knowledgeDocs)
-      .where(and(eq(knowledgeDocs.id, id), eq(knowledgeDocs.roomId, workspaceId)))
+      .where(and(eq(knowledgeDocs.id, id), eq(knowledgeDocs.workspaceId, workspaceId)))
       .limit(1);
 
     if (!doc) return noStoreJson({ error: "Document not found" }, 404);
@@ -138,7 +138,7 @@ export async function DELETE(req: NextRequest) {
     } else {
       await db
         .delete(knowledgeDocs)
-        .where(and(eq(knowledgeDocs.id, id), eq(knowledgeDocs.roomId, workspaceId)));
+        .where(and(eq(knowledgeDocs.id, id), eq(knowledgeDocs.workspaceId, workspaceId)));
     }
 
     return noStoreJson({ success: true, id });
@@ -153,7 +153,7 @@ async function deleteDocAndChildren(docId: string, workspaceId: string) {
   const children = await db
     .select()
     .from(knowledgeDocs)
-    .where(and(eq(knowledgeDocs.parentId, docId), eq(knowledgeDocs.roomId, workspaceId)));
+    .where(and(eq(knowledgeDocs.parentId, docId), eq(knowledgeDocs.workspaceId, workspaceId)));
 
   // Recursively delete children
   for (const child of children) {
@@ -162,12 +162,12 @@ async function deleteDocAndChildren(docId: string, workspaceId: string) {
     } else {
       await db
         .delete(knowledgeDocs)
-        .where(and(eq(knowledgeDocs.id, child.id), eq(knowledgeDocs.roomId, workspaceId)));
+        .where(and(eq(knowledgeDocs.id, child.id), eq(knowledgeDocs.workspaceId, workspaceId)));
     }
   }
 
   // Delete the folder itself
   await db
     .delete(knowledgeDocs)
-    .where(and(eq(knowledgeDocs.id, docId), eq(knowledgeDocs.roomId, workspaceId)));
+    .where(and(eq(knowledgeDocs.id, docId), eq(knowledgeDocs.workspaceId, workspaceId)));
 }

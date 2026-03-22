@@ -127,22 +127,22 @@ export function isSameRepository(url1: string, url2: string): boolean {
 }
 
 /**
- * Validate that agent's git context matches room's repository
+ * Validate that agent's git context matches workspace's repository
  * This is the core of the "Join Guard" logic
  */
 export interface JoinGuardResult {
   allowed: boolean;
   reason?: string;
   agentRepo?: string;
-  roomRepo?: string;
+  workspaceRepo?: string;
 }
 
 export function validateJoinGuard(
   agentGitRemote: string | null,
-  roomRepoUrl: string | null
+  workspaceRepoUrl: string | null
 ): JoinGuardResult {
-  // If room has no repo URL, allow join (backward compatibility)
-  if (!roomRepoUrl) {
+  // If workspace has no repo URL, allow join (backward compatibility)
+  if (!workspaceRepoUrl) {
     return { allowed: true };
   }
 
@@ -150,18 +150,18 @@ export function validateJoinGuard(
   if (!agentGitRemote) {
     return {
       allowed: false,
-      reason: 'Agent is not in a git repository. This room requires git synchronization.',
-      roomRepo: roomRepoUrl,
+      reason: 'Agent is not in a git repository. This workspace requires git synchronization.',
+      workspaceRepo: workspaceRepoUrl,
     };
   }
 
   // Check if repositories match
-  if (!isSameRepository(agentGitRemote, roomRepoUrl)) {
+  if (!isSameRepository(agentGitRemote, workspaceRepoUrl)) {
     return {
       allowed: false,
-      reason: 'Repository mismatch. Agent must be working in the same repository as the room.',
+      reason: 'Repository mismatch. Agent must be working in the same repository as the workspace.',
       agentRepo: agentGitRemote,
-      roomRepo: roomRepoUrl,
+      workspaceRepo: workspaceRepoUrl,
     };
   }
 

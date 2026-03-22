@@ -39,8 +39,9 @@ async function request<T>(
 
   // Debug (masked token)
   const token = headers["Authorization"]?.split(" ")[1] || "";
-  const maskedToken = token.length > 10 ? `${token.slice(0, 5)}...${token.slice(-5)}` : "***";
-  
+  const maskedToken =
+    token.length > 10 ? `${token.slice(0, 5)}...${token.slice(-5)}` : "***";
+
   if (process.env.DEBUG) {
     console.error(`[DEBUG] API Request: ${method} ${serverUrl}${path}`);
     console.error(`[DEBUG] Token: ${maskedToken} (len: ${token.length})`);
@@ -50,7 +51,7 @@ async function request<T>(
     method,
     headers: {
       ...headers,
-      "Accept": "application/json",
+      Accept: "application/json",
       "User-Agent": "Orkestrate-CLI-v1",
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -76,6 +77,16 @@ export async function getMe(): Promise<UserInfo> {
   return data.user;
 }
 
+// --- GitHub API ---
+
+export async function getGithubStatus(): Promise<{ connected: boolean }> {
+  const data = await request<{ connected: boolean }>(
+    "GET",
+    "/api/github/status",
+  );
+  return { connected: Boolean(data.connected) };
+}
+
 // --- Workspace API ---
 
 export interface Workspace {
@@ -89,7 +100,10 @@ export interface Workspace {
 }
 
 export async function listWorkspaces(): Promise<Workspace[]> {
-  const data = await request<{ workspaces: Workspace[] }>("GET", "/api/workspaces");
+  const data = await request<{ workspaces: Workspace[] }>(
+    "GET",
+    "/api/workspaces",
+  );
   return data.workspaces || [];
 }
 
@@ -105,12 +119,16 @@ export async function createWorkspace(
   repoUrl: string,
   defaultBranch: string,
 ): Promise<Workspace> {
-  const data = await request<{ workspace: Workspace }>("POST", "/api/workspaces", {
-    action: "create",
-    name,
-    repoUrl,
-    defaultBranch,
-  });
+  const data = await request<{ workspace: Workspace }>(
+    "POST",
+    "/api/workspaces",
+    {
+      action: "create",
+      name,
+      repoUrl,
+      defaultBranch,
+    },
+  );
   return data.workspace;
 }
 

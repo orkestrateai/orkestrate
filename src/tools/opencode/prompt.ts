@@ -1,17 +1,17 @@
 import { registerToolAdapter, type AgentContext, type ToolAdapter } from "../_base";
 
 const opencodeAdapter: ToolAdapter = {
-    family: "opencode",
+  family: "opencode",
 
-    buildPhase0Prompt(ctx: AgentContext): string {
-        return `**OpenCode Setup:**
+  buildPhase0Prompt(ctx: AgentContext): string {
+    return `**OpenCode Setup:**
 
 1. Ensure Orkestrate MCP is added and authenticated.
 2. Call \`join_workspace\` now with your current git-derived context:
 
 \`\`\`json
 {
-  "workspaceId": "${ctx.roomId}",
+  "workspaceId": "${ctx.workspaceId}",
   "agentId": "${ctx.agentId}",
   "toolName": "OpenCode",
   "gitContext": {
@@ -27,7 +27,7 @@ const opencodeAdapter: ToolAdapter = {
 
 3. For every new user task, call \`identify_intent\` first.
 4. After every coordination call, follow returned \`nextRequiredTool\` exactly.`;
-    },
+  },
 };
 
 registerToolAdapter(opencodeAdapter);

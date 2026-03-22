@@ -4,11 +4,17 @@
  * Manage workspaces from the CLI.
  */
 
-import { getCredentials, setActiveWorkspace, getActiveWorkspace } from "../lib/config.js";
+import {
+  getCredentials,
+  setActiveWorkspace,
+  getActiveWorkspace,
+  hasGithubToken,
+} from "../lib/config.js";
 import {
   listWorkspaces,
   switchWorkspace as apiSwitchWorkspace,
   createWorkspace as apiCreateWorkspace,
+  getGithubStatus,
 } from "../lib/api.js";
 import { ui } from "../lib/ui.js";
 
@@ -41,7 +47,9 @@ export async function workspaceCommand(
     case "create":
     case "new":
       if (!nameOrId) {
-        ui.error("Usage: orkestrate workspace create <name> <repo-url> [branch]");
+        ui.error(
+          "Usage: orkestrate workspace create <name> <repo-url> [branch]",
+        );
         process.exit(1);
       }
       return workspaceCreate(nameOrId, extra);
@@ -66,7 +74,9 @@ async function workspaceList(): Promise<void> {
 
     if (workspaces.length === 0) {
       ui.dim("No workspaces found.");
-      ui.info("Create one at orkestrate.space or run `orkestrate workspace create`.");
+      ui.info(
+        "Create one at orkestrate.space or run `orkestrate workspace create`.",
+      );
       return;
     }
 
@@ -89,7 +99,9 @@ async function workspaceList(): Promise<void> {
     ui.blank();
     ui.dim(`${workspaces.length} workspace(s)`);
   } catch (err) {
-    ui.error(`Failed to list workspaces: ${err instanceof Error ? err.message : String(err)}`);
+    ui.error(
+      `Failed to list workspaces: ${err instanceof Error ? err.message : String(err)}`,
+    );
     process.exit(1);
   }
 }
@@ -101,8 +113,7 @@ async function workspaceSwitch(nameOrId: string): Promise<void> {
     // Find by exact ID or name match
     const target = workspaces.find(
       (ws) =>
-        ws.id === nameOrId ||
-        ws.name.toLowerCase() === nameOrId.toLowerCase(),
+        ws.id === nameOrId || ws.name.toLowerCase() === nameOrId.toLowerCase(),
     );
 
     if (!target) {
@@ -119,12 +130,36 @@ async function workspaceSwitch(nameOrId: string): Promise<void> {
     setActiveWorkspace(target.id, target.name);
     ui.success(`Switched to workspace: ${target.name}`);
   } catch (err) {
-    ui.error(`Failed to switch workspace: ${err instanceof Error ? err.message : String(err)}`);
+    ui.error(
+      `Failed to switch workspace: ${err instanceof Error ? err.message : String(err)}`,
+    );
     process.exit(1);
   }
 }
 
 async function workspaceCreate(name: string, repoUrl?: string): Promise<void> {
+  const localGithubTokenAvailable = hasGithubToken();
+  let serverGithubConnected = false;
+
+  try {
+    const status = await getGithubStatus();
+    serverGithubConnected = status.connected;
+  } catch (err) {
+    ui.error(
+      `Failed to verify GitHub connection with server: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    ui.info("Please re-run `orkestrate login` and ensure GitHub is connected.");
+    process.exit(1);
+  }
+
+  if (!localGithubTokenAvailable || !serverGithubConnected) {
+    ui.error("GitHub is not connected. Workspace creation is blocked.");
+    ui.info(
+      "Run `orkestrate login` and complete GitHub connection, then try again.",
+    );
+    process.exit(1);
+  }
+
   if (!repoUrl) {
     ui.error("Repository URL is required.");
     ui.info("Usage: orkestrate workspace create <name> <repo-url>");
@@ -138,7 +173,9 @@ async function workspaceCreate(name: string, repoUrl?: string): Promise<void> {
     ui.kv("ID", workspace.id);
     ui.kv("Repo", repoUrl);
   } catch (err) {
-    ui.error(`Failed to create workspace: ${err instanceof Error ? err.message : String(err)}`);
+    ui.error(
+      `Failed to create workspace: ${err instanceof Error ? err.message : String(err)}`,
+    );
     process.exit(1);
   }
 }

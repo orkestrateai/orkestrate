@@ -17,7 +17,7 @@ const nav = [
     title: "Core Concepts",
     items: [
       { label: "How Orkestrate works", href: "/docs#how-it-works", hash: "how-it-works" },
-      { label: "Workspaces", href: "/docs#rooms", hash: "rooms" },
+      { label: "Workspaces", href: "/docs#workspaces", hash: "workspaces" },
       { label: "Shared State", href: "/docs#shared-state", hash: "shared-state" },
     ],
   },

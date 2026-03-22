@@ -51,7 +51,7 @@ ${pastWork}
 **Notes for team:** ${s.notesForTeam}
 
 **What to do now:**
-1. Run the setup steps again with the same agent id and room.
+1. Run the setup steps again with the same agent id and workspace.
 2. Call \`read_team_state\` to refresh stateHash and active claims.
 3. For any new user task, call \`identify_intent\` first.
 4. Follow returned \`nextRequiredTool\` exactly.
@@ -91,7 +91,7 @@ After that, always call the tool named in \`nextRequiredTool\`.
 7. On completion/handoff, publish empty footprint and release scope.
 
 ## Session Setup (Run Now)
-Room id: \`${ctx.roomId}\`
+Workspace id: \`${ctx.workspaceId}\`
 Canonical agent id: \`${ctx.agentId}\`
 
 ${phase0}

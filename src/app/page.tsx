@@ -56,9 +56,8 @@ export default function VisualLabHome() {
                             <Logo size="sm" withText={true} />
                         </Link>
                         <div className="hidden md:flex items-center gap-6 text-sm text-white/50">
+                            <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
                             <Link href="/docs" className="hover:text-white transition-colors">Docs</Link>
-                            <Link href="/whitepaper" className="hover:text-white transition-colors">Whitepaper</Link>
-                            <Link href="/changelog" className="hover:text-white transition-colors">Changelog</Link>
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
@@ -88,9 +87,9 @@ export default function VisualLabHome() {
                             </>
                         ) : (
                             <>
-                                <button onClick={handleLogin} className="hidden md:block text-sm text-white/50 hover:text-white transition-colors">
+                                <Link href="/login" className="hidden md:block text-sm text-white/50 hover:text-white transition-colors">
                                     Sign in
-                                </button>
+                                </Link>
                             </>
                         )}
                     </div>
@@ -116,12 +115,14 @@ export default function VisualLabHome() {
                             </span>
                         </Link>
                     ) : (
-                        <button onClick={handleLogin} className="relative flex items-center justify-center gap-3 bg-white text-black hover:bg-[#F0F0F0] transition-all px-10 py-5 rounded-full text-lg font-medium group overflow-hidden shadow-[0_0_40px_rgba(255,255,255,0.1)] hover:shadow-[0_0_60px_rgba(255,255,255,0.2)] hover:scale-[1.02]">
-                            <span className="relative z-10 flex items-center gap-2">
-                                Get Started
-                                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                            </span>
-                        </button>
+                        <div className="flex flex-col items-center gap-6">
+                            <Link href="/login" className="relative flex items-center justify-center gap-3 bg-white text-black hover:bg-[#F0F0F0] transition-all px-10 py-5 rounded-full text-lg font-medium group overflow-hidden shadow-[0_0_40px_rgba(255,255,255,0.1)] hover:shadow-[0_0_60px_rgba(255,255,255,0.2)] hover:scale-[1.02]">
+                                <span className="relative z-10 flex items-center gap-2">
+                                    Get Started
+                                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                                </span>
+                            </Link>
+                        </div>
                     )}
                 </div>
             </section>

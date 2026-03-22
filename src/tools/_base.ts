@@ -11,8 +11,8 @@ export interface AgentContext {
     agentId: string;
     /** OAuth client ID */
     clientId: string;
-    /** Room ID for coordination */
-    roomId: string;
+    /** Workspace ID for coordination */
+    workspaceId: string;
     /** Orkestrate host, e.g. "Orkestrate.vercel.app" */
     host: string;
 }
