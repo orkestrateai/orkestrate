@@ -21,7 +21,7 @@ function QuickstartCard() {
       <div className="w-full max-w-2xl">
         <div className="relative border border-white/[0.06] rounded-2xl p-8 overflow-hidden bg-gradient-to-b from-white/[0.02] to-transparent">
           {/* Subtle grid background */}
-          <div className="absolute inset-0 opacity-[0.02] pointer-events-none">
+          <div className="absolute inset-0 opacity-[0.2] pointer-events-none">
             <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
               <defs>
                 <pattern

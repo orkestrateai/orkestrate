@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono, Fraunces } from "next/font/google";
 import "./globals.css";
-import { SpeedInsights } from "@vercel/speed-insights/next"
+import { SpeedInsights } from "@vercel/speed-insights/next";
+import { Analytics } from "@vercel/analytics/next";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -63,19 +64,17 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const nonce = (await headers()).get('x-nonce') ?? undefined;
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   return (
     <html lang="en" className="dark">
       <body
         className={`${inter.variable} ${jetbrainsMono.variable} ${fraunces.variable} antialiased font-sans`}
       >
-        <TooltipProvider delayDuration={0}>
-          {children}
-        </TooltipProvider>
+        <TooltipProvider delayDuration={0}>{children}</TooltipProvider>
       </body>
       <SpeedInsights />
+      <Analytics />
     </html>
   );
 }
-
