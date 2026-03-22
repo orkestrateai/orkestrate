@@ -125,3 +125,18 @@ Desktop.ini
 public/models/
 public/images/grass-generic-sm_*
 public/images/simple-waves-oce_*
+
+# Packages - never commit node_modules, dist, or build artifacts
+packages/*/node_modules/
+packages/*/dist/
+packages/cli/test-*.json
+packages/cli/err.txt
+packages/cli/out.txt
+packages/cli/opencode.json
+
+# Configs with secrets
+litellm_config.yaml
+rzp*.csv
+
+# MCP
+.mcp.json
