@@ -3,6 +3,7 @@ import {
   exchangeCodeForGithubToken,
   storeGithubTokens,
 } from "@/lib/github-tokens";
+import { authenticateRequestUser } from "@/lib/auth-user-request";
 
 const GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token";
 const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID!;
@@ -27,6 +28,18 @@ const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET!;
  */
 export async function POST(req: NextRequest) {
   try {
+    const user = await authenticateRequestUser(req);
+    if (!user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET) {
+      return NextResponse.json(
+        { error: "GitHub OAuth is not configured on this server" },
+        { status: 500 },
+      );
+    }
+
     // device_code poll — Orkestrate proxies to GitHub
     const body = (await req.json()) as {
       device_code?: string;
@@ -86,16 +99,14 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Store tokens server-side for the Orkestrate user
-      if (body.user_id) {
-        await storeGithubTokens(
-          body.user_id,
-          accessToken,
-          refreshToken ?? null,
-          expiresIn ?? null,
-          pollData.scope as string | null,
-        );
-      }
+      // Store tokens server-side for the authenticated Orkestrate user only
+      await storeGithubTokens(
+        user.id,
+        accessToken,
+        refreshToken ?? null,
+        expiresIn ?? null,
+        pollData.scope as string | null,
+      );
 
       return NextResponse.json({
         access_token: accessToken,
@@ -115,15 +126,13 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      if (body.user_id) {
-        await storeGithubTokens(
-          body.user_id,
-          result.accessToken,
-          result.refreshToken ?? null,
-          result.expiresIn ?? null,
-          result.scope ?? null,
-        );
-      }
+      await storeGithubTokens(
+        user.id,
+        result.accessToken,
+        result.refreshToken ?? null,
+        result.expiresIn ?? null,
+        result.scope ?? null,
+      );
 
       return NextResponse.json({
         access_token: result.accessToken,

@@ -1,15 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import {
-  Search,
-  Plus,
-  FolderKanban,
-  Loader2,
-  Globe,
-  Lock,
-  Github,
-} from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { Session } from "@supabase/supabase-js";
+import { Search, Plus, FolderKanban, Globe, Lock, Github } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/utils/supabase/client";
 import Link from "next/link";
 
@@ -32,7 +25,7 @@ function QuickstartCard() {
             <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
               <defs>
                 <pattern
-                  id="iso"
+                  id="iso-pattern"
                   width="28"
                   height="24"
                   patternUnits="userSpaceOnUse"
@@ -51,7 +44,7 @@ function QuickstartCard() {
                   />
                 </pattern>
               </defs>
-              <rect width="100%" height="100%" fill="url(#iso)" />
+              <rect width="100%" height="100%" fill="url(#iso-pattern)" />
             </svg>
           </div>
 
@@ -282,41 +275,85 @@ function EmptySearchState() {
   );
 }
 
+function ZedSpinner({ size = "24px" }: { size?: string }) {
+  return (
+    <div className="flex items-center justify-center">
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        className="animate-spin text-zinc-600"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <circle
+          cx="12"
+          cy="12"
+          r="10"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeDasharray="2 6" // This creates the "dotted" effect
+          strokeLinecap="round"
+        />
+      </svg>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true); // Outer global loading
+  const [isRefreshing, setIsRefreshing] = useState(false); // Inner list loading
   const [session, setSession] = useState<any>(null);
 
+  // Initialize once
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+
+  // 1. Handle Auth State
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
     supabase.auth
       .getSession()
-      .then(({ data }: any) => setSession(data.session));
+      .then(({ data: { session } }: { data: { session: Session | null } }) => {
+        setSession(session);
+        if (!session) setIsInitialLoading(false); // Stop loading if no user is found
+      });
+
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_: any, session: any) =>
-      setSession(session),
+    } = supabase.auth.onAuthStateChange(
+      (_event: string, session: Session | null) => {
+        setSession(session);
+        if (!session) setIsInitialLoading(false);
+      },
     );
-    return () => subscription.unsubscribe();
-  }, []);
 
+    return () => subscription.unsubscribe();
+  }, [supabase]);
+
+  // 2. Handle Data Fetching
   useEffect(() => {
-    if (!session) {
-      setLoading(false);
-      return;
-    }
-    const load = async () => {
-      const res = await fetch("/api/workspaces", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setWorkspaces(data.workspaces || []);
+    if (!session) return;
+
+    const loadWorkspaces = async () => {
+      setIsRefreshing(true);
+      try {
+        const res = await fetch("/api/workspaces", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setWorkspaces(data.workspaces || []);
+        }
+      } catch (error) {
+        console.error("Failed to fetch workspaces", error);
+      } finally {
+        setIsRefreshing(false);
+        setIsInitialLoading(false); // Only turns off once on first mount
       }
-      setLoading(false);
     };
-    load();
+
+    loadWorkspaces();
   }, [session]);
 
   const filteredWorkspaces = workspaces.filter((ws) =>
@@ -324,16 +361,30 @@ export default function DashboardPage() {
   );
 
   function timeAgo(date: string) {
+    if (!date) return "Unknown";
     const d = new Date(date);
+    if (isNaN(d.getTime())) return "Unknown";
+
     const now = new Date();
     const diff = Math.floor((now.getTime() - d.getTime()) / 1000);
+
     if (diff < 60) return "just now";
     if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
     if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
     return `${Math.floor(diff / 86400)} days ago`;
   }
 
-  if (!session && !loading) {
+  // 3. Render: Initial Page Load Spinner
+  if (isInitialLoading) {
+    return (
+      <div className="flex-1 bg-[#050505] min-h-screen flex items-center justify-center">
+        <ZedSpinner size="32px" />
+      </div>
+    );
+  }
+
+  // 4. Render: Unauthenticated State
+  if (!session) {
     return (
       <div className="flex-1 bg-[#050505] min-h-screen">
         <div className="max-w-4xl mx-auto px-8 pt-16">
@@ -352,7 +403,6 @@ export default function DashboardPage() {
             </div>
             <button
               onClick={() => {
-                const supabase = createSupabaseBrowserClient();
                 supabase.auth.signInWithOAuth({
                   provider: "github",
                   options: {
@@ -371,6 +421,7 @@ export default function DashboardPage() {
     );
   }
 
+  // 5. Render: Authenticated Dashboard
   return (
     <div className="flex-1 bg-[#050505] min-h-screen">
       <div className="max-w-4xl mx-auto px-8 pt-16 pb-24">
@@ -405,9 +456,16 @@ export default function DashboardPage() {
                 <span className="text-[12px] font-bold text-zinc-600 uppercase tracking-widest">
                   All Workspaces
                 </span>
+                {/* Inner spinner displays during background fetching */}
+                {isRefreshing && <ZedSpinner size="16px" />}
               </div>
 
-              <div className="space-y-1">
+              <div className="relative space-y-1">
+                {/* Optional subtle fade when list is refreshing */}
+                {isRefreshing && (
+                  <div className="absolute inset-0 bg-[#050505]/20 z-10 pointer-events-none" />
+                )}
+
                 {filteredWorkspaces.length > 0 ? (
                   filteredWorkspaces.map((ws) => (
                     <Link
@@ -449,11 +507,6 @@ export default function DashboardPage() {
               </div>
             </div>
           </>
-        ) : loading ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-3 text-zinc-600">
-            <Loader2 className="w-6 h-6 animate-spin" />
-            <span className="text-sm">Loading...</span>
-          </div>
         ) : (
           <QuickstartCard />
         )}

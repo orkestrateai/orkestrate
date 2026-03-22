@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { agents, agentSessions, members, rooms } from "@/db/schema";
+import { agents, agentSessions, members, workspaces } from "@/db/schema";
 import {
   canAccessWorkspace,
   ensureActiveWorkspaceForUser,
@@ -14,14 +14,14 @@ function nextSessionId() {
 }
 
 export type JoinedAgentContext = {
-  roomId: string;
+  workspaceId: string;
   sessionId: string;
 };
 
 export async function joinWorkspaceForAgent(args: {
   userId: string;
   scopedAgentId: string;
-  client: string;
+  toolName: string;
   label: string;
   workspaceId?: string | null;
   gitRemote?: string | null;
@@ -36,7 +36,15 @@ export async function joinWorkspaceForAgent(args: {
   const workspaceId = requestedWorkspaceId || await ensureActiveWorkspaceForUser(args.userId);
 
   if (!workspaceId) {
-    return { ok: false as const, reason: "No active workspace found." };
+    const allWorkspaces = await db.query.members.findFirst({
+      where: eq(members.userId, args.userId),
+    });
+    
+    if (!allWorkspaces) {
+      return { ok: false as const, reason: "No workspaces found for this account. Please create one in the dashboard first." };
+    }
+    
+    return { ok: false as const, reason: "No active workspace found. Please specify a workspaceId or open a workspace in the dashboard to set it as active." };
   }
 
   const canJoin = await canAccessWorkspace(args.userId, workspaceId);
@@ -45,32 +53,32 @@ export async function joinWorkspaceForAgent(args: {
   }
 
   // Git-Rooted Coordination: Join Guard validation
-  const room = await db.query.rooms.findFirst({
-    where: eq(rooms.id, workspaceId),
+  const workspace = await db.query.workspaces.findFirst({
+    where: eq(workspaces.id, workspaceId),
   });
 
-  if (!room?.repoUrl) {
+  if (!workspace?.repoUrl) {
     return {
       ok: false as const,
-      reason: "Workspace missing repository binding. Please connect a Git repository in Room Settings to enable orchestration.",
+      reason: "Workspace missing repository binding. Please connect a Git repository in Workspace Settings to enable orchestration.",
     };
   }
 
-  const guardResult = validateJoinGuard(args.gitRemote || null, room.repoUrl);
+  const guardResult = validateJoinGuard(args.gitRemote || null, workspace.repoUrl);
   if (!guardResult.allowed) {
     return {
       ok: false as const,
       reason: guardResult.reason || "Repository validation failed.",
       details: {
         agentRepo: guardResult.agentRepo,
-        roomRepo: guardResult.roomRepo,
+        workspaceRepo: guardResult.workspaceRepo,
       },
     };
   }
 
   await setActiveWorkspaceForUser(args.userId, workspaceId);
   const membership = await db.query.members.findFirst({
-    where: and(eq(members.userId, args.userId), eq(members.roomId, workspaceId)),
+    where: and(eq(members.userId, args.userId), eq(members.workspaceId, workspaceId)),
   });
   if (!membership) {
     return { ok: false as const, reason: "Workspace membership missing." };
@@ -81,8 +89,8 @@ export async function joinWorkspaceForAgent(args: {
     .values({
       id: args.scopedAgentId,
       memberId: membership.id,
-      roomId: workspaceId,
-      client: args.client,
+      workspaceId: workspaceId,
+      toolName: args.toolName,
       label: args.label,
       status: "active",
       repoUrl: args.gitRemote,
@@ -97,8 +105,8 @@ export async function joinWorkspaceForAgent(args: {
       target: [agents.id],
       set: {
         memberId: membership.id,
-        roomId: workspaceId,
-        client: args.client,
+        workspaceId: workspaceId,
+        toolName: args.toolName,
         label: args.label,
         status: "active",
         repoUrl: args.gitRemote,
@@ -123,7 +131,7 @@ export async function joinWorkspaceForAgent(args: {
   await db.insert(agentSessions).values({
     id: sessionId,
     agentId: args.scopedAgentId,
-    roomId: workspaceId,
+    workspaceId: workspaceId,
     status: "active",
     normalizedRemote: args.normalizedGitRemote ?? args.gitRemote,
     repoRoot: args.repoRoot,
@@ -141,7 +149,7 @@ export async function joinWorkspaceForAgent(args: {
 
   return {
     ok: true as const,
-    roomId: workspaceId,
+    workspaceId: workspaceId,
     sessionId,
   };
 }
@@ -150,7 +158,7 @@ export async function getJoinedWorkspaceForAgent(userId: string, scopedAgentId: 
   const joined = await db
     .select({
       id: agents.id,
-      roomId: agents.roomId,
+      workspaceId: agents.workspaceId,
       status: agents.status,
     })
     .from(agents)
@@ -165,14 +173,14 @@ export async function getJoinedWorkspaceForAgent(userId: string, scopedAgentId: 
   const activeSession = await db.query.agentSessions.findFirst({
     where: and(
       eq(agentSessions.agentId, scopedAgentId),
-      eq(agentSessions.roomId, agent.roomId),
+      eq(agentSessions.workspaceId, agent.workspaceId),
       eq(agentSessions.status, "active"),
     ),
     orderBy: [desc(agentSessions.startedAt)],
   });
 
   if (!activeSession) return null;
-  return { roomId: agent.roomId, sessionId: activeSession.id };
+  return { workspaceId: agent.workspaceId, sessionId: activeSession.id };
 }
 
 export async function touchAgentSession(scopedAgentId: string, sessionId: string) {

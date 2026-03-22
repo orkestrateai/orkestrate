@@ -25,7 +25,8 @@ export const workspaces = pgTable(
       .notNull()
       .references(() => authUsers.id),
     repoUrl: text("repo_url"), // Git repository URL for Git-Rooted Coordination
-    defaultBranch: text("default_branch").default("main"), // Default branch for this workspace
+    defaultBranch: text("default_branch"), // Auto-created workspace branch: orkestrate/workspace-{id}
+    baseBranch: text("base_branch").default("main").notNull(), // User-chosen branch to fork from (e.g. main)
     maxAgents: integer("max_agents").default(3).notNull(), // Maximum concurrent agents allowed
     maxMembers: integer("max_members").default(1).notNull(), // Maximum members allowed
     createdAt: timestamp("created_at").defaultNow().notNull(),

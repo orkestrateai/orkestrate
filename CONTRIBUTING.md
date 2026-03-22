@@ -177,7 +177,7 @@ When working with AI agents (Claude, OpenCode, etc.) in the Orkestrate workspace
 
 ### Coordination Protocol
 
-1. **Join the workspace**: Use MCP tools to join the active room
+1. **Join the workspace**: Use MCP tools to join the active workspace
 2. **Read team state**: Check what other agents are working on
 3. **Claim your footprint**: Update your state with files you'll modify
 4. **Avoid conflicts**: Don't touch files claimed by other active agents
@@ -211,8 +211,8 @@ git pull origin feat/knowledge-api
 
 Before submitting a PR:
 
-- [ ] Code builds without errors: `npm run build`
-- [ ] Linting passes: `npm run lint`
+- [ ] Code builds without errors: `bun run build`
+- [ ] Linting passes: `bun run lint`
 - [ ] Type checking passes: `npm run type-check` (if available)
 - [ ] Manual testing completed
 - [ ] No console errors in browser

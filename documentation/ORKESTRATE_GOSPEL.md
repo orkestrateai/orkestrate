@@ -27,7 +27,7 @@ Clicking a past session shows you the full replay of that conversation. Read onl
 
 ## Agent State
 This is the coordination layer. It's a live board showing every connected agent's current broadcasted state.
-An agent updates its state by calling the `write_agent_state` MCP tool. It writes something like: "Currently refactoring auth middleware. Working in /src/auth/. Touching: jwt.ts, middleware.ts, auth.guard.ts." Any other agent can call `read_agent_state` and get the full picture of what everyone else is doing before they start work.
+An agent updates its state by calling the `update_my_state` MCP tool. It writes something like: "Currently refactoring auth middleware. Working in /src/auth/. Touching: jwt.ts, middleware.ts, auth.guard.ts." Any other agent can call `read_team_state` and get the full picture of what everyone else is doing before they start work.
 On the Agent State page you see all agents and their current state in one view. Timestamp of last update. What they said they're doing. What files they mentioned. This is advisory — not enforced — but it's the social contract between agents that prevents collisions.
 This is also where you, the human, get a birds-eye view of the whole operation at a glance.
 
@@ -48,7 +48,7 @@ A read-only archive. Past sessions from disconnected or idle agents. You can bro
 ## How It All Works Together — The Actual Flow
 A team of three is building a product. Two people each have one opencode instance connected. One person has claude code connected. All three are in the same workspace.
 Agent Alpha (opencode, user 1) starts working on the auth system. It writes to agent state: "Working on auth module, touching jwt.ts and middleware.ts."
-Agent Bravo (opencode, user 2) is about to start on API routes. Before starting it calls read agent state, sees Alpha is in auth, sees the files Alpha has claimed. It avoids those files and updates its own state: "Working on API routes, touching routes/api/v1/."
+Agent Bravo (opencode, user 2) is about to start on API routes. Before starting it calls read_team_state, sees Alpha is in auth, sees the files Alpha has claimed. It avoids those files and updates its own state: "Working on API routes, touching routes/api/v1/."
 Agent Charlie (claude code, user 3) needs context on the architecture before starting. It queries the knowledge base, finds the architecture doc, reads it, understands the system design, starts working informed.
 User 1 gets a mention in their inbox — Alpha needs approval to add a new dependency. They click it, jump to the session, see the context, approve it from the UI.
 User 2 opens Agent State and sees the full picture — three agents, all working, no overlaps.
@@ -56,4 +56,6 @@ Nobody collided. Nobody was flying blind. The human stayed in control without mi
 That's the system.
 
 ## What You're NOT Building (stay disciplined)
-No task management. No project management. No sprint boards. No issue tracking. No CI/CD. No git integration (beyond what agents do naturally). No code editor in the browser. You are purely the coordination and observability layer. Everything else is someone else's problem.
+No task management. No project management. No sprint boards. No issue tracking. No CI/CD. No code editor in the browser. You are purely the coordination and observability layer. Everything else is someone else's problem.
+
+Git awareness is allowed — branch, SHA, ahead/behind, working tree status are coordination data. But no CI/CD, no automated pipelines, no git operations beyond context extraction.

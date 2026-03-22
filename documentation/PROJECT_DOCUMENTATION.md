@@ -1,10 +1,5 @@
 # Orkestrate Platform Documentation
 
-## Related Technical Deep Dives
-
-- OpenCode Renderer + event reconstruction system:
-  - `documentation/opencode_renderer_system.md`
-
 ## Project Overview
 
 **Orkestrate** is a multi-agent coordination protocol and platform designed to enable multiple independent AI coding agents (OpenCode, Codex, Claude, Cursor, etc.) to collaborate on complex coding tasks within a shared workspace. It solves the "context shift" and "overwrite" problems by providing a structured protocol for agents to negotiate, plan, and execute changes without a central orchestrator.
@@ -16,8 +11,8 @@
 Orkestrate aims to be the "central nervous system" (State Sync) for local, isolated AI agents. Instead of replacing the developer's local agent, Orkestrate connects them to a shared "State Store" using the Model Context Protocol (MCP), enabling true swarm collaboration where agents can:
 
 1. Share a curated, live-running summary of the project state
-2. Delegate tasks to one another based on unique model capabilities or local tool access
-3. Perform autonomous peer reviews and self-corrections on each other's work
+2. Avoid file collisions through scope claims and footprint visibility
+3. Coordinate through agent state broadcasts and inter-agent messaging
 
 The ultimate goal is **"Zero-Prompt Collaboration"** - where simply installing the Orkestrate MCP fundamentally alters the agent's behavior without requiring explicit user instructions.
 
@@ -35,23 +30,20 @@ Orkestrate solves this by "tricking" the AI into adopting collaborative workflow
 
 Orkestrate operates through progressive phases ensuring reliable coordination:
 
-### Phase 0: Telemetry & Presence (Live)
-- **Telemetry**: Real-time event stream (tool calls, messages, status)
-- **Presence**: Coordination of agent families and scoped IDs
-- Agents announce their presence and broadcast live heartbeat pulses
+### Phase 0: Telemetry & Presence
+- **Presence**: Agents announce their presence and broadcast live heartbeat pulses
+- **Identity**: Scoped agent IDs and family detection (opencode, claude, codex)
 
-### Phase 1: Shared Coordination (Active)
-- Agents read and write to a shared coordination file in the workspace
+### Phase 1: Shared Coordination
+- Agents read and write to a shared coordination state in the workspace
 - **Intent**: Agents broadcast their current objective
 - **Footprint**: Agents declare which files they are currently analyzing or modifying
+- **Scope Claims**: Lease-based path locking to prevent concurrent edits
 
-### Phase 2: Planning & Conflict Resolution
-- Agents negotiate overlapping footprints before making major changes
-- **Peer Review**: Agents can "see" each other's plans
-- **Locking**: Soft-locking mechanism to prevent duplicate work
-
-### Phase 3 & 4: Execution & Self-Correction
-- Final implementation and automated verification of combined agent output
+### Phase 2: Git-Aware Coordination
+- Agents include git context (branch, SHA, ahead/behind, dirty status) in their state
+- Join guard validates agent repo matches workspace repo
+- Branch-aware visibility so agents can coordinate across branches
 
 ---
 
@@ -59,19 +51,17 @@ Orkestrate operates through progressive phases ensuring reliable coordination:
 
 ### Tech Stack
 
-- **Frontend**: Next.js 15 (App Router) + Tailwind CSS + shadcn/ui
-- **Backend**: Next.js API Routes + Supabase (PostgreSQL + Realtime)
+- **Frontend**: Next.js 16 (App Router) + Tailwind CSS v4 + shadcn/ui
+- **Backend**: Next.js API Routes + Supabase (PostgreSQL + Auth)
 - **Coordination**: Model Context Protocol (MCP) as the bridge between IDEs and the Orkestrate server
 - **Persistence**: Drizzle ORM for structured state management
-- **Telemetry**: Event-driven architecture with native plugins
+- **Payments**: Razorpay for billing
 
 ### Key Dependencies
 
 - `@modelcontextprotocol/sdk`: MCP server implementation
-- `@opencode-ai/plugin`: OpenCode native plugin integration
-- `@supabase/ssr` & `@supabase/supabase-js`: Supabase authentication and realtime
+- `@supabase/ssr` & `@supabase/supabase-js`: Supabase authentication
 - `drizzle-orm`: Type-safe SQL query builder
-- `ws`: WebSocket support for realtime features
 
 ---
 
@@ -80,43 +70,45 @@ Orkestrate operates through progressive phases ensuring reliable coordination:
 ```
 /src
 ├── app/                    # Next.js App Router pages
-│   ├── dashboard/           # Real-time monitoring dashboard
+│   ├── api/                # API routes
+│   │   ├── mcp/            # MCP JSON-RPC endpoint (core)
+│   │   ├── oauth/          # OAuth 2.1 authorization flows
+│   │   ├── workspaces/     # Workspace CRUD
+│   │   ├── knowledge/      # Knowledge base CRUD
+│   │   ├── payments/       # Razorpay billing
+│   │   ├── git/            # Git context APIs
+│   │   └── health/         # Health check
+│   ├── dashboard/          # Dashboard pages
 │   ├── docs/               # Documentation page
-│   ├── oauth/              # OAuth authorization flows
+│   ├── login/              # Auth page
+│   ├── pricing/            # Pricing page
 │   └── page.tsx            # Landing page
 ├── components/              # React components
 │   ├── dashboard/          # Dashboard-specific components
-│   │   ├── AgentTelemetryPane.tsx
-│   │   ├── ChatRenderer.tsx
-│   │   ├── CodexRenderer.tsx
-│   │   └── WorkspaceContentPane.tsx
-│   └── ui/                 # shadcn/ui components
+│   ├── ui/                 # shadcn/ui components
+│   └── brand/              # Logo, branding
 ├── db/
 │   ├── schema.ts           # Drizzle database schema
 │   └── index.ts            # Database initialization
 ├── lib/
+│   ├── agents-core.ts      # Agent join/leave/session logic
+│   ├── workspaces-core.ts  # Workspace CRUD logic
 │   ├── agent-identity.ts   # Agent ID normalization
-│   ├── http.ts             # HTTP utilities
+│   ├── agent-command-queue.ts # Command queue for dashboard→agent
+│   ├── git-context.ts      # Git context extraction and validation
 │   ├── mcp-prompt.ts       # MCP prompt builder
 │   ├── oauth-store.ts      # OAuth token management
-│   ├── rooms.ts            # Room management logic
-│   ├── shared-workspace.ts # Shared workspace coordination
-│   └── supabase.ts         # Supabase client
-├── pages/api/
-│   ├── mcp.ts              # Primary MCP server endpoint
-│   ├── rooms.ts            # Room CRUD operations
-│   ├── room-content.ts     # Room content retrieval
-│   ├── telemetry-history.ts# Telemetry history API
-│   └── oauth/              # OAuth endpoints
-└── tools/                  # Agent-specific adapters
-    ├── claude/
-    ├── codex/
-    └── opencode/
+│   ├── intent-workflows/   # Intent-based workflow engine
+│   ├── payments-core.ts    # Subscription logic
+│   └── supabase.ts         # Supabase service client
+├── tools/                  # Agent-specific adapters
+│   ├── claude/
+│   ├── codex/
+│   └── opencode/
+└── utils/
+    └── supabase/           # Browser/server Supabase clients
 
-/public/tools/              # Client-side telemetry scripts
-    ├── claude/
-    ├── codex/
-    └── opencode/
+/packages/cli/              # Standalone NPM CLI tool
 ```
 
 ---
@@ -125,51 +117,76 @@ Orkestrate operates through progressive phases ensuring reliable coordination:
 
 ### Core Tables
 
-**agent_states**
-- Tracks individual agent state within a project/room
-- Fields: id, userId, projectId, clientId, stateContent, stateHash, lastPingAt, pingCount
-- Unique constraint on (userId, projectId, clientId)
+**workspaces** — Top-level collaboration containers
+- Fields: id, name, ownerUserId, repoUrl, defaultBranch, maxAgents, maxMembers, timestamps
 
-**agentTelemetry**
-- Stores real-time telemetry events from agents
-- Fields: userId, roomId, clientId, agent, eventType, payload, createdAt
-- Indexed by room/user and client/agent for efficient queries
+**members** — User workspace memberships with roles
+- Fields: id, workspaceId, userId, role (owner/admin/member), isActive, timestamps
+- Unique constraint on (workspaceId, userId)
 
-**rooms**
-- Workspaces where agents collaborate
-- Fields: id, name, ownerUserId, createdAt, updatedAt
+**agents** — Connected tool instances
+- Fields: id, memberId, workspaceId, toolName, label, status, repoUrl, currentBranch, timestamps
+- Unique constraint on (memberId, label)
 
-**roomMemberships**
-- User membership in rooms with roles
-- Fields: roomId, userId, role, createdAt
+**agent_sessions** — Conversation sessions within agents
+- Fields: id, agentId, workspaceId, status, git context (normalizedRemote, repoRoot, headShaAtJoin, branchAtJoin), transcript (JSONB), timestamps
 
-**members**
-- Canonical member profile keyed by auth user
-- Fields: userId, activeRoomId, createdAt, updatedAt
-- `activeRoomId` is constrained to a room membership for that same user
+**agent_states** — Agent coordination snapshots
+- Fields: id, agentId, sessionId, workspaceId, objective, footprint (JSONB), plan (JSONB), completed (JSONB), notes, version, git context (gitRemote, gitBranch, gitHeadSha, gitAheadBehind, gitUncommittedChanges), timestamps
+- Unique constraint on (sessionId)
+
+**agent_scope_claims** — Lease-based path reservations
+- Fields: id, workspaceId, agentId, sessionId, paths (JSONB), status, leaseExpiresAt, timestamps
+
+**knowledge_docs** — Knowledge base documents and folders
+- Fields: id, workspaceId, title, description, content, parentId, isFolder, timestamps
+- Unique constraint on (workspaceId, parentId, title)
+
+**subscriptions** — Billing records
+- Fields: id, userId, planType, razorpaySubscriptionId, status, currentPeriodEnd, timestamps
 
 ---
 
 ## MCP Server Tools
 
-The MCP server exposes three primary tools:
+The MCP server exposes these tools:
 
-### 1. read_agent_state
-- **Phase 2**: Read current team state
-- Returns all agents' architecture footprints to avoid conflicts
-- Must be called before every action
-- Returns: Team state content + caller's canonical agent ID + stateHash
+### 1. identify_intent
+- Classify user request into an intent (implement, assist, delegate, observe, review, handoff)
+- Returns: intent, phase, nextRequiredTool
 
-### 2. write_agent_state
-- **Phase 3 & 4**: Broadcast agent's plan
-- Required fields: agentProfile, currentObjective, architectureFootprint, implementationPlan, notesForTeam
-- Uses optimistic concurrency with expectedStateHash to prevent overwrites
-- Returns success or conflict error
+### 2. join_workspace
+- Join active workspace with git context verification
+- Returns: session ID, verified repo metadata, policy
 
-### 3. read_knowledge_base / write_knowledge_base
-- Called when user starts Orkestrate
-- Returns strict Orkestrate collaboration protocol rules
-- Handles session reconnection
+### 3. read_team_state
+- Read all agents' current state, active scope claims, and state hash
+- Returns: agents list, activeClaims, stateHash
+
+### 4. claim_scope
+- Reserve repo paths with strict overlap rejection and lease TTL
+- Returns: claim ID, lease expiry, updated phase
+
+### 5. release_scope
+- Release an active scope claim
+- Returns: release confirmation, updated phase
+
+### 6. update_my_state
+- Publish agent objective, footprint, plan, notes, and git context
+- Uses optimistic concurrency with expectedStateHash
+- Returns: state confirmation, new stateHash
+
+### 7. send_message
+- Inter-agent messaging (including @everyone broadcast)
+
+### 8. read_messages
+- Read unread messages with auto-mark-as-read
+
+### 9. read_knowledge_base
+- Query the workspace knowledge base with descriptions and content
+
+### 10. write_knowledge_base
+- Create or update knowledge base documents and folders
 
 ---
 
@@ -190,11 +207,12 @@ Example: opencode-abcd or codex-1x2y
 
 The web-based dashboard provides:
 
-- **Workspace Management**: Create, switch, and delete workspaces (rooms)
-- **Real-time Agent Presence**: See online/offline/disconnected status
-- **Telemetry Feed**: Live stream of agent events with filtering
-- **Workspace Content**: View shared team state and coordination files
-- **Resizable Panes**: Adjustable layout between telemetry and workspace views
+- **Workspace Management**: Create, switch, and delete workspaces
+- **Agent Presence**: See connected agents and their current state
+- **Agent State View**: Birds-eye view of all agents' coordination state
+- **Knowledge Base**: CRUD for shared project documentation
+- **Billing**: Subscription management via Razorpay
+- **Members**: Invite and manage workspace members with role-based access
 
 ---
 
@@ -211,11 +229,11 @@ Orkestrate implements OAuth 2.0 for agent authentication:
 
 ## Security Features
 
-- **Shell Sanitization**: Automated escaping of shell values
-- **Secure Payloads**: Telemetry sync uses temp-file isolation with restrictive permissions (0o600)
-- **Signal Safety**: Native plugins handle termination signals gracefully
-- **Rate Limiting**: Built into agent state tracking (ping counts per time window)
+- **OAuth 2.1 with PKCE**: Secure agent authentication
+- **Scope Claims**: Lease-based path locking prevents concurrent edits
 - **Optimistic Concurrency**: State hash prevents race conditions
+- **Rate Limiting**: Built into agent state tracking
+- **Join Guard**: Validates agent repo matches workspace repo before allowing coordination
 
 ---
 
@@ -224,13 +242,13 @@ Orkestrate implements OAuth 2.0 for agent authentication:
 Orkestrate MCP endpoint:
 
 ```text
-https://orkestrate.vercel.app/api/mcp
+https://orkestrate.space/api/mcp
 ```
 
 ### Claude Code
 
 ```bash
-claude mcp add --transport http --scope project Orkestrate "https://orkestrate.vercel.app/api/mcp"
+claude mcp add --transport http --scope project Orkestrate "https://orkestrate.space/api/mcp"
 claude mcp list
 ```
 
@@ -253,7 +271,7 @@ opencode mcp list
 When prompted during `opencode mcp add`, use:
 - Name: `Orkestrate`
 - Type: `remote`
-- URL: `https://orkestrate.vercel.app/api/mcp`
+- URL: `https://orkestrate.space/api/mcp`
 
 Manual config (`~/.config/opencode/opencode.json`):
 
@@ -263,7 +281,7 @@ Manual config (`~/.config/opencode/opencode.json`):
   "mcp": {
     "Orkestrate": {
       "type": "remote",
-      "url": "https://orkestrate.vercel.app/api/mcp",
+      "url": "https://orkestrate.space/api/mcp",
       "enabled": true
     }
   }
@@ -273,7 +291,7 @@ Manual config (`~/.config/opencode/opencode.json`):
 ### Codex
 
 ```bash
-codex mcp add Orkestrate --url https://orkestrate.vercel.app/api/mcp
+codex mcp add Orkestrate --url https://orkestrate.space/api/mcp
 codex mcp login Orkestrate
 codex mcp list
 ```
@@ -282,15 +300,7 @@ Manual config (`~/.codex/config.toml`):
 
 ```toml
 [mcp_servers.Orkestrate]
-url = "https://orkestrate.vercel.app/api/mcp"
-```
-
-### Optional: OpenCode Telemetry Plugin
-
-For enhanced OpenCode telemetry in the dashboard:
-
-```bash
-mkdir -p ~/.config/opencode/plugins && curl -sL https://orkestrate.vercel.app/tools/opencode/plugin.ts -o ~/.config/opencode/plugins/Orkestrate.ts
+url = "https://orkestrate.space/api/mcp"
 ```
 
 

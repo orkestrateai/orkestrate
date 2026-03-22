@@ -42,7 +42,7 @@ type StoredAgentState = {
   status: "active" | "idle" | "blocked" | "planning" | "handoff" | "done";
   content: AgentStateContent;
   objective: string;
-  claimedPaths: string[];
+  footprint: string[];
   plan: string[];
   notes: string;
   completed: string[];
@@ -143,7 +143,7 @@ function isValidHeadSha(value: unknown): value is string {
 
 type StoredKnowledgeDoc = {
   id: string;
-  roomId: string;
+  workspaceId: string;
   title: string;
   description: string;
   content: string;
@@ -161,43 +161,43 @@ export type AgentMessage = {
   timestamp: string;
 };
 
-type RoomBucket = {
+type WorkspaceBucket = {
   agentMetadata: Map<string, { agentProfile: string; pastWorkSummary: string[] }>;
   workflowRuns: Map<string, WorkflowRunContext>;
   messages: AgentMessage[];
   readReceipts: Map<string, Set<string>>;
 };
 
-const READ_KNOWLEDGE_BASE_ENABLED = false;
+const READ_KNOWLEDGE_BASE_ENABLED = true;
 
 declare global {
-  var __orkestrateRuntimeStore: Map<string, RoomBucket> | undefined;
+  var __orkestrateRuntimeStore: Map<string, WorkspaceBucket> | undefined;
 }
 
 function getRuntimeStore() {
   if (!global.__orkestrateRuntimeStore) {
-    global.__orkestrateRuntimeStore = new Map<string, RoomBucket>();
+    global.__orkestrateRuntimeStore = new Map<string, WorkspaceBucket>();
   }
   return global.__orkestrateRuntimeStore;
 }
 
-function getRoomBucket(roomId: string): RoomBucket {
+function getWorkspaceBucket(workspaceId: string): WorkspaceBucket {
   const store = getRuntimeStore();
-  const existing = store.get(roomId);
+  const existing = store.get(workspaceId);
   if (existing) return existing;
 
-  const bucket: RoomBucket = {
+  const bucket: WorkspaceBucket = {
     agentMetadata: new Map<string, { agentProfile: string; pastWorkSummary: string[] }>(),
     workflowRuns: new Map<string, WorkflowRunContext>(),
     messages: [],
     readReceipts: new Map<string, Set<string>>(),
   };
-  store.set(roomId, bucket);
+  store.set(workspaceId, bucket);
   return bucket;
 }
 
 function getSessionWorkflowRun(
-  bucket: RoomBucket,
+  bucket: WorkspaceBucket,
   scopedAgentId: string,
   sessionId: string,
 ): WorkflowRunContext | null {
@@ -206,7 +206,7 @@ function getSessionWorkflowRun(
 }
 
 function setSessionWorkflowRun(
-  bucket: RoomBucket,
+  bucket: WorkspaceBucket,
   run: WorkflowRunContext,
 ) {
   bucket.workflowRuns.set(workflowRunKey(run.scopedAgentId, run.sessionId), run);
@@ -268,7 +268,7 @@ function hasNonEmptyArchitectureFootprint(content: unknown): boolean {
   const obj = content && typeof content === "object" && !Array.isArray(content)
     ? content as Record<string, unknown>
     : {};
-  return firstStringList(obj, ["architectureFootprint", "claimedPaths"]).length > 0;
+  return firstStringList(obj, ["architectureFootprint", "footprint"]).length > 0;
 }
 
 function rpcResult(id: RpcId, result: unknown) {
@@ -394,7 +394,7 @@ function coerceState(
     : {};
 
   const currentObjective = firstNonEmptyString(obj, ["currentObjective", "objective"]) || "Standing by for next task.";
-  const architectureFootprint = firstStringList(obj, ["architectureFootprint", "claimedPaths"]);
+  const architectureFootprint = firstStringList(obj, ["architectureFootprint", "footprint"]);
   const implementationPlan = firstStringList(obj, ["implementationPlan", "plan"]);
   const notesForTeam = firstNonEmptyString(obj, ["notesForTeam", "notes"]) || "";
   const pastWorkSummary = firstStringList(obj, ["pastWorkSummary", "completed"]);
@@ -423,7 +423,7 @@ function coerceState(
     status,
     content: contentState,
     objective: contentState.currentObjective,
-    claimedPaths: contentState.architectureFootprint,
+    footprint: contentState.architectureFootprint,
     plan: contentState.implementationPlan,
     notes: contentState.notesForTeam,
     completed: contentState.pastWorkSummary,
@@ -435,7 +435,7 @@ function coerceState(
 function mapKnowledgeDocRow(row: typeof knowledgeDocs.$inferSelect): StoredKnowledgeDoc {
   return {
     id: row.id,
-    roomId: row.roomId,
+    workspaceId: row.workspaceId,
     title: row.title,
     description: row.description,
     content: row.content,
@@ -446,13 +446,13 @@ function mapKnowledgeDocRow(row: typeof knowledgeDocs.$inferSelect): StoredKnowl
   };
 }
 
-async function getKnowledgeDocById(roomId: string, id: string) {
+async function getKnowledgeDocById(workspaceId: string, id: string) {
   return db.query.knowledgeDocs.findFirst({
-    where: and(eq(knowledgeDocs.roomId, roomId), eq(knowledgeDocs.id, id)),
+    where: and(eq(knowledgeDocs.workspaceId, workspaceId), eq(knowledgeDocs.id, id)),
   });
 }
 
-async function collectKnowledgeDescendants(roomId: string, rootId: string) {
+async function collectKnowledgeDescendants(workspaceId: string, rootId: string) {
   const descendants: string[] = [];
   const queue = [rootId];
   while (queue.length > 0) {
@@ -460,7 +460,7 @@ async function collectKnowledgeDescendants(roomId: string, rootId: string) {
     const children = await db
       .select({ id: knowledgeDocs.id })
       .from(knowledgeDocs)
-      .where(and(eq(knowledgeDocs.roomId, roomId), eq(knowledgeDocs.parentId, parentId)));
+      .where(and(eq(knowledgeDocs.workspaceId, workspaceId), eq(knowledgeDocs.parentId, parentId)));
     for (const child of children) {
       descendants.push(child.id);
       queue.push(child.id);
@@ -470,19 +470,19 @@ async function collectKnowledgeDescendants(roomId: string, rootId: string) {
 }
 
 async function validateKnowledgeParent(
-  roomId: string,
+  workspaceId: string,
   parentId: string | null,
   movingDocId?: string,
 ) {
   if (parentId === null) return { ok: true as const };
-  const parent = await getKnowledgeDocById(roomId, parentId);
+  const parent = await getKnowledgeDocById(workspaceId, parentId);
   if (!parent) return { ok: false as const, reason: "Parent doc not found." };
   if (!parent.isFolder) return { ok: false as const, reason: "Parent must be a folder." };
   if (movingDocId && parent.id === movingDocId) {
     return { ok: false as const, reason: "A doc cannot be its own parent." };
   }
   if (movingDocId) {
-    const descendants = new Set(await collectKnowledgeDescendants(roomId, movingDocId));
+    const descendants = new Set(await collectKnowledgeDescendants(workspaceId, movingDocId));
     if (descendants.has(parent.id)) {
       return { ok: false as const, reason: "Move would create a parent cycle." };
     }
@@ -509,10 +509,10 @@ function stripUrlToHost(urlOrHost: string): string {
 
 async function listWorkspaceCoordinationStates(workspaceId: string): Promise<StoredAgentState[]> {
   const sessions = await db.query.agentSessions.findMany({
-    where: and(eq(agentSessions.roomId, workspaceId), eq(agentSessions.status, "active")),
+    where: and(eq(agentSessions.workspaceId, workspaceId), eq(agentSessions.status, "active")),
   });
 
-  const bucket = getRoomBucket(workspaceId);
+  const bucket = getWorkspaceBucket(workspaceId);
   const rows: StoredAgentState[] = [];
   for (const session of sessions) {
     const state = await db.query.agentStates.findFirst({
@@ -521,12 +521,12 @@ async function listWorkspaceCoordinationStates(workspaceId: string): Promise<Sto
 
     const agentId = session.agentId.split("::")[1] || session.agentId;
     const metadata = bucket.agentMetadata.get(session.agentId);
-    
+
     // Provide safe fallbacks if the agent hasn't published state yet
     const content: AgentStateContent = {
       agentProfile: metadata?.agentProfile || `${agentId} - coordination agent`,
       currentObjective: state?.objective || "Standing by for next task.",
-      architectureFootprint: state && Array.isArray(state.claimedPaths) ? state.claimedPaths : [],
+      architectureFootprint: state && Array.isArray(state.footprint) ? state.footprint : [],
       implementationPlan: state && Array.isArray(state.plan) ? state.plan : [],
       notesForTeam: state?.notes || "",
       pastWorkSummary: metadata?.pastWorkSummary || (state && Array.isArray(state.completed) ? state.completed : []),
@@ -547,7 +547,7 @@ async function listWorkspaceCoordinationStates(workspaceId: string): Promise<Sto
                   : "active",
       content,
       objective: content.currentObjective,
-      claimedPaths: content.architectureFootprint,
+      footprint: content.architectureFootprint,
       plan: content.implementationPlan,
       notes: content.notesForTeam,
       completed: content.pastWorkSummary,
@@ -567,7 +567,7 @@ async function listWorkspaceCoordinationStates(workspaceId: string): Promise<Sto
 
 async function workspaceStateHash(workspaceId: string) {
   const sessions = await db.query.agentSessions.findMany({
-    where: and(eq(agentSessions.roomId, workspaceId), eq(agentSessions.status, "active")),
+    where: and(eq(agentSessions.workspaceId, workspaceId), eq(agentSessions.status, "active")),
   });
 
   const signatures: string[] = [];
@@ -584,7 +584,7 @@ async function workspaceStateHash(workspaceId: string) {
 
   const now = new Date();
   const claims = await db.query.agentScopeClaims.findMany({
-    where: and(eq(agentScopeClaims.roomId, workspaceId), eq(agentScopeClaims.status, "active")),
+    where: and(eq(agentScopeClaims.workspaceId, workspaceId), eq(agentScopeClaims.status, "active")),
   });
   for (const claim of claims) {
     if (claim.leaseExpiresAt <= now) continue;
@@ -601,22 +601,22 @@ async function workspaceStateHash(workspaceId: string) {
   return `v${digest}`;
 }
 
-async function expireStaleScopeClaims(roomId: string, now: Date) {
+async function expireStaleScopeClaims(workspaceId: string, now: Date) {
   await db
     .update(agentScopeClaims)
     .set({ status: "expired", updatedAt: now })
     .where(and(
-      eq(agentScopeClaims.roomId, roomId),
+      eq(agentScopeClaims.workspaceId, workspaceId),
       eq(agentScopeClaims.status, "active"),
       lte(agentScopeClaims.leaseExpiresAt, now),
     ));
 }
 
-async function listActiveScopeClaims(roomId: string): Promise<ActiveScopeClaim[]> {
+async function listActiveScopeClaims(workspaceId: string): Promise<ActiveScopeClaim[]> {
   const now = new Date();
-  await expireStaleScopeClaims(roomId, now);
+  await expireStaleScopeClaims(workspaceId, now);
   const rows = await db.query.agentScopeClaims.findMany({
-    where: and(eq(agentScopeClaims.roomId, roomId), eq(agentScopeClaims.status, "active")),
+    where: and(eq(agentScopeClaims.workspaceId, workspaceId), eq(agentScopeClaims.status, "active")),
     orderBy: [desc(agentScopeClaims.updatedAt)],
   });
 
@@ -629,7 +629,7 @@ async function listActiveScopeClaims(roomId: string): Promise<ActiveScopeClaim[]
   }));
 }
 
-function getUnreadMessagesAlert(bucket: RoomBucket, agentId: string): string[] {
+function getUnreadMessagesAlert(bucket: WorkspaceBucket, agentId: string): string[] {
   if (!bucket.readReceipts) bucket.readReceipts = new Map();
   if (!bucket.messages) bucket.messages = [];
 
@@ -650,10 +650,10 @@ function getUnreadMessagesAlert(bucket: RoomBucket, agentId: string): string[] {
   return [];
 }
 
-function buildJoinWorkspaceOrchestrationGuide(roomId: string, canonicalAgentId: string) {
+function buildJoinWorkspaceOrchestrationGuide(workspaceId: string, canonicalAgentId: string) {
   return [
     "Orkestrate coordination instructions:",
-    `- roomId: ${roomId}`,
+    `- workspaceId: ${workspaceId}`,
     `- canonicalAgentId: ${canonicalAgentId}`,
     "",
     "Coordination loop (run in this order):",
@@ -912,38 +912,38 @@ function buildMcpToolList() {
         additionalProperties: false,
       },
     },
-    // {
-    //   name: "read_knowledge_base",
-    //   description: "Read room-scoped knowledge docs stored in Postgres. Use id for direct read, parentId for folder traversal (parentId:null = root), or query for search.",
-    //   inputSchema: {
-    //     type: "object",
-    //     properties: {
-    //       id: { type: "string", description: "Optional doc id for direct read." },
-    //       parentId: { type: ["string", "null"], description: "Optional parent filter. Use null to list root docs." },
-    //       query: { type: "string", description: "Optional case-insensitive search across title/description/content." },
-    //       includeContent: { type: "boolean", description: "Include full content in list responses." },
-    //     },
-    //     additionalProperties: false,
-    //   },
-    // },
-    // {
-    //   name: "write_knowledge_base",
-    //   description: "Mutate room-scoped knowledge docs in Postgres. Supports create/update/move/delete. Parent must be a folder; move cycles are rejected; folder delete cascades descendants.",
-    //   inputSchema: {
-    //     type: "object",
-    //     properties: {
-    //       action: { type: "string", enum: ["create", "update", "move", "delete"] },
-    //       id: { type: "string", description: "Required for update/move/delete." },
-    //       title: { type: "string", description: "Doc title (create/update)." },
-    //       description: { type: "string", description: "Optional doc summary (create/update)." },
-    //       content: { type: "string", description: "Doc body (create/update)." },
-    //       parentId: { type: ["string", "null"], description: "Folder parent id or null for root." },
-    //       isFolder: { type: "boolean", description: "Create as folder when true." },
-    //     },
-    //     required: ["action"],
-    //     additionalProperties: false,
-    //   },
-    // },
+    {
+      name: "read_knowledge_base",
+      description: "Read workspace knowledge docs stored in Postgres. Use id for direct read, parentId for folder traversal (parentId:null = root), or query for search.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "Optional doc id for direct read." },
+          parentId: { type: ["string", "null"], description: "Optional parent filter. Use null to list root docs." },
+          query: { type: "string", description: "Optional case-insensitive search across title/description/content." },
+          includeContent: { type: "boolean", description: "Include full content in list responses." },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "write_knowledge_base",
+      description: "Mutate workspace knowledge docs in Postgres. Supports create/update/move/delete. Parent must be a folder; move cycles are rejected; folder delete cascades descendants.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["create", "update", "move", "delete"] },
+          id: { type: "string", description: "Required for update/move/delete." },
+          title: { type: "string", description: "Doc title (create/update)." },
+          description: { type: "string", description: "Optional doc summary (create/update)." },
+          content: { type: "string", description: "Doc body (create/update)." },
+          parentId: { type: ["string", "null"], description: "Folder parent id or null for root." },
+          isFolder: { type: "boolean", description: "Create as folder when true." },
+        },
+        required: ["action"],
+        additionalProperties: false,
+      },
+    },
     // Backward-compatible aliases kept visible for older agents:
     // { name: "read_agent_state", description: "Legacy alias for read_team_state. Prefer read_team_state.", inputSchema: { type: "object", properties: { agentId: { type: "string" } }, additionalProperties: false } },
     // { name: "write_agent_state", description: "Legacy alias for update_my_state. Prefer update_my_state.", inputSchema: { type: "object", properties: { agentId: { type: "string" }, content: { type: "object" }, expectedStateHash: { type: "string" } }, required: ["content", "expectedStateHash"], additionalProperties: false } },
@@ -1058,7 +1058,7 @@ export async function POST(req: NextRequest) {
       const prompt = adapter.buildPhase0Prompt({
         agentId: canonicalIdentity.id,
         clientId,
-        roomId: workspaceId,
+        workspaceId,
         host,
       });
 
@@ -1195,7 +1195,7 @@ export async function POST(req: NextRequest) {
       const joined = await joinWorkspaceForAgent({
         userId,
         scopedAgentId,
-        client: persistedClientName,
+        toolName: persistedClientName,
         label: canonicalIdentity.id,
         workspaceId,
         gitRemote,
@@ -1208,7 +1208,7 @@ export async function POST(req: NextRequest) {
 
       if (!joined.ok) {
         const errorDetails = 'details' in joined && joined.details
-          ? `\n\nDetails:\n- Agent repo: ${joined.details.agentRepo || 'none'}\n- Room repo: ${joined.details.roomRepo || 'none'}`
+          ? `\n\nDetails:\n- Agent repo: ${joined.details.agentRepo || 'none'}\n- Workspace repo: ${joined.details.workspaceRepo || 'none'}`
           : '';
         return json(200, rpcResult(id, {
           content: [
@@ -1229,12 +1229,12 @@ export async function POST(req: NextRequest) {
           ],
         }));
       }
-      const orchestrationGuide = buildJoinWorkspaceOrchestrationGuide(joined.roomId, canonicalIdentity.id);
+      const orchestrationGuide = buildJoinWorkspaceOrchestrationGuide(joined.workspaceId, canonicalIdentity.id);
 
       return json(200, rpcResult(id, {
         content: [
           ...(aliasNotice ? [{ type: "text", text: aliasNotice }] : []),
-          { type: "text", text: `Joined workspace ${joined.roomId} as ${canonicalIdentity.id}.` },
+          { type: "text", text: `Joined workspace ${joined.workspaceId} as ${canonicalIdentity.id}.` },
           ...workflowContentEntries({
             ok: true,
             intentId: null,
@@ -1246,8 +1246,7 @@ export async function POST(req: NextRequest) {
           { type: "text", text: orchestrationGuide },
           {
             type: "text", text: JSON.stringify({
-              workspaceId: joined.roomId,
-              roomId: joined.roomId,
+              workspaceId: joined.workspaceId,
               sessionId: joined.sessionId,
               canonicalAgentId: canonicalIdentity.id,
               scopedAgentId,
@@ -1303,13 +1302,13 @@ export async function POST(req: NextRequest) {
         }));
       }
 
-      const roomId = joined.roomId;
+      const workspaceId = joined.workspaceId;
       await touchAgentSession(scopedAgentId, joined.sessionId);
 
       const chainQueue = normalizeIntentChain(argsObj.chain);
       const resolution = resolveIntent(userPrompt, argsObj.forceIntent);
       const intentDef = getIntentDefinition(resolution.intentId);
-      const bucket = getRoomBucket(roomId);
+      const bucket = getWorkspaceBucket(workspaceId);
       const run = createWorkflowRun({
         sessionId: joined.sessionId,
         scopedAgentId,
@@ -1377,7 +1376,7 @@ export async function POST(req: NextRequest) {
               },
               targetAgentId: targetAgentId || null,
               scopeHints,
-              systemAlerts: getUnreadMessagesAlert(getRoomBucket(roomId), canonicalIdentity.id),
+              systemAlerts: getUnreadMessagesAlert(getWorkspaceBucket(workspaceId), canonicalIdentity.id),
             }, null, 2),
           },
         ],
@@ -1408,12 +1407,12 @@ export async function POST(req: NextRequest) {
         }));
       }
 
-      const roomId = joined.roomId;
+      const workspaceId = joined.workspaceId;
       await touchAgentSession(scopedAgentId, joined.sessionId);
-      const agents = await listWorkspaceCoordinationStates(roomId);
-      const activeClaims = await listActiveScopeClaims(roomId);
-      const stateHash = await workspaceStateHash(roomId);
-      const bucket = getRoomBucket(roomId);
+      const agents = await listWorkspaceCoordinationStates(workspaceId);
+      const activeClaims = await listActiveScopeClaims(workspaceId);
+      const stateHash = await workspaceStateHash(workspaceId);
+      const bucket = getWorkspaceBucket(workspaceId);
       const existingRun = getSessionWorkflowRun(bucket, scopedAgentId, joined.sessionId);
       const run = existingRun
         ? touchRun(existingRun, { phase: "read", lastReadStateHash: stateHash })
@@ -1425,7 +1424,7 @@ export async function POST(req: NextRequest) {
         toolName: state.toolName,
         status: state.status,
         objective: state.objective,
-        footprint: state.claimedPaths,
+        footprint: state.footprint,
         branch: state.repo.branch,
         headSha: state.repo.headSha,
         updatedAt: state.updatedAt,
@@ -1457,8 +1456,7 @@ export async function POST(req: NextRequest) {
           {
             type: "text",
             text: JSON.stringify({
-              workspaceId: roomId,
-              roomId,
+              workspaceId,
               canonicalAgentId: canonicalIdentity.id,
               scopedAgentId,
               stateHash,
@@ -1503,9 +1501,9 @@ export async function POST(req: NextRequest) {
         }));
       }
 
-      const roomId = joined.roomId;
+      const workspaceId = joined.workspaceId;
       await touchAgentSession(scopedAgentId, joined.sessionId);
-      const bucket = getRoomBucket(roomId);
+      const bucket = getWorkspaceBucket(workspaceId);
       const existingRun = getSessionWorkflowRun(bucket, scopedAgentId, joined.sessionId);
       const guard = enforceWriteToolGuard({
         toolName: "claim_scope",
@@ -1528,8 +1526,8 @@ export async function POST(req: NextRequest) {
           ],
         }));
       }
-      await expireStaleScopeClaims(roomId, new Date());
-      const currentHash = await workspaceStateHash(roomId);
+      await expireStaleScopeClaims(workspaceId, new Date());
+      const currentHash = await workspaceStateHash(workspaceId);
       if (argsObj.expectedStateHash !== currentHash) {
         if (existingRun) {
           setSessionWorkflowRun(bucket, setRunPhase(existingRun, "resync"));
@@ -1555,7 +1553,7 @@ export async function POST(req: NextRequest) {
         }));
       }
 
-      const activeClaims = await listActiveScopeClaims(roomId);
+      const activeClaims = await listActiveScopeClaims(workspaceId);
       const conflicts = activeClaims
         .filter((claim) => claim.scopedAgentId !== scopedAgentId && findScopeConflicts(paths, claim.paths))
         .map((claim) => ({
@@ -1574,7 +1572,7 @@ export async function POST(req: NextRequest) {
             text: JSON.stringify({
               error: "SCOPE_CONFLICT",
               conflicts,
-              currentStateHash: await workspaceStateHash(roomId),
+              currentStateHash: await workspaceStateHash(workspaceId),
             }, null, 2),
           },
           ...workflowContentEntries({
@@ -1603,7 +1601,7 @@ export async function POST(req: NextRequest) {
         .update(agentScopeClaims)
         .set({ status: "released", updatedAt: now })
         .where(and(
-          eq(agentScopeClaims.roomId, roomId),
+          eq(agentScopeClaims.workspaceId, workspaceId),
           eq(agentScopeClaims.agentId, scopedAgentId),
           eq(agentScopeClaims.status, "active"),
         ));
@@ -1612,7 +1610,7 @@ export async function POST(req: NextRequest) {
       const leaseExpiresAt = new Date(now.getTime() + (ttlSeconds * 1000));
       await db.insert(agentScopeClaims).values({
         id: claimId,
-        roomId,
+        workspaceId,
         agentId: scopedAgentId,
         sessionId: joined.sessionId,
         paths,
@@ -1635,20 +1633,19 @@ export async function POST(req: NextRequest) {
             phase: "claimed",
             nextRequiredTool: "update_my_state",
             why: "Scope is reserved. Publish state next before or while editing files.",
-            recommendedArgs: { expectedStateHash: await workspaceStateHash(roomId) },
+            recommendedArgs: { expectedStateHash: await workspaceStateHash(workspaceId) },
           }),
           {
             type: "text",
             text: JSON.stringify({
-              workspaceId: roomId,
-              roomId,
+              workspaceId,
               claim: {
                 claimId,
                 agentId: canonicalIdentity.id,
                 paths,
                 leaseExpiresAt: leaseExpiresAt.toISOString(),
               },
-              stateHash: await workspaceStateHash(roomId),
+              stateHash: await workspaceStateHash(workspaceId),
             }, null, 2),
           },
         ],
@@ -1684,9 +1681,9 @@ export async function POST(req: NextRequest) {
         }));
       }
 
-      const roomId = joined.roomId;
+      const workspaceId = joined.workspaceId;
       await touchAgentSession(scopedAgentId, joined.sessionId);
-      const bucket = getRoomBucket(roomId);
+      const bucket = getWorkspaceBucket(workspaceId);
       const existingRun = getSessionWorkflowRun(bucket, scopedAgentId, joined.sessionId);
       const guard = enforceWriteToolGuard({
         toolName: "release_scope",
@@ -1710,7 +1707,7 @@ export async function POST(req: NextRequest) {
         }));
       }
       const existing = await db.query.agentScopeClaims.findFirst({
-        where: and(eq(agentScopeClaims.id, claimId), eq(agentScopeClaims.roomId, roomId)),
+        where: and(eq(agentScopeClaims.id, claimId), eq(agentScopeClaims.workspaceId, workspaceId)),
       });
       if (!existing) {
         return json(404, rpcError(id, -32004, "Scope claim not found."));
@@ -1762,10 +1759,9 @@ export async function POST(req: NextRequest) {
           {
             type: "text",
             text: JSON.stringify({
-              workspaceId: roomId,
-              roomId,
+              workspaceId,
               claimId,
-              stateHash: await workspaceStateHash(roomId),
+              stateHash: await workspaceStateHash(workspaceId),
             }, null, 2),
           },
         ],
@@ -1803,9 +1799,9 @@ export async function POST(req: NextRequest) {
         }));
       }
 
-      const roomId = joined.roomId;
+      const workspaceId = joined.workspaceId;
       await touchAgentSession(scopedAgentId, joined.sessionId);
-      const bucket = getRoomBucket(roomId);
+      const bucket = getWorkspaceBucket(workspaceId);
       const existingRun = getSessionWorkflowRun(bucket, scopedAgentId, joined.sessionId);
       const guard = enforceWriteToolGuard({
         toolName: "update_my_state",
@@ -1829,7 +1825,7 @@ export async function POST(req: NextRequest) {
           ],
         }));
       }
-      const currentHash = await workspaceStateHash(roomId);
+      const currentHash = await workspaceStateHash(workspaceId);
 
       if (argsObj.expectedStateHash !== currentHash) {
         if (existingRun) {
@@ -1892,8 +1888,8 @@ export async function POST(req: NextRequest) {
         }));
       }
 
-      if (next.claimedPaths.length > 0) {
-        const ownedActiveClaims = (await listActiveScopeClaims(roomId))
+      if (next.footprint.length > 0) {
+        const ownedActiveClaims = (await listActiveScopeClaims(workspaceId))
           .filter((claim) => claim.scopedAgentId === scopedAgentId);
         if (ownedActiveClaims.length === 0) {
           if (existingRun) {
@@ -1921,7 +1917,7 @@ export async function POST(req: NextRequest) {
         }
 
         const claimPaths = ownedActiveClaims.flatMap((claim) => claim.paths);
-        const missingPaths = next.claimedPaths.filter((path) => !claimPaths.some((claimPath) => claimPathCovers(claimPath, path)));
+        const missingPaths = next.footprint.filter((path) => !claimPaths.some((claimPath) => claimPathCovers(claimPath, path)));
         if (missingPaths.length > 0) {
           return json(200, rpcResult(id, {
             content: [{
@@ -1965,10 +1961,10 @@ export async function POST(req: NextRequest) {
           id: `state_${randomUUID().replace(/-/g, "").slice(0, 12)}`,
           agentId: scopedAgentId,
           sessionId: joined.sessionId,
-          roomId,
+          workspaceId,
           status: next.status,
           objective: next.objective,
-          claimedPaths: next.claimedPaths,
+          footprint: next.footprint,
           plan: next.plan,
           completed: next.completed,
           notes: next.notes,
@@ -1987,7 +1983,7 @@ export async function POST(req: NextRequest) {
           .set({
             status: next.status,
             objective: next.objective,
-            claimedPaths: next.claimedPaths,
+            footprint: next.footprint,
             plan: next.plan,
             completed: next.completed,
             notes: next.notes,
@@ -2003,22 +1999,22 @@ export async function POST(req: NextRequest) {
       }
 
       if (
-        next.claimedPaths.length === 0 &&
+        next.footprint.length === 0 &&
         (next.status === "idle" || next.status === "done" || next.status === "handoff")
       ) {
         await db
           .update(agentScopeClaims)
           .set({ status: "released", updatedAt: new Date() })
           .where(and(
-            eq(agentScopeClaims.roomId, roomId),
+            eq(agentScopeClaims.workspaceId, workspaceId),
             eq(agentScopeClaims.agentId, scopedAgentId),
             eq(agentScopeClaims.status, "active"),
           ));
       }
 
-      let nextWorkflowPhase: WorkflowPhase = next.claimedPaths.length > 0 ? "active" : "active";
+      let nextWorkflowPhase: WorkflowPhase = next.footprint.length > 0 ? "active" : "active";
       let nextIntentId: IntentId | null = existingRun?.intentId || null;
-      if (next.claimedPaths.length === 0 && (next.status === "done" || next.status === "handoff")) {
+      if (next.footprint.length === 0 && (next.status === "done" || next.status === "handoff")) {
         nextWorkflowPhase = "done";
       }
       if (existingRun) {
@@ -2066,14 +2062,13 @@ export async function POST(req: NextRequest) {
               ? {}
               : nextRequiredTool === "identify_intent"
                 ? { userPrompt: "Describe the next task." }
-                : { expectedStateHash: await workspaceStateHash(roomId) },
+                : { expectedStateHash: await workspaceStateHash(workspaceId) },
           }),
-          { type: "text", text: `stateHash=${await workspaceStateHash(roomId)}` },
+          { type: "text", text: `stateHash=${await workspaceStateHash(workspaceId)}` },
           {
             type: "text",
             text: JSON.stringify({
-              workspaceId: roomId,
-              roomId,
+              workspaceId,
               state: next,
               systemAlerts: getUnreadMessagesAlert(bucket, canonicalIdentity.id),
             }, null, 2),
@@ -2097,12 +2092,12 @@ export async function POST(req: NextRequest) {
         }));
       }
 
-      const roomId = joined.roomId;
+      const workspaceId = joined.workspaceId;
       await touchAgentSession(scopedAgentId, joined.sessionId);
-      const bucket = getRoomBucket(roomId);
+      const bucket = getWorkspaceBucket(workspaceId);
       if (!bucket.messages) bucket.messages = [];
       if (!bucket.readReceipts) bucket.readReceipts = new Map();
-      
+
       const msgId = `msg_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
       bucket.messages.push({
         id: msgId,
@@ -2132,12 +2127,12 @@ export async function POST(req: NextRequest) {
         }));
       }
 
-      const roomId = joined.roomId;
+      const workspaceId = joined.workspaceId;
       await touchAgentSession(scopedAgentId, joined.sessionId);
-      const bucket = getRoomBucket(roomId);
+      const bucket = getWorkspaceBucket(workspaceId);
       if (!bucket.messages) bucket.messages = [];
       if (!bucket.readReceipts) bucket.readReceipts = new Map();
-      
+
       let receipts = bucket.readReceipts.get(canonicalIdentity.id);
       if (!receipts) {
         receipts = new Set();
@@ -2154,11 +2149,11 @@ export async function POST(req: NextRequest) {
 
       return json(200, rpcResult(id, {
         content: [
-          { 
-            type: "text", 
-            text: unread.length === 0 
-              ? "You have no unread messages." 
-              : `You have ${unread.length} new message(s).` 
+          {
+            type: "text",
+            text: unread.length === 0
+              ? "You have no unread messages."
+              : `You have ${unread.length} new message(s).`
           },
           ...(unread.length > 0 ? [{
             type: "text",
@@ -2183,7 +2178,7 @@ export async function POST(req: NextRequest) {
         }));
       }
 
-      const roomId = joined.roomId;
+      const workspaceId = joined.workspaceId;
       await touchAgentSession(scopedAgentId, joined.sessionId);
 
       const idArg = typeof argsObj.id === "string" ? argsObj.id : null;
@@ -2195,15 +2190,15 @@ export async function POST(req: NextRequest) {
       const includeContent = Boolean(argsObj.includeContent);
 
       if (idArg) {
-        const row = await getKnowledgeDocById(roomId, idArg);
+        const row = await getKnowledgeDocById(workspaceId, idArg);
         const doc = row ? mapKnowledgeDocRow(row) : null;
         return json(200, rpcResult(id, {
-          content: [{ type: "text", text: JSON.stringify({ workspaceId: roomId, roomId, doc }, null, 2) }],
+          content: [{ type: "text", text: JSON.stringify({ workspaceId, doc }, null, 2) }],
         }));
       }
 
       const whereClauses: Array<ReturnType<typeof eq> | ReturnType<typeof isNull> | ReturnType<typeof or>> = [
-        eq(knowledgeDocs.roomId, roomId),
+        eq(knowledgeDocs.workspaceId, workspaceId),
       ];
 
       if (hasParentFilter && parentIdArg !== undefined) {
@@ -2231,7 +2226,7 @@ export async function POST(req: NextRequest) {
         .map((doc) => (includeContent ? doc : { ...doc, content: "" }));
 
       return json(200, rpcResult(id, {
-        content: [{ type: "text", text: JSON.stringify({ workspaceId: roomId, roomId, count: docs.length, docs }, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify({ workspaceId, count: docs.length, docs }, null, 2) }],
       }));
     }
 
@@ -2244,21 +2239,21 @@ export async function POST(req: NextRequest) {
         }));
       }
 
-      const roomId = joined.roomId;
+      const workspaceId = joined.workspaceId;
       await touchAgentSession(scopedAgentId, joined.sessionId);
       const action = typeof argsObj.action === "string" ? argsObj.action : "";
 
       if (action === "create") {
         const now = new Date().toISOString();
         const parentId = typeof argsObj.parentId === "string" ? argsObj.parentId.trim() : null;
-        const parentCheck = await validateKnowledgeParent(roomId, parentId);
+        const parentCheck = await validateKnowledgeParent(workspaceId, parentId);
         if (!parentCheck.ok) return json(400, rpcError(id, -32602, parentCheck.reason));
 
         const title = typeof argsObj.title === "string" && argsObj.title.trim() ? argsObj.title.trim() : "Untitled";
         const docId = `kb_${randomUUID().replace(/-/g, "").slice(0, 20)}`;
         await db.insert(knowledgeDocs).values({
           id: docId,
-          roomId,
+          workspaceId,
           title,
           description: typeof argsObj.description === "string" ? argsObj.description.trim() : "",
           content: typeof argsObj.content === "string" ? argsObj.content : "",
@@ -2267,11 +2262,11 @@ export async function POST(req: NextRequest) {
           createdAt: new Date(now),
           updatedAt: new Date(now),
         });
-        const inserted = await getKnowledgeDocById(roomId, docId);
+        const inserted = await getKnowledgeDocById(workspaceId, docId);
         const doc = inserted ? mapKnowledgeDocRow(inserted) : null;
 
         return json(200, rpcResult(id, {
-          content: [{ type: "text", text: JSON.stringify({ workspaceId: roomId, roomId, doc }, null, 2) }],
+          content: [{ type: "text", text: JSON.stringify({ workspaceId, doc }, null, 2) }],
         }));
       }
 
@@ -2281,7 +2276,7 @@ export async function POST(req: NextRequest) {
           return json(400, rpcError(id, -32602, "Missing id for update."));
         }
 
-        const existing = await getKnowledgeDocById(roomId, idTrimmed);
+        const existing = await getKnowledgeDocById(workspaceId, idTrimmed);
         if (!existing) {
           return json(404, rpcError(id, -32004, "Knowledge doc not found."));
         }
@@ -2289,7 +2284,7 @@ export async function POST(req: NextRequest) {
         const nextParent = typeof argsObj.parentId === "string"
           ? argsObj.parentId.trim()
           : (argsObj.parentId === null ? null : existing.parentId);
-        const parentCheck = await validateKnowledgeParent(roomId, nextParent, existing.id);
+        const parentCheck = await validateKnowledgeParent(workspaceId, nextParent, existing.id);
         if (!parentCheck.ok) return json(400, rpcError(id, -32602, parentCheck.reason));
 
         await db
@@ -2301,12 +2296,12 @@ export async function POST(req: NextRequest) {
             parentId: nextParent,
             updatedAt: new Date(),
           })
-          .where(and(eq(knowledgeDocs.id, existing.id), eq(knowledgeDocs.roomId, roomId)));
-        const refreshed = await getKnowledgeDocById(roomId, existing.id);
+          .where(and(eq(knowledgeDocs.id, existing.id), eq(knowledgeDocs.workspaceId, workspaceId)));
+        const refreshed = await getKnowledgeDocById(workspaceId, existing.id);
         const updated = refreshed ? mapKnowledgeDocRow(refreshed) : null;
 
         return json(200, rpcResult(id, {
-          content: [{ type: "text", text: JSON.stringify({ workspaceId: roomId, roomId, doc: updated }, null, 2) }],
+          content: [{ type: "text", text: JSON.stringify({ workspaceId, doc: updated }, null, 2) }],
         }));
       }
 
@@ -2316,7 +2311,7 @@ export async function POST(req: NextRequest) {
           return json(400, rpcError(id, -32602, "Missing id for move."));
         }
 
-        const existing = await getKnowledgeDocById(roomId, idTrimmed);
+        const existing = await getKnowledgeDocById(workspaceId, idTrimmed);
         if (!existing) {
           return json(404, rpcError(id, -32004, "Knowledge doc not found."));
         }
@@ -2324,7 +2319,7 @@ export async function POST(req: NextRequest) {
         const nextParent = typeof argsObj.parentId === "string"
           ? argsObj.parentId.trim()
           : null;
-        const parentCheck = await validateKnowledgeParent(roomId, nextParent, existing.id);
+        const parentCheck = await validateKnowledgeParent(workspaceId, nextParent, existing.id);
         if (!parentCheck.ok) return json(400, rpcError(id, -32602, parentCheck.reason));
 
         await db
@@ -2333,12 +2328,12 @@ export async function POST(req: NextRequest) {
             parentId: nextParent,
             updatedAt: new Date(),
           })
-          .where(and(eq(knowledgeDocs.id, existing.id), eq(knowledgeDocs.roomId, roomId)));
-        const refreshed = await getKnowledgeDocById(roomId, existing.id);
+          .where(and(eq(knowledgeDocs.id, existing.id), eq(knowledgeDocs.workspaceId, workspaceId)));
+        const refreshed = await getKnowledgeDocById(workspaceId, existing.id);
         const updated = refreshed ? mapKnowledgeDocRow(refreshed) : null;
 
         return json(200, rpcResult(id, {
-          content: [{ type: "text", text: JSON.stringify({ workspaceId: roomId, roomId, doc: updated }, null, 2) }],
+          content: [{ type: "text", text: JSON.stringify({ workspaceId, doc: updated }, null, 2) }],
         }));
       }
 
@@ -2348,23 +2343,23 @@ export async function POST(req: NextRequest) {
           return json(400, rpcError(id, -32602, "Missing id for delete."));
         }
 
-        const existing = await getKnowledgeDocById(roomId, idTrimmed);
+        const existing = await getKnowledgeDocById(workspaceId, idTrimmed);
         if (!existing) {
           return json(404, rpcError(id, -32004, "Knowledge doc not found."));
         }
 
-        const descendants = await collectKnowledgeDescendants(roomId, existing.id);
+        const descendants = await collectKnowledgeDescendants(workspaceId, existing.id);
         if (descendants.length > 0) {
           await db
             .delete(knowledgeDocs)
-            .where(and(eq(knowledgeDocs.roomId, roomId), or(...descendants.map((descId) => eq(knowledgeDocs.id, descId)))!));
+            .where(and(eq(knowledgeDocs.workspaceId, workspaceId), or(...descendants.map((descId) => eq(knowledgeDocs.id, descId)))!));
         }
         await db
           .delete(knowledgeDocs)
-          .where(and(eq(knowledgeDocs.roomId, roomId), eq(knowledgeDocs.id, existing.id)));
+          .where(and(eq(knowledgeDocs.workspaceId, workspaceId), eq(knowledgeDocs.id, existing.id)));
 
         return json(200, rpcResult(id, {
-          content: [{ type: "text", text: JSON.stringify({ workspaceId: roomId, roomId, deleted: true, deletedCount: descendants.length + 1, doc: mapKnowledgeDocRow(existing) }, null, 2) }],
+          content: [{ type: "text", text: JSON.stringify({ workspaceId, deleted: true, deletedCount: descendants.length + 1, doc: mapKnowledgeDocRow(existing) }, null, 2) }],
         }));
       }
 

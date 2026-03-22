@@ -1,125 +1,146 @@
 {
-    "version":  "7",
-    "dialect":  "postgresql",
-    "entries":  [
-                    {
-                        "idx":  0,
-                        "version":  "7",
-                        "when":  1771675519653,
-                        "tag":  "0000_nice_madame_web",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  1,
-                        "version":  "7",
-                        "when":  1771690475417,
-                        "tag":  "0001_swift_ozymandias",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  2,
-                        "version":  "7",
-                        "when":  1771700991743,
-                        "tag":  "0002_thin_captain_america",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  3,
-                        "version":  "7",
-                        "when":  1771863638484,
-                        "tag":  "0003_agent_state_uniqueness",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  4,
-                        "version":  "7",
-                        "when":  1771863638485,
-                        "tag":  "0004_rooms_and_preferences",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  5,
-                        "version":  "7",
-                        "when":  1771863638486,
-                        "tag":  "0005_telemetry_hardening",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  6,
-                        "version":  "7",
-                        "when":  1772308800000,
-                        "tag":  "0006_orchestration_v1",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  7,
-                        "version":  "7",
-                        "when":  1772400000000,
-                        "tag":  "0007_auth_rooms_foundation",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  8,
-                        "version":  "7",
-                        "when":  1772403600000,
-                        "tag":  "0008_members_active_room",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  9,
-                        "version":  "7",
-                        "when":  1772407200000,
-                        "tag":  "0009_phase1_nuke_legacy",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  10,
-                        "version":  "7",
-                        "when":  1772559600000,
-                        "tag":  "0010_agents_sessions_states",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  11,
-                        "version":  "7",
-                        "when":  1772563200000,
-                        "tag":  "0011_room_delete_cascade",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  12,
-                        "version":  "7",
-                        "when":  1772566800000,
-                        "tag":  "0012_members_workspace_scoped",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  13,
-                        "version":  "7",
-                        "when":  1772570400000,
-                        "tag":  "0013_agent_plugin_connected",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  14,
-                        "version":  "7",
-                        "when":  1772574000000,
-                        "tag":  "0014_agent_session_transcript",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  15,
-                        "version":  "7",
-                        "when":  1772577600000,
-                        "tag":  "0015_knowledge_docs",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  16,
-                        "version":  "7",
-                        "when":  1772581200000,
-                        "tag":  "0016_coordination_v1_claims",
-                        "breakpoints":  true
-                    }
-                ]
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1771675519653,
+      "tag": "0000_nice_madame_web",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1771690475417,
+      "tag": "0001_swift_ozymandias",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1771700991743,
+      "tag": "0002_thin_captain_america",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1771863638484,
+      "tag": "0003_agent_state_uniqueness",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1771863638485,
+      "tag": "0004_rooms_and_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1771863638486,
+      "tag": "0005_telemetry_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1772308800000,
+      "tag": "0006_orchestration_v1",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1772400000000,
+      "tag": "0007_auth_rooms_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1772403600000,
+      "tag": "0008_members_active_room",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1772407200000,
+      "tag": "0009_phase1_nuke_legacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1772559600000,
+      "tag": "0010_agents_sessions_states",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1772563200000,
+      "tag": "0011_room_delete_cascade",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1772566800000,
+      "tag": "0012_members_workspace_scoped",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1772570400000,
+      "tag": "0013_agent_plugin_connected",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1772574000000,
+      "tag": "0014_agent_session_transcript",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1772577600000,
+      "tag": "0015_knowledge_docs",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1772581200000,
+      "tag": "0016_coordination_v1_claims",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1773425162617,
+      "tag": "0017_bouncy_gideon",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1773500000000,
+      "tag": "0018_rename_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1773600000000,
+      "tag": "0019_workspace_base_branch",
+      "breakpoints": true
+    }
+  ]
 }

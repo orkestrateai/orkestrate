@@ -1,6 +1,8 @@
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import type { NextApiRequest } from "next";
 import { bearerToken } from "@/lib/http";
+import { createServiceClient } from "@/lib/supabase";
+import { validateAccessToken } from "@/lib/oauth-store";
 
 export type AuthenticatedApiUser = {
   id: string;
@@ -120,6 +122,25 @@ function accessTokenFromSupabaseCookies(req: NextApiRequest) {
 export async function authenticateBearerToken(token: string | null | undefined): Promise<AuthenticatedApiUser | null> {
   if (!token) return null;
 
+  // 1. Try custom OAuth session store first
+  // Our tokens are random randomToken(40) -> base64url (~54 chars)
+  // Supabase JWTs are much longer and contain dots.
+  if (token.length < 100 && !token.includes(".")) {
+    try {
+      const serviceClient = createServiceClient();
+      const tokenRecord = await validateAccessToken(serviceClient, token);
+      if (tokenRecord && tokenRecord.user_id) {
+        return {
+          id: tokenRecord.user_id,
+          email: null, // Basic identity sufficient for most API checks
+        };
+      }
+    } catch (err) {
+      console.error("[auth-user] Custom token validation error:", err);
+    }
+  }
+
+  // 2. Fallback to standard Supabase Auth (for web dashboard sessions)
   const client = getAuthClient();
   const { data, error } = await client.auth.getUser(token);
   if (error || !data.user?.id) return null;
