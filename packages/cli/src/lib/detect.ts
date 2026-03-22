@@ -30,6 +30,18 @@ function getZedConfigPath(): string {
 }
 
 /**
+ * Strip JavaScript-style comments from JSON content.
+ * Zed settings.json uses comments which are invalid plain JSON.
+ */
+function stripJsonComments(content: string): string {
+  // Remove single-line comments (// ...)
+  return content
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("//"))
+    .join("\n");
+}
+
+/**
  * Detect which AI coding tools are available on this system.
  */
 export function detectTools(
@@ -243,9 +255,11 @@ function configureZed(bridge: { command: string; args: string[] }): {
     const dir = join(configPath, "..");
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
-    const config = existsSync(configPath)
-      ? JSON.parse(readFileSync(configPath, "utf-8"))
-      : {};
+    const rawContent = existsSync(configPath)
+      ? readFileSync(configPath, "utf-8")
+      : "{}";
+    const strippedContent = stripJsonComments(rawContent);
+    const config = JSON.parse(strippedContent);
     if (!config.context_servers || typeof config.context_servers !== "object")
       config.context_servers = {};
 
