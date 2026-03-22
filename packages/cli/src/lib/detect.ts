@@ -22,6 +22,13 @@ export interface DetectedTool {
   configPath?: string;
 }
 
+function getZedConfigPath(): string {
+  if (process.platform === "win32") {
+    return join(homedir(), "AppData", "Roaming", "Zed", "settings.json");
+  }
+  return join(homedir(), ".config", "zed", "settings.json");
+}
+
 /**
  * Detect which AI coding tools are available on this system.
  */
@@ -75,10 +82,12 @@ export function detectTools(
   });
 
   // Zed
+  const zedConfig = getZedConfigPath();
   tools.push({
     name: "zed",
     displayName: "Zed",
-    detected: isCommandAvailable("zed"),
+    detected: existsSync(zedConfig),
+    configPath: zedConfig,
   });
 
   return tools;
@@ -113,11 +122,7 @@ export async function configureTool(
     case "codex":
       return configureCodex(bridge);
     case "zed":
-      return configureMcpServersJson(
-        "Zed",
-        join(projectDir, ".zed", "mcp.json"),
-        bridge,
-      );
+      return configureZed(bridge);
     default:
       return { success: false, message: `Unknown tool: ${tool}` };
   }
@@ -225,6 +230,42 @@ function configureMcpServersJson(
     return {
       success: false,
       message: `${displayName} config failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
+function configureZed(bridge: { command: string; args: string[] }): {
+  success: boolean;
+  message: string;
+} {
+  const configPath = getZedConfigPath();
+  try {
+    const dir = join(configPath, "..");
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+
+    const config = existsSync(configPath)
+      ? JSON.parse(readFileSync(configPath, "utf-8"))
+      : {};
+    if (!config.context_servers || typeof config.context_servers !== "object")
+      config.context_servers = {};
+
+    // Zed format: command and args at top level, not nested
+    config.context_servers["Orkestrate"] = {
+      enabled: true,
+      remote: false,
+      command: bridge.command,
+      args: bridge.args,
+    };
+
+    writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
+    return {
+      success: true,
+      message: `Configured Zed at ${configPath}`,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      message: `Zed config failed: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
 }

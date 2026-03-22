@@ -132,7 +132,9 @@ function displayGenericInstructions(): void {
 
   ui.blank();
   ui.line("  Zed:");
-  ui.line("    Add to ~/.config/zed/settings.json under mcpServers:");
+  ui.line("    Add to settings.json under context_servers:");
+  ui.line("    ~/.config/zed/settings.json (Linux/macOS)");
+  ui.line("    ~/AppData/Roaming/Zed/settings.json (Windows)");
 
   ui.blank();
   ui.line(
