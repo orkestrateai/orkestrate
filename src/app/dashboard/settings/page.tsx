@@ -276,49 +276,51 @@ function AccountsSettingsTab() {
         </p>
 
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-[#16181A] border border-[#232529] rounded-[12px]">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
-                <Github className="w-5 h-5 text-[#F2F2F2]" />
-              </div>
-              <div>
-                <div className="text-[14px] font-medium text-[#F2F2F2]">
-                  GitHub
-                </div>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <div
-                    className={`w-1.5 h-1.5 rounded-full ${isGitHubConnected ? "bg-white shadow-[0_0_8px_rgba(255,255,255,0.5)]" : "bg-[#3A3F4A]"}`}
-                  ></div>
-                  <span className="text-[12px] text-[#8A8F98]">
-                    {isCheckingConn
-                      ? "Checking..."
-                      : isGitHubConnected
-                        ? "Connected"
-                        : "Not connected"}
-                  </span>
-                </div>
-              </div>
+          {isCheckingConn ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-5 h-5 animate-spin text-[#5E626B]" />
             </div>
-            {isGitHubConnected ? (
-              <button
-                onClick={() => void handleDisconnectGitHub()}
-                disabled={isDisconnecting}
-                className="px-4 py-1.5 rounded-[6px] text-[13px] font-medium bg-transparent border border-[#232529] text-[#F2F2F2] hover:bg-white/5 transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                {isDisconnecting ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Github className="w-3.5 h-3.5" />
-                )}
-                Disconnect
-              </button>
-            ) : (
-              <GitHubReconnectButton
-                label="Connect"
-                className="px-4 py-1.5 rounded-[6px] text-[13px] font-medium bg-[#F2F2F2] text-[#111214] hover:bg-white transition-colors"
-              />
-            )}
-          </div>
+          ) : (
+            <div className="flex items-center justify-between p-4 bg-[#16181A] border border-[#232529] rounded-[12px]">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+                  <Github className="w-5 h-5 text-[#F2F2F2]" />
+                </div>
+                <div>
+                  <div className="text-[14px] font-medium text-[#F2F2F2]">
+                    GitHub
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <div
+                      className={`w-1.5 h-1.5 rounded-full ${isGitHubConnected ? "bg-white shadow-[0_0_8px_rgba(255,255,255,0.5)]" : "bg-[#3A3F4A]"}`}
+                    ></div>
+                    <span className="text-[12px] text-[#8A8F98]">
+                      {isGitHubConnected ? "Connected" : "Not connected"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              {isGitHubConnected ? (
+                <button
+                  onClick={() => void handleDisconnectGitHub()}
+                  disabled={isDisconnecting}
+                  className="px-4 py-1.5 rounded-[6px] text-[13px] font-medium bg-transparent border border-[#232529] text-[#F2F2F2] hover:bg-white/5 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isDisconnecting ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Github className="w-3.5 h-3.5" />
+                  )}
+                  Disconnect
+                </button>
+              ) : (
+                <GitHubReconnectButton
+                  label="Connect"
+                  className="px-4 py-1.5 rounded-[6px] text-[13px] font-medium bg-[#F2F2F2] text-[#111214] hover:bg-white transition-colors"
+                />
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -609,6 +609,11 @@ function GitSettingsTab({
           integration.
         </p>
 
+        {isChecking ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-5 h-5 animate-spin text-[#5E626B]" />
+          </div>
+        ) : (
           <div className="flex items-center justify-between p-4 bg-[#16181A] border border-[#232529] rounded-[12px]">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
@@ -621,30 +626,19 @@ function GitSettingsTab({
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <div
                     className={`w-1.5 h-1.5 rounded-full ${
-                      isChecking
-                        ? "bg-[#5E626B] animate-pulse"
-                        : isConnected
-                          ? "bg-white shadow-[0_0_8px_rgba(255,255,255,0.5)]"
-                          : "bg-[#3A3F4A]"
+                      isConnected
+                        ? "bg-white shadow-[0_0_8px_rgba(255,255,255,0.5)]"
+                        : "bg-[#3A3F4A]"
                     }`}
                   />
                   <span className="text-[12px] text-[#8A8F98]">
-                    {isChecking
-                      ? "Checking..."
-                      : isConnected
-                        ? "Connected"
-                        : "Not connected"}
+                    {isConnected ? "Connected" : "Not connected"}
                   </span>
                 </div>
               </div>
             </div>
 
-            {isChecking ? (
-              <div className="px-4 py-1.5 rounded-[6px] text-[13px] font-medium bg-transparent border border-[#232529] text-[#5E626B] flex items-center gap-2">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                Checking...
-              </div>
-            ) : isConnected ? (
+            {isConnected ? (
               <button
                 onClick={() => void disconnect()}
                 disabled={isDisconnecting}
@@ -664,6 +658,7 @@ function GitSettingsTab({
               />
             )}
           </div>
+        )}
       </div>
     </div>
   );
