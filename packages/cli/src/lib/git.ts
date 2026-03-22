@@ -27,11 +27,23 @@ function git(cmd: string, cwd: string): string {
   }
 }
 
-export function detectGitContext(cwd: string = process.cwd()): GitContext | null {
+export function detectGitContext(
+  cwd: string = process.cwd(),
+): GitContext | null {
   const repoRoot = git("rev-parse --show-toplevel", cwd);
   if (!repoRoot) return null;
 
-  const remote = git("remote get-url origin", cwd);
+  // Get first available remote instead of hardcoding 'origin'
+  const remotes = git("remote", cwd).split("\n").filter(Boolean);
+  let remote = "";
+  for (const r of remotes) {
+    const url = git(`remote get-url ${r}`, cwd);
+    if (url) {
+      remote = url;
+      break;
+    }
+  }
+
   const branch = git("rev-parse --abbrev-ref HEAD", cwd);
   const headSha = git("rev-parse HEAD", cwd);
   const status = git("status --porcelain", cwd);

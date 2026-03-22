@@ -13,7 +13,7 @@ const program = new Command();
 program
   .name("orkestrate")
   .description("The coordination layer for autonomous AI coding agents")
-  .version("0.1.14")
+  .version("0.1.15")
   .hook("preAction", () => {
     // Show banner on all commands
   });

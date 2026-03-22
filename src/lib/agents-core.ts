@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { agents, agentSessions, members, workspaces } from "@/db/schema";
 import {
   canAccessWorkspace,
+  createWorkspaceForUser,
   ensureActiveWorkspaceForUser,
   setActiveWorkspaceForUser,
 } from "@/lib/workspaces-core";
@@ -33,18 +34,53 @@ export async function joinWorkspaceForAgent(args: {
 }) {
   const now = new Date();
   const requestedWorkspaceId = (args.workspaceId || "").trim();
-  const workspaceId = requestedWorkspaceId || await ensureActiveWorkspaceForUser(args.userId);
+  let workspaceId =
+    requestedWorkspaceId || (await ensureActiveWorkspaceForUser(args.userId));
 
   if (!workspaceId) {
     const allWorkspaces = await db.query.members.findFirst({
       where: eq(members.userId, args.userId),
     });
-    
+
     if (!allWorkspaces) {
-      return { ok: false as const, reason: "No workspaces found for this account. Please create one in the dashboard first." };
+      // Auto-create workspace if gitRemote is available
+      if (args.gitRemote) {
+        const repoName =
+          args.gitRemote
+            .split("/")
+            .pop()
+            ?.replace(/\.git$/, "") || "Workspace";
+        const created = await createWorkspaceForUser(
+          args.userId,
+          repoName,
+          args.gitRemote,
+          args.gitBranch || "main",
+        );
+        if (created.workspace) {
+          workspaceId = created.workspace.id;
+          await setActiveWorkspaceForUser(args.userId, workspaceId);
+        } else {
+          return {
+            ok: false as const,
+            reason:
+              "Failed to create workspace: " +
+              (created.error || "unknown error"),
+          };
+        }
+      } else {
+        return {
+          ok: false as const,
+          reason:
+            "No workspaces found for this account. Please create one in the dashboard first.",
+        };
+      }
+    } else {
+      return {
+        ok: false as const,
+        reason:
+          "No active workspace found. Please specify a workspaceId or open a workspace in the dashboard to set it as active.",
+      };
     }
-    
-    return { ok: false as const, reason: "No active workspace found. Please specify a workspaceId or open a workspace in the dashboard to set it as active." };
   }
 
   const canJoin = await canAccessWorkspace(args.userId, workspaceId);
@@ -60,11 +96,15 @@ export async function joinWorkspaceForAgent(args: {
   if (!workspace?.repoUrl) {
     return {
       ok: false as const,
-      reason: "Workspace missing repository binding. Please connect a Git repository in Workspace Settings to enable orchestration.",
+      reason:
+        "Workspace missing repository binding. Please connect a Git repository in Workspace Settings to enable orchestration.",
     };
   }
 
-  const guardResult = validateJoinGuard(args.gitRemote || null, workspace.repoUrl);
+  const guardResult = validateJoinGuard(
+    args.gitRemote || null,
+    workspace.repoUrl,
+  );
   if (!guardResult.allowed) {
     return {
       ok: false as const,
@@ -78,7 +118,10 @@ export async function joinWorkspaceForAgent(args: {
 
   await setActiveWorkspaceForUser(args.userId, workspaceId);
   const membership = await db.query.members.findFirst({
-    where: and(eq(members.userId, args.userId), eq(members.workspaceId, workspaceId)),
+    where: and(
+      eq(members.userId, args.userId),
+      eq(members.workspaceId, workspaceId),
+    ),
   });
   if (!membership) {
     return { ok: false as const, reason: "Workspace membership missing." };
@@ -125,7 +168,12 @@ export async function joinWorkspaceForAgent(args: {
       endedAt: now,
       updatedAt: now,
     })
-    .where(and(eq(agentSessions.agentId, args.scopedAgentId), eq(agentSessions.status, "active")));
+    .where(
+      and(
+        eq(agentSessions.agentId, args.scopedAgentId),
+        eq(agentSessions.status, "active"),
+      ),
+    );
 
   const sessionId = nextSessionId();
   await db.insert(agentSessions).values({
@@ -154,7 +202,10 @@ export async function joinWorkspaceForAgent(args: {
   };
 }
 
-export async function getJoinedWorkspaceForAgent(userId: string, scopedAgentId: string): Promise<JoinedAgentContext | null> {
+export async function getJoinedWorkspaceForAgent(
+  userId: string,
+  scopedAgentId: string,
+): Promise<JoinedAgentContext | null> {
   const joined = await db
     .select({
       id: agents.id,
@@ -183,7 +234,10 @@ export async function getJoinedWorkspaceForAgent(userId: string, scopedAgentId: 
   return { workspaceId: agent.workspaceId, sessionId: activeSession.id };
 }
 
-export async function touchAgentSession(scopedAgentId: string, sessionId: string) {
+export async function touchAgentSession(
+  scopedAgentId: string,
+  sessionId: string,
+) {
   const now = new Date();
 
   await db
@@ -203,7 +257,12 @@ export async function touchAgentSession(scopedAgentId: string, sessionId: string
       lastMessageAt: now,
       updatedAt: now,
     })
-    .where(and(eq(agentSessions.id, sessionId), eq(agentSessions.agentId, scopedAgentId)));
+    .where(
+      and(
+        eq(agentSessions.id, sessionId),
+        eq(agentSessions.agentId, scopedAgentId),
+      ),
+    );
 }
 
 export async function reconcileWorkspaceAgentLiveness() {

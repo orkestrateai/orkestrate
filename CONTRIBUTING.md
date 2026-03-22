@@ -255,6 +255,14 @@ The `.gitignore` already covers most cases, but never commit:
 - **PRs**: For code contributions
 - **Discord/Slack**: For real-time coordination (if available)
 
+## 🔌 Adding MCP Configs
+
+Orkestrate supports auto-configuration for multiple AI coding tools. We welcome contributions for tools not yet supported!
+
+**📋 See [Issue #6: Add MCP configuration support for [YOUR TOOL]](https://github.com/system1970/Orkestrate/issues/6)** for details on what's needed and how to contribute.
+
+If your tool isn't in the auto-config list, use `orkestrate connect` to get tool-specific setup instructions.
+
 ## 📚 Additional Resources
 
 - [Git Workflow Documentation](./documentation/git-workflow.md) - Detailed workflow guide

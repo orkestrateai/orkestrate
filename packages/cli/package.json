@@ -1,6 +1,6 @@
 {
   "name": "orkestrate",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "CLI for Orkestrate — the coordination layer for autonomous AI coding agents",
   "type": "module",
   "bin": {

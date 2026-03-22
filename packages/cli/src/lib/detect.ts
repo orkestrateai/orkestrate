@@ -6,9 +6,14 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
-import { getServerUrl } from "./config.js";
 
-export type ToolName = "claude" | "opencode" | "cursor" | "windsurf" | "codex";
+export type ToolName =
+  | "claude"
+  | "opencode"
+  | "cursor"
+  | "windsurf"
+  | "codex"
+  | "zed";
 
 export interface DetectedTool {
   name: ToolName;
@@ -20,7 +25,9 @@ export interface DetectedTool {
 /**
  * Detect which AI coding tools are available on this system.
  */
-export function detectTools(projectDir: string = process.cwd()): DetectedTool[] {
+export function detectTools(
+  projectDir: string = process.cwd(),
+): DetectedTool[] {
   const tools: DetectedTool[] = [];
 
   // Claude Code
@@ -44,7 +51,8 @@ export function detectTools(projectDir: string = process.cwd()): DetectedTool[] 
   tools.push({
     name: "cursor",
     displayName: "Cursor",
-    detected: existsSync(join(projectDir, ".cursor")) || existsSync(cursorConfig),
+    detected:
+      existsSync(join(projectDir, ".cursor")) || existsSync(cursorConfig),
     configPath: cursorConfig,
   });
 
@@ -53,7 +61,8 @@ export function detectTools(projectDir: string = process.cwd()): DetectedTool[] 
   tools.push({
     name: "windsurf",
     displayName: "Windsurf",
-    detected: existsSync(join(projectDir, ".windsurf")) || existsSync(windsurfConfig),
+    detected:
+      existsSync(join(projectDir, ".windsurf")) || existsSync(windsurfConfig),
     configPath: windsurfConfig,
   });
 
@@ -63,6 +72,13 @@ export function detectTools(projectDir: string = process.cwd()): DetectedTool[] 
     name: "codex",
     displayName: "Codex CLI",
     detected: isCommandAvailable("codex") || existsSync(codexDir),
+  });
+
+  // Zed
+  tools.push({
+    name: "zed",
+    displayName: "Zed",
+    detected: isCommandAvailable("zed"),
   });
 
   return tools;
@@ -76,7 +92,6 @@ export async function configureTool(
   projectDir: string = process.cwd(),
 ): Promise<{ success: boolean; message: string }> {
   const bridge = resolveMcpBridge();
-  const mcpUrl = `${getServerUrl()}/api/mcp`;
 
   switch (tool) {
     case "claude":
@@ -84,11 +99,25 @@ export async function configureTool(
     case "opencode":
       return configureOpenCode(join(projectDir, "opencode.json"), bridge);
     case "cursor":
-      return configureMcpServersJson("Cursor", join(projectDir, ".cursor", "mcp.json"), bridge);
+      return configureMcpServersJson(
+        "Cursor",
+        join(projectDir, ".cursor", "mcp.json"),
+        bridge,
+      );
     case "windsurf":
-      return configureMcpServersJson("Windsurf", join(projectDir, ".windsurf", "mcp.json"), bridge);
+      return configureMcpServersJson(
+        "Windsurf",
+        join(projectDir, ".windsurf", "mcp.json"),
+        bridge,
+      );
     case "codex":
       return configureCodex(bridge);
+    case "zed":
+      return configureMcpServersJson(
+        "Zed",
+        join(projectDir, ".zed", "mcp.json"),
+        bridge,
+      );
     default:
       return { success: false, message: `Unknown tool: ${tool}` };
   }
@@ -97,10 +126,10 @@ export async function configureTool(
 /**
  * Resolves the global command to run the Orkestrate MCP bridge.
  */
-function resolveMcpBridge(): { command: string, args: string[] } {
+function resolveMcpBridge(): { command: string; args: string[] } {
   return {
     command: "orkestrate",
-    args: ["mcp"]
+    args: ["mcp"],
   };
 }
 
@@ -108,69 +137,102 @@ function resolveMcpBridge(): { command: string, args: string[] } {
 // Tool Specific Configs (Global Command standard)
 // ──────────────────────────────────────────────
 
-function configureClaudeCode(bridge: { command: string, args: string[] }): { success: boolean; message: string } {
-  if (!isCommandAvailable("claude")) return { success: false, message: "Claude Code CLI not found." };
+function configureClaudeCode(bridge: { command: string; args: string[] }): {
+  success: boolean;
+  message: string;
+} {
+  if (!isCommandAvailable("claude"))
+    return { success: false, message: "Claude Code CLI not found." };
 
   try {
     // Attempt to remove existing first (idempotency)
     try {
       execSync("claude mcp remove Orkestrate", { stdio: "pipe" });
-    } catch { /* ignore if not exists */ }
+    } catch {
+      /* ignore if not exists */
+    }
 
     // Claude expects: claude mcp add <name> <command> [args...]
     // We pass the command and args as separate tokens
     const commandToRun = bridge.command;
     const argsToRun = bridge.args.join(" ");
-    
+
     execSync(
       `claude mcp add --transport stdio --scope project Orkestrate ${commandToRun} ${argsToRun}`,
       { stdio: "pipe", encoding: "utf-8" },
     );
     return { success: true, message: "MCP added to Claude Code." };
   } catch (err) {
-    return { success: false, message: `Claude config failed: ${err instanceof Error ? err.message : String(err)}` };
+    return {
+      success: false,
+      message: `Claude config failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
   }
 }
 
-function configureOpenCode(configPath: string, bridge: { command: string, args: string[] }): { success: boolean; message: string } {
+function configureOpenCode(
+  configPath: string,
+  bridge: { command: string; args: string[] },
+): { success: boolean; message: string } {
   try {
-    let config = existsSync(configPath) ? JSON.parse(readFileSync(configPath, "utf-8")) : {};
+    const config = existsSync(configPath)
+      ? JSON.parse(readFileSync(configPath, "utf-8"))
+      : {};
     if (!config.mcp || typeof config.mcp !== "object") config.mcp = {};
 
     config.mcp["Orkestrate"] = {
       type: "local",
       command: [bridge.command, ...bridge.args],
-      enabled: true
+      enabled: true,
     };
 
     writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
     return { success: true, message: `Configured OpenCode at ${configPath}` };
   } catch (err) {
-    return { success: false, message: `OpenCode config failed: ${err instanceof Error ? err.message : String(err)}` };
+    return {
+      success: false,
+      message: `OpenCode config failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
   }
 }
 
-function configureMcpServersJson(displayName: string, configPath: string, bridge: { command: string, args: string[] }): { success: boolean; message: string } {
+function configureMcpServersJson(
+  displayName: string,
+  configPath: string,
+  bridge: { command: string; args: string[] },
+): { success: boolean; message: string } {
   try {
     const dir = join(configPath, "..");
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
-    let config = existsSync(configPath) ? JSON.parse(readFileSync(configPath, "utf-8")) : {};
-    if (!config.mcpServers || typeof config.mcpServers !== "object") config.mcpServers = {};
+    const config = existsSync(configPath)
+      ? JSON.parse(readFileSync(configPath, "utf-8"))
+      : {};
+    if (!config.mcpServers || typeof config.mcpServers !== "object")
+      config.mcpServers = {};
 
     config.mcpServers["Orkestrate"] = {
       command: bridge.command,
-      args: bridge.args
+      args: bridge.args,
     };
 
     writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
-    return { success: true, message: `Configured ${displayName} at ${configPath}` };
+    return {
+      success: true,
+      message: `Configured ${displayName} at ${configPath}`,
+    };
   } catch (err) {
-    return { success: false, message: `${displayName} config failed: ${err instanceof Error ? err.message : String(err)}` };
+    return {
+      success: false,
+      message: `${displayName} config failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
   }
 }
 
-function configureCodex(bridge: { command: string, args: string[] }): { success: boolean; message: string } {
+function configureCodex(bridge: { command: string; args: string[] }): {
+  success: boolean;
+  message: string;
+} {
   const home = homedir();
   const codexDir = join(home, ".codex");
   const configPath = join(codexDir, "config.toml");
@@ -178,8 +240,10 @@ function configureCodex(bridge: { command: string, args: string[] }): { success:
   try {
     if (!existsSync(codexDir)) mkdirSync(codexDir, { recursive: true });
 
-    let content = existsSync(configPath) ? readFileSync(configPath, "utf-8") : "[mcp_servers]\n";
-    const proxySection = `[mcp_servers.Orkestrate]\ncommand = "${bridge.command}"\nargs = [${bridge.args.map(a => `"${a}"`).join(", ")}]\n`;
+    let content = existsSync(configPath)
+      ? readFileSync(configPath, "utf-8")
+      : "[mcp_servers]\n";
+    const proxySection = `[mcp_servers.Orkestrate]\ncommand = "${bridge.command}"\nargs = [${bridge.args.map((a) => `"${a}"`).join(", ")}]\n`;
 
     const sectionRegex = /\[mcp_servers\.Orkestrate\]\s*\n(?:(?!\[)[^\n]*\n?)*/;
     if (sectionRegex.test(content)) {
@@ -189,7 +253,11 @@ function configureCodex(bridge: { command: string, args: string[] }): { success:
       if (mcpServersIdx !== -1) {
         const lineEnd = content.indexOf("\n", mcpServersIdx);
         const insertPos = lineEnd !== -1 ? lineEnd + 1 : content.length;
-        content = content.slice(0, insertPos) + "\n" + proxySection + content.slice(insertPos);
+        content =
+          content.slice(0, insertPos) +
+          "\n" +
+          proxySection +
+          content.slice(insertPos);
       } else {
         content = content.trimEnd() + "\n\n[mcp_servers]\n\n" + proxySection;
       }
@@ -198,7 +266,10 @@ function configureCodex(bridge: { command: string, args: string[] }): { success:
     writeFileSync(configPath, content, "utf-8");
     return { success: true, message: `Configured Codex.` };
   } catch (err) {
-    return { success: false, message: `Codex config failed: ${err instanceof Error ? err.message : String(err)}` };
+    return {
+      success: false,
+      message: `Codex config failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
   }
 }
 
@@ -214,5 +285,5 @@ function isCommandAvailable(command: string): boolean {
 }
 
 export function getToolNames(): ToolName[] {
-  return ["claude", "opencode", "cursor", "windsurf", "codex"];
+  return ["claude", "opencode", "cursor", "windsurf", "codex", "zed"];
 }

@@ -27,6 +27,22 @@ interface WorkspaceData {
   role: string;
 }
 
+interface AgentData {
+  id: string;
+  agentId: string;
+  toolName: string;
+  status: string;
+  objective: string;
+  footprint: string[];
+  plan: string[];
+  completed: string[];
+  notes: string;
+  branch: string | null;
+  headSha: string | null;
+  lastMessageAt: string;
+  updatedAt: string;
+}
+
 async function workspaceFetcher(url: string): Promise<WorkspaceData> {
   const supabase = createSupabaseBrowserClient();
   const {
@@ -46,6 +62,25 @@ async function workspaceFetcher(url: string): Promise<WorkspaceData> {
   return data.workspace as WorkspaceData;
 }
 
+async function agentsFetcher(url: string): Promise<AgentData[]> {
+  const supabase = createSupabaseBrowserClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${session?.access_token}` },
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? "Failed to load agents");
+  }
+
+  const data = await res.json();
+  return data.agents as AgentData[];
+}
+
 export default function WorkspaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -58,6 +93,14 @@ export default function WorkspaceDetailPage() {
     onError: (err) => {
       if (err.message === "Unauthorized") router.push("/login");
     },
+  });
+
+  const {
+    data: agents,
+    error: agentsError,
+    isLoading: agentsLoading,
+  } = useSWR(id ? `/api/workspaces/${id}/agents` : null, agentsFetcher, {
+    refreshInterval: 5000,
   });
 
   if (isLoading) {
@@ -158,17 +201,20 @@ export default function WorkspaceDetailPage() {
             </p>
           </Link>
 
-          <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col">
-            <div className="w-10 h-10 rounded-xl bg-white/[0.04] flex items-center justify-center mb-5">
+          <Link
+            href={`/dashboard/workspaces/${workspace.id}/agents`}
+            className="group p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 hover:bg-white/[0.04] transition-all flex flex-col"
+          >
+            <div className="w-10 h-10 rounded-xl bg-white/[0.04] flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
               <Bot className="w-5 h-5 text-zinc-400" />
             </div>
-            <h3 className="text-base font-semibold text-zinc-100 mb-1">
+            <h3 className="text-base font-semibold text-zinc-100 group-hover:text-white transition-colors mb-1">
               Agents
             </h3>
             <p className="text-sm text-zinc-500">
-              Up to {workspace.maxAgents} concurrent agents. Connect via MCP.
+              {agents?.length || 0} / {workspace.maxAgents} active agents
             </p>
-          </div>
+          </Link>
 
           <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col">
             <div className="w-10 h-10 rounded-xl bg-white/[0.04] flex items-center justify-center mb-5">

@@ -17,6 +17,7 @@ const SUPPORTED_AUTO_CONFIG: ToolName[] = [
   "cursor",
   "windsurf",
   "codex",
+  "zed",
 ];
 
 export async function connectCommand(toolName?: string): Promise<void> {
@@ -85,7 +86,6 @@ export async function connectCommand(toolName?: string): Promise<void> {
 }
 
 function displayGenericInstructions(): void {
-  const mcpUrl = `${getServerUrl()}/api/mcp`;
   const bridgeCommand = "orkestrate";
   const bridgeArgs = "mcp";
 
@@ -131,7 +131,11 @@ function displayGenericInstructions(): void {
   ui.line(`      args = ["${bridgeArgs}"]`);
 
   ui.blank();
-  ui.dim(
+  ui.line("  Zed:");
+  ui.line("    Add to ~/.config/zed/settings.json under mcpServers:");
+
+  ui.blank();
+  ui.line(
     "  Not sure if your tool supports MCP? Check its docs for 'MCP server'.",
   );
 }
