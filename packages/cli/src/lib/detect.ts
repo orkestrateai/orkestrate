@@ -34,11 +34,34 @@ function getZedConfigPath(): string {
  * Zed settings.json uses comments which are invalid plain JSON.
  */
 function stripJsonComments(content: string): string {
-  // Remove single-line comments (// ...)
-  return content
-    .split("\n")
-    .filter((line) => !line.trim().startsWith("//"))
-    .join("\n");
+  let result = "";
+  let inString = false;
+  let i = 0;
+
+  while (i < content.length) {
+    const char = content[i];
+
+    // Toggle string state when we hit an unescaped quote
+    if (char === '"' && (i === 0 || content[i - 1] !== "\\")) {
+      inString = !inString;
+      result += char;
+      i++;
+      continue;
+    }
+
+    // If we see // outside of a string, skip to end of line
+    if (char === "/" && content[i + 1] === "/" && !inString) {
+      while (i < content.length && content[i] !== "\n") {
+        i++;
+      }
+      continue;
+    }
+
+    result += char;
+    i++;
+  }
+
+  return result;
 }
 
 /**
