@@ -30,41 +30,6 @@ function getZedConfigPath(): string {
 }
 
 /**
- * Strip JavaScript-style comments from JSON content.
- * Zed settings.json uses comments which are invalid plain JSON.
- */
-function stripJsonComments(content: string): string {
-  let result = "";
-  let inString = false;
-  let i = 0;
-
-  while (i < content.length) {
-    const char = content[i];
-
-    // Toggle string state when we hit an unescaped quote
-    if (char === '"' && (i === 0 || content[i - 1] !== "\\")) {
-      inString = !inString;
-      result += char;
-      i++;
-      continue;
-    }
-
-    // If we see // outside of a string, skip to end of line
-    if (char === "/" && content[i + 1] === "/" && !inString) {
-      while (i < content.length && content[i] !== "\n") {
-        i++;
-      }
-      continue;
-    }
-
-    result += char;
-    i++;
-  }
-
-  return result;
-}
-
-/**
  * Detect which AI coding tools are available on this system.
  */
 export function detectTools(
@@ -278,23 +243,88 @@ function configureZed(bridge: { command: string; args: string[] }): {
     const dir = join(configPath, "..");
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
-    const rawContent = existsSync(configPath)
-      ? readFileSync(configPath, "utf-8")
-      : "{}";
-    const strippedContent = stripJsonComments(rawContent);
-    const config = JSON.parse(strippedContent);
-    if (!config.context_servers || typeof config.context_servers !== "object")
-      config.context_servers = {};
+    // Build the entry to insert
+    const entry = `    "Orkestrate": {
+      "enabled": true,
+      "remote": false,
+      "command": "${bridge.command}",
+      "args": ${JSON.stringify(bridge.args)}
+    }`;
 
-    // Zed format: command and args at top level, not nested
-    config.context_servers["Orkestrate"] = {
-      enabled: true,
-      remote: false,
-      command: bridge.command,
-      args: bridge.args,
-    };
+    if (!existsSync(configPath)) {
+      // Create a minimal config file
+      const minimal = `{
+  "context_servers": {
+${entry}
+  }
+}
+`;
+      writeFileSync(configPath, minimal, "utf-8");
+      return {
+        success: true,
+        message: `Configured Zed at ${configPath}`,
+      };
+    }
 
-    writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
+    // Read existing content
+    const content = readFileSync(configPath, "utf-8");
+
+    // Check if Orkestrate already exists
+    if (content.includes('"Orkestrate"')) {
+      // Replace existing entry
+      const newContent = content.replace(
+        /    "Orkestrate":\s*\{[^}]+\}/,
+        entry,
+      );
+      writeFileSync(configPath, newContent, "utf-8");
+      return {
+        success: true,
+        message: `Updated Zed config at ${configPath}`,
+      };
+    }
+
+    // Insert into context_servers block
+    let newContent: string;
+    if (content.includes('"context_servers"')) {
+      // Find the context_servers block and add our entry
+      // Pattern: look for the closing brace of context_servers block
+      const contextServersMatch = content.match(/"context_servers":\s*\{/);
+      if (contextServersMatch) {
+        const insertPos =
+          contextServersMatch.index! + contextServersMatch[0].length;
+        // Find the end of the context_servers block (matching closing brace)
+        let braceCount = 1;
+        let i = insertPos;
+        while (i < content.length && braceCount > 0) {
+          if (content[i] === "{") braceCount++;
+          else if (content[i] === "}") braceCount--;
+          i++;
+        }
+        // Insert before the closing brace
+        newContent =
+          content.slice(0, i - 1) +
+          ",\n" +
+          entry +
+          "\n  " +
+          content.slice(i - 1);
+      } else {
+        return {
+          success: false,
+          message: "Could not parse context_servers block in Zed config",
+        };
+      }
+    } else {
+      // No context_servers block - add one before the last closing brace
+      const lastBrace = content.lastIndexOf("}");
+      newContent =
+        content.slice(0, lastBrace) +
+        ',\n  "context_servers": {\n' +
+        entry +
+        "\n  }\n" +
+        content.slice(lastBrace);
+    }
+
+    writeFileSync(configPath, newContent, "utf-8");
     return {
       success: true,
       message: `Configured Zed at ${configPath}`,
