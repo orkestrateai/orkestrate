@@ -1,6 +1,0 @@
-model_list:
-  - model_name: minimax-m2.7
-    litellm_params:
-      model: openai/minimax-m2.7
-      api_base: https://opencode.ai/zen/go/v1
-      api_key: sk-jsDMivMzKCk90yFT5JfBVXFfYXcYz4n5bCSbXrJiTE33yVBonvvJ9rI0uuxNf8ly
