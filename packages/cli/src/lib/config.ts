@@ -51,7 +51,20 @@ export function getServerUrl(): string {
 }
 
 export function setCredentials(creds: StoredCredentials): void {
-  config.set("credentials", creds);
+  let lastError: Error | undefined;
+  for (let i = 0; i < 3; i++) {
+    try {
+      config.set("credentials", creds);
+      return;
+    } catch (err: any) {
+      lastError = err;
+      // Only retry on EPERM/EBUSY (Windows file locking)
+      if (err?.code !== "EPERM" && err?.code !== "EBUSY") {
+        throw err;
+      }
+    }
+  }
+  throw lastError;
 }
 
 export function getCredentials(): StoredCredentials | null {

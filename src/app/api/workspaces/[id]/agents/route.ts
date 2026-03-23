@@ -76,3 +76,86 @@ export async function GET(
     );
   }
 }
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id: workspaceId } = await params;
+    const { searchParams } = new URL(req.url);
+    const agentId = searchParams.get("agentId");
+
+    if (!agentId) {
+      return NextResponse.json(
+        { error: "agentId is required" },
+        { status: 400 },
+      );
+    }
+
+    // Check if user is an owner or admin of this workspace
+    const membership = await db.query.members.findFirst({
+      where: and(
+        eq(members.workspaceId, workspaceId),
+        eq(members.userId, user.id),
+      ),
+    });
+
+    if (!membership || !["owner", "admin"].includes(membership.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Find the agent in this workspace
+    const agent = await db.query.agents.findFirst({
+      where: and(eq(agents.id, agentId), eq(agents.workspaceId, workspaceId)),
+    });
+
+    if (!agent) {
+      return NextResponse.json({ error: "Agent not found" }, { status: 404 });
+    }
+
+    const now = new Date();
+
+    // End any active sessions for this agent
+    await db
+      .update(agentSessions)
+      .set({
+        status: "ended",
+        endedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(agentSessions.agentId, agentId),
+          eq(agentSessions.workspaceId, workspaceId),
+        ),
+      );
+
+    // Mark the agent as removed
+    await db
+      .update(agents)
+      .set({
+        status: "removed",
+        disconnectedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(agents.id, agentId));
+
+    return NextResponse.json({ success: true, agentId });
+  } catch (error) {
+    console.error("Error removing agent:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
+  }
+}

@@ -1,13 +1,10 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono, Fraunces } from "next/font/google";
+import { Inter, JetBrains_Mono, Fraunces, Geist } from "next/font/google";
 import "./globals.css";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 
-const inter = Inter({
-  variable: "--font-sans",
-  subsets: ["latin"],
-});
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-mono",
@@ -58,6 +55,7 @@ export const metadata: Metadata = {
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { headers } from "next/headers";
+import { cn } from "@/lib/utils";
 
 export default async function RootLayout({
   children,
@@ -67,9 +65,9 @@ export default async function RootLayout({
   const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className={cn("dark", "font-sans", geist.variable)}>
       <body
-        className={`${inter.variable} ${jetbrainsMono.variable} ${fraunces.variable} antialiased font-sans`}
+        className={`${geist.variable} ${jetbrainsMono.variable} ${fraunces.variable} antialiased font-sans`}
       >
         <TooltipProvider delayDuration={0}>{children}</TooltipProvider>
       </body>

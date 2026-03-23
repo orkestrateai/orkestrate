@@ -100,29 +100,31 @@ export async function configureTool(
   tool: ToolName,
   projectDir: string = process.cwd(),
 ): Promise<{ success: boolean; message: string }> {
-  const bridge = resolveMcpBridge();
+  const bridge = resolveMcpBridge(tool);
 
   switch (tool) {
     case "claude":
       return configureClaudeCode(bridge);
     case "opencode":
-      return configureOpenCode(join(projectDir, "opencode.json"), bridge);
+      return configureOpenCode(join(projectDir, "opencode.json"), bridge, tool);
     case "cursor":
       return configureMcpServersJson(
         "Cursor",
         join(projectDir, ".cursor", "mcp.json"),
         bridge,
+        tool,
       );
     case "windsurf":
       return configureMcpServersJson(
         "Windsurf",
         join(projectDir, ".windsurf", "mcp.json"),
         bridge,
+        tool,
       );
     case "codex":
-      return configureCodex(bridge);
+      return configureCodex(bridge, tool);
     case "zed":
-      return configureZed(bridge);
+      return configureZed(bridge, tool);
     default:
       return { success: false, message: `Unknown tool: ${tool}` };
   }
@@ -131,10 +133,10 @@ export async function configureTool(
 /**
  * Resolves the global command to run the Orkestrate MCP bridge.
  */
-function resolveMcpBridge(): { command: string; args: string[] } {
+function resolveMcpBridge(tool: ToolName): { command: string; args: string[] } {
   return {
     command: "orkestrate",
-    args: ["mcp"],
+    args: ["mcp", "--parent-tool", tool],
   };
 }
 
@@ -158,12 +160,11 @@ function configureClaudeCode(bridge: { command: string; args: string[] }): {
     }
 
     // Claude expects: claude mcp add <name> <command> [args...]
-    // We pass the command and args as separate tokens
     const commandToRun = bridge.command;
     const argsToRun = bridge.args.join(" ");
 
     execSync(
-      `claude mcp add --transport stdio --scope project Orkestrate ${commandToRun} ${argsToRun}`,
+      `claude mcp add --transport stdio --scope project Osrkestrate -- ${commandToRun} ${argsToRun}`,
       { stdio: "pipe", encoding: "utf-8" },
     );
     return { success: true, message: "MCP added to Claude Code." };
@@ -178,6 +179,7 @@ function configureClaudeCode(bridge: { command: string; args: string[] }): {
 function configureOpenCode(
   configPath: string,
   bridge: { command: string; args: string[] },
+  tool: ToolName,
 ): { success: boolean; message: string } {
   try {
     const config = existsSync(configPath)
@@ -189,6 +191,7 @@ function configureOpenCode(
       type: "local",
       command: [bridge.command, ...bridge.args],
       enabled: true,
+      env: { ORKESTRATE_PARENT_TOOL: tool },
     };
 
     writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
@@ -205,6 +208,7 @@ function configureMcpServersJson(
   displayName: string,
   configPath: string,
   bridge: { command: string; args: string[] },
+  tool: ToolName,
 ): { success: boolean; message: string } {
   try {
     const dir = join(configPath, "..");
@@ -219,6 +223,7 @@ function configureMcpServersJson(
     config.mcpServers["Orkestrate"] = {
       command: bridge.command,
       args: bridge.args,
+      env: { ORKESTRATE_PARENT_TOOL: tool },
     };
 
     writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
@@ -234,7 +239,10 @@ function configureMcpServersJson(
   }
 }
 
-function configureZed(bridge: { command: string; args: string[] }): {
+function configureZed(
+  bridge: { command: string; args: string[] },
+  tool: ToolName,
+): {
   success: boolean;
   message: string;
 } {
@@ -243,88 +251,48 @@ function configureZed(bridge: { command: string; args: string[] }): {
     const dir = join(configPath, "..");
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
-    // Build the entry to insert
-    const entry = `    "Orkestrate": {
-      "enabled": true,
-      "remote": false,
-      "command": "${bridge.command}",
-      "args": ${JSON.stringify(bridge.args)}
-    }`;
+    // Build the server entry as a properly formatted object
+    const serverEntry: Record<string, unknown> = {
+      enabled: true,
+      remote: false,
+      command: bridge.command,
+      args: bridge.args,
+      env: { ORKESTRATE_PARENT_TOOL: tool },
+    };
 
-    if (!existsSync(configPath)) {
-      // Create a minimal config file
-      const minimal = `{
-  "context_servers": {
-${entry}
-  }
-}
-`;
-      writeFileSync(configPath, minimal, "utf-8");
-      return {
-        success: true,
-        message: `Configured Zed at ${configPath}`,
-      };
-    }
-
-    // Read existing content
-    const content = readFileSync(configPath, "utf-8");
-
-    // Check if Orkestrate already exists
-    if (content.includes('"Orkestrate"')) {
-      // Replace existing entry
-      const newContent = content.replace(
-        /    "Orkestrate":\s*\{[^}]+\}/,
-        entry,
-      );
-      writeFileSync(configPath, newContent, "utf-8");
-      return {
-        success: true,
-        message: `Updated Zed config at ${configPath}`,
-      };
-    }
-
-    // Insert into context_servers block
-    let newContent: string;
-    if (content.includes('"context_servers"')) {
-      // Find the context_servers block and add our entry
-      // Pattern: look for the closing brace of context_servers block
-      const contextServersMatch = content.match(/"context_servers":\s*\{/);
-      if (contextServersMatch) {
-        const insertPos =
-          contextServersMatch.index! + contextServersMatch[0].length;
-        // Find the end of the context_servers block (matching closing brace)
-        let braceCount = 1;
-        let i = insertPos;
-        while (i < content.length && braceCount > 0) {
-          if (content[i] === "{") braceCount++;
-          else if (content[i] === "}") braceCount--;
-          i++;
+    // Parse existing config ( Zed supports JSON with comments/trailing commas)
+    let config: Record<string, unknown> = {};
+    if (existsSync(configPath)) {
+      const content = readFileSync(configPath, "utf-8").trim();
+      const jsonStart = content.indexOf("{");
+      const trimmedContent = jsonStart >= 0 ? content.slice(jsonStart) : "";
+      if (trimmedContent) {
+        try {
+          // Use Function constructor instead of JSON.parse to handle trailing commas and comments
+          // eslint-disable-next-line no-new-func
+          config = new Function("return " + trimmedContent)();
+        } catch {
+          return {
+            success: false,
+            message:
+              "Zed config is not valid JSON - manual configuration required",
+          };
         }
-        // Insert before the closing brace
-        newContent =
-          content.slice(0, i - 1) +
-          ",\n" +
-          entry +
-          "\n  " +
-          content.slice(i - 1);
-      } else {
-        return {
-          success: false,
-          message: "Could not parse context_servers block in Zed config",
-        };
       }
-    } else {
-      // No context_servers block - add one before the last closing brace
-      const lastBrace = content.lastIndexOf("}");
-      newContent =
-        content.slice(0, lastBrace) +
-        ',\n  "context_servers": {\n' +
-        entry +
-        "\n  }\n" +
-        content.slice(lastBrace);
     }
 
-    writeFileSync(configPath, newContent, "utf-8");
+    // Initialize context_servers if needed
+    if (!config.context_servers || typeof config.context_servers !== "object") {
+      config.context_servers = {};
+    }
+
+    // Update or add the mcp-server-orkestrate entry
+    (config.context_servers as Record<string, unknown>)[
+      "mcp-server-orkestrate"
+    ] = serverEntry;
+
+    // Re-serialize with 2-space indent
+    writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
     return {
       success: true,
       message: `Configured Zed at ${configPath}`,
@@ -337,7 +305,10 @@ ${entry}
   }
 }
 
-function configureCodex(bridge: { command: string; args: string[] }): {
+function configureCodex(
+  bridge: { command: string; args: string[] },
+  tool: ToolName,
+): {
   success: boolean;
   message: string;
 } {
@@ -351,7 +322,7 @@ function configureCodex(bridge: { command: string; args: string[] }): {
     let content = existsSync(configPath)
       ? readFileSync(configPath, "utf-8")
       : "[mcp_servers]\n";
-    const proxySection = `[mcp_servers.Orkestrate]\ncommand = "${bridge.command}"\nargs = [${bridge.args.map((a) => `"${a}"`).join(", ")}]\n`;
+    const proxySection = `[mcp_servers.Orkestrate]\ncommand = "${bridge.command}"\nargs = [${bridge.args.map((a) => `"${a}"`).join(", ")}]\nenv = { ORKESTRATE_PARENT_TOOL = "${tool}" }\n`;
 
     const sectionRegex = /\[mcp_servers\.Orkestrate\]\s*\n(?:(?!\[)[^\n]*\n?)*/;
     if (sectionRegex.test(content)) {

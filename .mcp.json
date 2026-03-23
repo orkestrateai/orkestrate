@@ -1,10 +1,12 @@
 {
   "mcpServers": {
-    "Orkestrate": {
+    "Osrkestrate": {
       "type": "stdio",
       "command": "orkestrate",
       "args": [
-        "mcp"
+        "mcp",
+        "--parent-tool",
+        "claude"
       ],
       "env": {}
     }

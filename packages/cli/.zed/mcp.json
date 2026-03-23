@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "Orkestrate": {
+      "command": "orkestrate",
+      "args": [
+        "mcp"
+      ]
+    }
+  }
+}

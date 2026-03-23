@@ -80,10 +80,14 @@ program
 program
   .command("mcp")
   .description("Run as a local MCP server (stdio bridge to Orkestrate Cloud)")
-  .action(async () => {
+  .option(
+    "--parent-tool <tool>",
+    "The AI coding tool invoking this bridge (claude, zed, cursor, etc.)",
+  )
+  .action(async (opts) => {
     try {
       const { mcpCommand } = await import("./commands/mcp.js");
-      await mcpCommand();
+      await mcpCommand(opts);
     } catch (err) {
       process.stderr.write(
         `[Orkestrate-MCP] ${err instanceof Error ? err.message : String(err)}\n`,
