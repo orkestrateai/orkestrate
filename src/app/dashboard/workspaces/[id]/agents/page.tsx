@@ -1,17 +1,21 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import useSWR from "swr";
 import { createSupabaseBrowserClient } from "@/utils/supabase/client";
-import {
-  Bot,
-  Loader2,
-  GitBranch,
-  ChevronLeft,
-  X,
-} from "lucide-react";
+import { Bot, Loader2, GitBranch, ChevronLeft, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 interface AgentData {
   id: string;
@@ -34,24 +38,58 @@ async function agentsFetcher(url: string): Promise<AgentData[]> {
   const {
     data: { session },
   } = await supabase.auth.getSession();
-
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${session?.access_token}` },
   });
-
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error ?? "Failed to load agents");
   }
-
   const data = await res.json();
   return data.agents as AgentData[];
 }
 
+async function deleteAgent(
+  agentId: string,
+  workspaceId: string,
+): Promise<void> {
+  const supabase = createSupabaseBrowserClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const res = await fetch(
+    `/api/workspaces/${workspaceId}/agents?agentId=${agentId}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${session?.access_token}` },
+    },
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? "Failed to delete agent");
+  }
+}
+
+const statusStyles: Record<string, { bg: string; text: string; dot: string }> =
+  {
+    active: {
+      bg: "bg-emerald-500/10",
+      text: "text-emerald-400",
+      dot: "bg-emerald-400",
+    },
+    idle: { bg: "bg-zinc-500/10", text: "text-zinc-400", dot: "bg-zinc-500" },
+    blocked: { bg: "bg-red-500/10", text: "text-red-400", dot: "bg-red-400" },
+  };
+
+function getStatusStyle(s: string) {
+  return statusStyles[s] ?? statusStyles.idle;
+}
+
 export default function AgentsPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
   const [selectedAgent, setSelectedAgent] = useState<AgentData | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<AgentData | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const {
     data: agents,
@@ -59,15 +97,12 @@ export default function AgentsPage() {
     isLoading,
   } = useSWR(id ? `/api/workspaces/${id}/agents` : null, agentsFetcher, {
     refreshInterval: 5000,
-    onError: (err) => {
-      if (err.message === "Unauthorized") router.push("/login");
-    },
   });
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-[#050505] min-h-screen gap-3">
-        <Loader2 className="w-6 h-6 animate-spin text-zinc-700" />
+      <div className="flex-1 flex flex-col items-center justify-center min-h-screen bg-black gap-3">
+        <Loader2 className="w-5 h-5 animate-spin text-zinc-600" />
         <span className="text-sm text-zinc-500">Loading agents...</span>
       </div>
     );
@@ -75,16 +110,14 @@ export default function AgentsPage() {
 
   if (error) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-[#050505] min-h-screen p-8 text-center">
-        <h1 className="text-lg font-semibold text-white mb-2">
-          {error?.message ?? "Failed to load agents"}
+      <div className="flex-1 flex flex-col items-center justify-center min-h-screen bg-black p-8 text-center">
+        <h1 className="text-base font-medium text-white mb-1">
+          Failed to load
         </h1>
-        <p className="text-sm text-zinc-500 mb-6">
-          Unable to fetch agents for this workspace.
-        </p>
+        <p className="text-sm text-zinc-500 mb-4">{error.message}</p>
         <Link
           href={`/dashboard/workspaces/${id}`}
-          className="text-sm text-zinc-400 hover:text-white transition-colors"
+          className="text-sm text-zinc-400 hover:text-white"
         >
           ← Return to Workspace
         </Link>
@@ -93,25 +126,26 @@ export default function AgentsPage() {
   }
 
   return (
-    <div className="flex-1 bg-[#050505] min-h-screen">
-      <div className="max-w-6xl mx-auto px-8 pt-16 pb-24">
+    <div className="flex-1 min-h-screen relative overflow-hidden">
+      <div className="max-w-5xl mx-auto px-6 pt-20 pb-24 relative z-10">
         {/* Header */}
-        <div className="mb-10">
+        <div className="mb-8">
           <Link
             href={`/dashboard/workspaces/${id}`}
-            className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-white transition-colors mb-6"
+            className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6"
           >
             <ChevronLeft className="w-4 h-4" />
-            Back to Workspace
+            Back
           </Link>
 
-          <div className="flex items-center justify-between">
+          <div className="flex items-end justify-between">
             <div>
-              <h1 className="text-2xl font-semibold text-white tracking-tight mb-2">
-                Active Agents
+              <h1 className="text-2xl font-semibold text-white tracking-tight">
+                Agents
               </h1>
-              <p className="text-sm text-zinc-500">
-                {agents?.length || 0} agent{agents?.length !== 1 ? "s" : ""} currently active
+              <p className="text-sm text-zinc-500 mt-1">
+                {agents?.length ?? 0} agent{agents?.length !== 1 ? "s" : ""}{" "}
+                connected
               </p>
             </div>
           </div>
@@ -119,138 +153,159 @@ export default function AgentsPage() {
 
         {/* Agents Grid */}
         {agents && agents.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {agents.map((agent) => (
-              <button
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {agents.map((agent, i) => (
+              <motion.button
                 key={agent.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.04 }}
                 onClick={() => setSelectedAgent(agent)}
-                className="p-5 rounded-xl bg-white/[0.02] border border-white/5 hover:border-white/10 hover:bg-white/[0.04] transition-all text-left"
+                className="p-4 rounded-lg border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/10 transition-all text-left"
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-white/[0.04] flex items-center justify-center">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-md bg-white/5 flex items-center justify-center">
                       <Bot className="w-4 h-4 text-zinc-400" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-semibold text-zinc-100">
+                      <p className="text-sm font-medium text-white">
                         {agent.agentId}
-                      </h3>
+                      </p>
                       <p className="text-xs text-zinc-600">{agent.toolName}</p>
                     </div>
                   </div>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded-full ${
-                      agent.status === "active"
-                        ? "bg-green-500/10 text-green-400"
-                        : agent.status === "idle"
-                        ? "bg-zinc-500/10 text-zinc-400"
-                        : agent.status === "blocked"
-                        ? "bg-red-500/10 text-red-400"
-                        : "bg-blue-500/10 text-blue-400"
-                    }`}
+                  <div
+                    className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full ${getStatusStyle(agent.status).bg}`}
                   >
-                    {agent.status}
-                  </span>
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${getStatusStyle(agent.status).dot}`}
+                    />
+                    <span
+                      className={`text-xs ${getStatusStyle(agent.status).text}`}
+                    >
+                      {agent.status}
+                    </span>
+                  </div>
                 </div>
-                <p className="text-sm text-zinc-400 line-clamp-2 mb-3">
+                <p className="text-xs text-zinc-500 line-clamp-2">
                   {agent.objective}
                 </p>
                 {agent.branch && (
-                  <div className="flex items-center gap-1.5 text-xs text-zinc-600">
+                  <div className="flex items-center gap-1.5 mt-2 text-xs text-zinc-600">
                     <GitBranch className="w-3 h-3" />
                     <span>{agent.branch}</span>
                   </div>
                 )}
-              </button>
+              </motion.button>
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-white/[0.02] flex items-center justify-center mb-4">
-              <Bot className="w-8 h-8 text-zinc-600" />
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center mb-4">
+              <Bot className="w-5 h-5 text-zinc-600" />
             </div>
-            <h3 className="text-lg font-semibold text-white mb-2">
-              No active agents
-            </h3>
-            <p className="text-sm text-zinc-500 max-w-md">
+            <h3 className="text-sm font-medium text-white mb-1">No agents</h3>
+            <p className="text-xs text-zinc-500 max-w-xs">
               Connect agents to this workspace via MCP to see them here.
             </p>
           </div>
         )}
+      </div>
 
-        {/* Side Panel */}
+      {/* Right Panel */}
+      <AnimatePresence>
         {selectedAgent && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-end">
-            <div className="w-full max-w-2xl h-full bg-[#0a0a0a] border-l border-white/10 overflow-y-auto">
-              <div className="sticky top-0 bg-[#0a0a0a] border-b border-white/10 p-6 flex items-center justify-between">
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedAgent(null)}
+              className="fixed inset-0 bg-black/40 z-40"
+            />
+
+            {/* Panel */}
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", stiffness: 400, damping: 35 }}
+              className="fixed inset-y-0 right-0 w-full max-w-md bg-[#0a0a0a] border-l border-white/5 z-50 flex flex-col"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-5 border-b border-white/5">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-white/[0.04] flex items-center justify-center">
-                    <Bot className="w-5 h-5 text-zinc-400" />
+                  <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center">
+                    <Bot className="w-4 h-4 text-zinc-400" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-white">
+                    <h2 className="text-sm font-semibold text-white">
                       {selectedAgent.agentId}
                     </h2>
-                    <p className="text-sm text-zinc-500">{selectedAgent.toolName}</p>
+                    <p className="text-xs text-zinc-500">
+                      {selectedAgent.toolName}
+                    </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setSelectedAgent(null)}
-                  className="p-2 rounded-lg hover:bg-white/[0.04] transition-colors"
+                  className="text-zinc-500 hover:text-white text-lg leading-none px-1"
                 >
-                  <X className="w-5 h-5 text-zinc-400" />
+                  ×
                 </button>
               </div>
 
-              <div className="p-6 space-y-6">
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-5">
                 {/* Status */}
                 <div>
-                  <h3 className="text-sm font-semibold text-zinc-400 mb-2">Status</h3>
-                  <span
-                    className={`inline-block text-sm px-3 py-1 rounded-full ${
-                      selectedAgent.status === "active"
-                        ? "bg-green-500/10 text-green-400"
-                        : selectedAgent.status === "idle"
-                        ? "bg-zinc-500/10 text-zinc-400"
-                        : selectedAgent.status === "blocked"
-                        ? "bg-red-500/10 text-red-400"
-                        : "bg-blue-500/10 text-blue-400"
-                    }`}
+                  <p className="text-xs text-zinc-500 mb-1.5">Status</p>
+                  <div
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ${getStatusStyle(selectedAgent.status).bg}`}
                   >
-                    {selectedAgent.status}
-                  </span>
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${getStatusStyle(selectedAgent.status).dot}`}
+                    />
+                    <span
+                      className={`text-xs ${getStatusStyle(selectedAgent.status).text}`}
+                    >
+                      {selectedAgent.status}
+                    </span>
+                  </div>
                 </div>
 
-                {/* Current Objective */}
+                {/* Objective */}
                 <div>
-                  <h3 className="text-sm font-semibold text-zinc-400 mb-2">
+                  <p className="text-xs text-zinc-500 mb-1.5">
                     Current Objective
-                  </h3>
-                  <p className="text-sm text-zinc-300">{selectedAgent.objective}</p>
+                  </p>
+                  <p className="text-sm text-zinc-300">
+                    {selectedAgent.objective}
+                  </p>
                 </div>
 
-                {/* Branch Info */}
+                {/* Branch */}
                 {selectedAgent.branch && (
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-400 mb-2">Branch</h3>
+                    <p className="text-xs text-zinc-500 mb-1.5">Branch</p>
                     <div className="flex items-center gap-2 text-sm text-zinc-300">
-                      <GitBranch className="w-4 h-4" />
+                      <GitBranch className="w-3.5 h-3.5" />
                       <span>{selectedAgent.branch}</span>
+                      {selectedAgent.headSha && (
+                        <span className="text-xs text-zinc-600 font-mono">
+                          {selectedAgent.headSha.slice(0, 7)}
+                        </span>
+                      )}
                     </div>
-                    {selectedAgent.headSha && (
-                      <p className="text-xs text-zinc-600 mt-1 font-mono">
-                        {selectedAgent.headSha.slice(0, 7)}
-                      </p>
-                    )}
                   </div>
                 )}
 
                 {/* Footprint */}
                 {selectedAgent.footprint.length > 0 && (
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-400 mb-2">
-                      Architecture Footprint
-                    </h3>
+                    <p className="text-xs text-zinc-500 mb-2">Files</p>
                     <div className="space-y-1">
                       {selectedAgent.footprint.map((path, idx) => (
                         <div
@@ -267,12 +322,13 @@ export default function AgentsPage() {
                 {/* Plan */}
                 {selectedAgent.plan.length > 0 && (
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-400 mb-2">
-                      Implementation Plan
-                    </h3>
-                    <ul className="space-y-2">
+                    <p className="text-xs text-zinc-500 mb-2">Plan</p>
+                    <ul className="space-y-1.5">
                       {selectedAgent.plan.map((step, idx) => (
-                        <li key={idx} className="text-sm text-zinc-300 flex gap-2">
+                        <li
+                          key={idx}
+                          className="text-sm text-zinc-400 flex gap-2"
+                        >
                           <span className="text-zinc-600">{idx + 1}.</span>
                           <span>{step}</span>
                         </li>
@@ -284,13 +340,14 @@ export default function AgentsPage() {
                 {/* Completed */}
                 {selectedAgent.completed.length > 0 && (
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-400 mb-2">
-                      Completed Work
-                    </h3>
-                    <ul className="space-y-2">
+                    <p className="text-xs text-zinc-500 mb-2">Completed</p>
+                    <ul className="space-y-1.5">
                       {selectedAgent.completed.map((item, idx) => (
-                        <li key={idx} className="text-sm text-zinc-500 flex gap-2">
-                          <span className="text-zinc-700">✓</span>
+                        <li
+                          key={idx}
+                          className="text-sm text-zinc-500 flex gap-2"
+                        >
+                          <span className="text-emerald-600">✓</span>
                           <span>{item}</span>
                         </li>
                       ))}
@@ -301,9 +358,7 @@ export default function AgentsPage() {
                 {/* Notes */}
                 {selectedAgent.notes && (
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-400 mb-2">
-                      Notes for Team
-                    </h3>
+                    <p className="text-xs text-zinc-500 mb-1.5">Notes</p>
                     <p className="text-sm text-zinc-400 whitespace-pre-wrap">
                       {selectedAgent.notes}
                     </p>
@@ -312,18 +367,78 @@ export default function AgentsPage() {
 
                 {/* Last Activity */}
                 <div>
-                  <h3 className="text-sm font-semibold text-zinc-400 mb-2">
-                    Last Activity
-                  </h3>
-                  <p className="text-sm text-zinc-500">
+                  <p className="text-xs text-zinc-500 mb-1.5">Last Activity</p>
+                  <p className="text-xs text-zinc-600">
                     {new Date(selectedAgent.lastMessageAt).toLocaleString()}
                   </p>
                 </div>
               </div>
-            </div>
-          </div>
+
+              {/* Footer */}
+              <div className="p-5 border-t border-white/5">
+                <button
+                  onClick={() => setDeleteConfirm(selectedAgent)}
+                  className="w-full px-4 py-2.5 text-sm text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/10 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Remove Agent
+                </button>
+              </div>
+            </motion.div>
+          </>
         )}
-      </div>
+      </AnimatePresence>
+
+      {/* Delete Dialog */}
+      <Dialog
+        open={!!deleteConfirm}
+        onOpenChange={() => setDeleteConfirm(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove Agent?</DialogTitle>
+            <DialogDescription>
+              This will disconnect{" "}
+              <span className="text-foreground font-medium">
+                {deleteConfirm?.agentId}
+              </span>{" "}
+              from the workspace.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirm(null)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (!deleteConfirm) return;
+                setIsDeleting(true);
+                try {
+                  await deleteAgent(deleteConfirm.id, id);
+                  setDeleteConfirm(null);
+                  setSelectedAgent(null);
+                } catch (err) {
+                  alert(
+                    err instanceof Error
+                      ? err.message
+                      : "Failed to remove agent",
+                  );
+                } finally {
+                  setIsDeleting(false);
+                }
+              }}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Removing..." : "Remove"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -6,6 +6,9 @@
  */
 
 import Conf from "conf";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { dirname } from "node:path";
+import { mkdirSync } from "node:fs";
 
 export interface StoredCredentials {
   clientId: string;
@@ -50,21 +53,59 @@ export function getServerUrl(): string {
   return config.get("serverUrl");
 }
 
-export function setCredentials(creds: StoredCredentials): void {
-  let lastError: Error | undefined;
-  for (let i = 0; i < 3; i++) {
+// Helper for config writes with retry and exponential backoff
+function setConfigWithRetry(
+  key: string,
+  value: unknown,
+  maxAttempts = 5,
+): void {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      config.set("credentials", creds);
+      config.set(key, value);
       return;
     } catch (err: any) {
-      lastError = err;
       // Only retry on EPERM/EBUSY (Windows file locking)
       if (err?.code !== "EPERM" && err?.code !== "EBUSY") {
         throw err;
       }
+      // Exponential backoff: 50ms, 100ms, 200ms, 400ms, 800ms
+      const delay = 50 * Math.pow(2, attempt);
+      if (attempt < maxAttempts - 1) {
+        const start = Date.now();
+        while (Date.now() - start < delay) {
+          // busy wait
+        }
+      }
     }
   }
-  throw lastError;
+
+  // Fallback: direct file write bypassing conf's atomic operations
+  try {
+    const configPath = config.path;
+    const dir = dirname(configPath);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
+    let currentConfig: Record<string, unknown> = {};
+    if (existsSync(configPath)) {
+      try {
+        currentConfig = JSON.parse(readFileSync(configPath, "utf-8"));
+      } catch {
+        currentConfig = {};
+      }
+    }
+    currentConfig[key] = value;
+    writeFileSync(configPath, JSON.stringify(currentConfig, null, 2), "utf-8");
+    return;
+  } catch (fallbackErr) {
+    throw new Error(
+      `Failed to save config after ${maxAttempts} attempts. Original error: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
+    );
+  }
+}
+
+export function setCredentials(creds: StoredCredentials): void {
+  setConfigWithRetry("credentials", creds);
 }
 
 export function getCredentials(): StoredCredentials | null {
@@ -72,12 +113,12 @@ export function getCredentials(): StoredCredentials | null {
 }
 
 export function clearCredentials(): void {
-  config.set("credentials", null);
+  setConfigWithRetry("credentials", null);
 }
 
 export function setActiveWorkspace(id: string, name: string): void {
-  config.set("activeWorkspaceId", id);
-  config.set("activeWorkspaceName", name);
+  setConfigWithRetry("activeWorkspaceId", id);
+  setConfigWithRetry("activeWorkspaceName", name);
 }
 
 export function getActiveWorkspace(): {
@@ -91,7 +132,7 @@ export function getActiveWorkspace(): {
 }
 
 export function setServerUrl(url: string): void {
-  config.set("serverUrl", url);
+  setConfigWithRetry("serverUrl", url);
 }
 
 export function clearAll(): void {

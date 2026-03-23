@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "Osrkestrate": {
+    "Orkestrate": {
       "type": "stdio",
       "command": "orkestrate",
       "args": [

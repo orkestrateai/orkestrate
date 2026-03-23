@@ -1,22 +1,32 @@
 import { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/Sidebar";
+import { SandBackground } from "@/components/sand-background";
 import { createClient } from "@/utils/supabase/server";
+import WaveBackground from "@/components/WaveBackground";
 
-export default async function DashboardLayout({ children }: { children: ReactNode }) {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+export default async function DashboardLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-    if (!user) {
-        redirect("/login");
-    }
+  if (!user) {
+    redirect("/login");
+  }
 
-    return (
-        <div className="flex h-screen w-screen bg-[#050505] text-[#F2F2F2] overflow-hidden">
-            <Sidebar />
-            <main className="flex-1 overflow-y-auto relative flex flex-col custom-scrollbar">
-                {children}
-            </main>
-        </div>
-    );
+  return (
+    <div className="flex h-screen w-screen bg-[#050505] text-[#F2F2F2] overflow-hidden">
+      {/*<SandBackground />*/}
+      <WaveBackground />
+      <Sidebar />
+      <main className="flex-1 overflow-y-auto relative flex flex-col custom-scrollbar">
+        {children}
+      </main>
+    </div>
+  );
 }

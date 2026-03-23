@@ -5,12 +5,11 @@
       "type": "local",
       "command": [
         "orkestrate",
-        "mcp"
+        "mcp",
+        "--parent-tool",
+        "opencode"
       ],
-      "enabled": true,
-      "env": {
-        "ORKESTRATE_PARENT_TOOL": "opencode"
-      }
+      "enabled": true
     }
   }
 }

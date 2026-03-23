@@ -152,19 +152,29 @@ function configureClaudeCode(bridge: { command: string; args: string[] }): {
     return { success: false, message: "Claude Code CLI not found." };
 
   try {
-    // Attempt to remove existing first (idempotency)
-    try {
-      execSync("claude mcp remove Orkestrate", { stdio: "pipe" });
-    } catch {
-      /* ignore if not exists */
-    }
-
-    // Claude expects: claude mcp add <name> <command> [args...]
     const commandToRun = bridge.command;
     const argsToRun = bridge.args.join(" ");
 
+    // Manage .mcp.json directly for idempotency (claude mcp remove doesn't work for project-level config)
+    const mcpJsonPath = join(process.cwd(), ".mcp.json");
+    if (existsSync(mcpJsonPath)) {
+      try {
+        const mcpConfig = JSON.parse(readFileSync(mcpJsonPath, "utf-8"));
+        if (mcpConfig.mcpServers?.Orkestrate) {
+          delete mcpConfig.mcpServers.Orkestrate;
+          writeFileSync(
+            mcpJsonPath,
+            JSON.stringify(mcpConfig, null, 2) + "\n",
+            "utf-8",
+          );
+        }
+      } catch {
+        /* ignore parse/write errors, proceed anyway */
+      }
+    }
+
     execSync(
-      `claude mcp add --transport stdio --scope project Osrkestrate -- ${commandToRun} ${argsToRun}`,
+      `claude mcp add --transport stdio --scope project Orkestrate -- ${commandToRun} ${argsToRun}`,
       { stdio: "pipe", encoding: "utf-8" },
     );
     return { success: true, message: "MCP added to Claude Code." };
@@ -191,7 +201,6 @@ function configureOpenCode(
       type: "local",
       command: [bridge.command, ...bridge.args],
       enabled: true,
-      env: { ORKESTRATE_PARENT_TOOL: tool },
     };
 
     writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
@@ -223,7 +232,6 @@ function configureMcpServersJson(
     config.mcpServers["Orkestrate"] = {
       command: bridge.command,
       args: bridge.args,
-      env: { ORKESTRATE_PARENT_TOOL: tool },
     };
 
     writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
@@ -257,7 +265,6 @@ function configureZed(
       remote: false,
       command: bridge.command,
       args: bridge.args,
-      env: { ORKESTRATE_PARENT_TOOL: tool },
     };
 
     // Parse existing config ( Zed supports JSON with comments/trailing commas)
@@ -322,7 +329,7 @@ function configureCodex(
     let content = existsSync(configPath)
       ? readFileSync(configPath, "utf-8")
       : "[mcp_servers]\n";
-    const proxySection = `[mcp_servers.Orkestrate]\ncommand = "${bridge.command}"\nargs = [${bridge.args.map((a) => `"${a}"`).join(", ")}]\nenv = { ORKESTRATE_PARENT_TOOL = "${tool}" }\n`;
+    const proxySection = `[mcp_servers.Orkestrate]\ncommand = "${bridge.command}"\nargs = [${bridge.args.map((a) => `"${a}"`).join(", ")}]\n`;
 
     const sectionRegex = /\[mcp_servers\.Orkestrate\]\s*\n(?:(?!\[)[^\n]*\n?)*/;
     if (sectionRegex.test(content)) {
