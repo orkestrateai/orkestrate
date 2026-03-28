@@ -28,13 +28,10 @@ export function StepGitHub({
             GitHub connection verified
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={() => window.open("/api/auth/github", "_blank")}
-            className="text-[14px] font-bold text-zinc-400 hover:text-white transition-colors underline underline-offset-4 decoration-zinc-800 hover:decoration-zinc-400"
-          >
-            Connect GitHub Account
-          </button>
+          <GitHubReconnectButton
+            label="Connect GitHub Account"
+            className="text-[14px] text-zinc-400 hover:text-white transition-colors underline underline-offset-4 decoration-zinc-800 hover:decoration-zinc-400"
+          />
         )}
       </div>
 

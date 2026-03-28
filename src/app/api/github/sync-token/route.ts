@@ -44,7 +44,20 @@ export async function POST() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get the GitHub provider token from Supabase session
+    // Only sync when the session actually comes from GitHub — a Google
+    // provider_token stored here would poison github_tokens and break all
+    // GitHub API calls.
+    const loginProvider =
+      session.user?.app_metadata?.provider ??
+      session.user?.app_metadata?.providers?.[0];
+
+    if (loginProvider !== "github") {
+      return NextResponse.json(
+        { error: "Current session is not a GitHub login" },
+        { status: 400 },
+      );
+    }
+
     const providerToken = session.provider_token;
     const providerRefreshToken = (session as any).provider_refresh_token;
 
