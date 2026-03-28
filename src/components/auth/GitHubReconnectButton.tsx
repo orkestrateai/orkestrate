@@ -22,10 +22,32 @@ export function GitHubReconnectButton({
 
     const supabase = createSupabaseBrowserClient();
 
-    // Use the same signInWithOAuth flow as the login page.
-    // Supabase handles the GitHub OAuth handshake and redirects to
-    // /auth/callback, which syncs the provider_token to our github_tokens
-    // DB table. One callback URL, no custom route needed.
+    // Check if user is already logged in via a non-GitHub provider (e.g. Google).
+    // If so, use linkIdentity to attach GitHub without replacing the session.
+    // Otherwise fall back to the standard signInWithOAuth flow.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const currentProvider = user?.app_metadata?.provider;
+    const isNonGithubSession = user && currentProvider && currentProvider !== "github";
+
+    if (isNonGithubSession) {
+      const { error } = await supabase.auth.linkIdentity({
+        provider: "github",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(window.location.pathname)}`,
+          scopes: "repo read:user user:email",
+        },
+      });
+
+      if (error) {
+        console.error("[GitHubReconnectButton] linkIdentity:", error.message);
+        setIsLoading(false);
+      }
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "github",
       options: {

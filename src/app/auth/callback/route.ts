@@ -45,8 +45,14 @@ export async function GET(request: Request) {
         data: { session },
       } = await supabase.auth.getSession();
 
-      // Auto-sync GitHub provider token to our DB so repo access works immediately
-      if (session?.provider_token) {
+      // Auto-sync GitHub provider token to our DB so repo access works immediately.
+      // Only store when the login provider is actually GitHub — a Google token
+      // stored here would poison github_tokens and break all GitHub API calls.
+      const loginProvider =
+        session?.user?.app_metadata?.provider ??
+        session?.user?.app_metadata?.providers?.[0];
+
+      if (session?.provider_token && loginProvider === "github") {
         try {
           await storeGithubTokens(
             session.user.id,
