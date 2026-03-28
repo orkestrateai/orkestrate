@@ -66,7 +66,7 @@ export default function KnowledgeBasePage() {
     const originalContentRef = useRef({ content: '', title: '', description: '' });
 
     const { data: wsData } = useSWR("/api/workspaces", fetcher);
-    const rooms = Array.isArray(wsData?.rooms) ? wsData.rooms : [];
+    const rooms = Array.isArray(wsData?.workspaces) ? wsData.workspaces : [];
     const activeRoomId = rooms.find((r: any) => r.isActive)?.id || rooms[0]?.id || null;
 
     const { data: knowledgeData, mutate: mutateKnowledge } = useSWR(activeRoomId ? `/api/knowledge?workspaceId=${activeRoomId}` : null, fetcher);

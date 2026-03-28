@@ -1,26 +1,43 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Logo } from "@/components/brand/Logo";
-import { ArrowRight, AlertCircle, Loader2, Github } from "lucide-react";
+import { AlertCircle, Loader2, Github } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/utils/supabase/client";
 
 export default function LoginPage() {
-  const router = useRouter();
   const supabase = createSupabaseBrowserClient();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  
+  const requestedNext = searchParams.get("next");
+  const safeNext =
+    requestedNext && requestedNext.startsWith("/") ? requestedNext : "/dashboard";
+
+  useEffect(() => {
+    // Redirect immediately if the user is already authenticated
+    supabase.auth.getUser().then((res: any) => {
+      if (res?.data?.user) {
+        router.replace(safeNext);
+      }
+    });
+  }, [supabase.auth, router, safeNext]);
 
   const [googleLoading, setGoogleLoading] = useState(false);
   const [githubLoading, setGithubLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const buildRedirectTo = () =>
+    `${window.location.origin}/auth/callback?next=${encodeURIComponent(safeNext)}`;
 
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
     setError(null);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: buildRedirectTo() },
     });
     if (error) {
       setError(error.message);
@@ -34,7 +51,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "github",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: buildRedirectTo(),
         scopes: "repo read:user user:email",
       },
     });

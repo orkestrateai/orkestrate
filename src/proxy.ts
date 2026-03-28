@@ -41,6 +41,7 @@ export function proxy(request: NextRequest) {
         // We still want to provide the nonce for scripts that use it
         const reqHeaders = new Headers(request.headers);
         reqHeaders.set('x-nonce', nonce);
+        reqHeaders.set('x-pathname', request.nextUrl.pathname);
         return NextResponse.next({
             request: { headers: reqHeaders }
         });
@@ -64,6 +65,7 @@ export function proxy(request: NextRequest) {
 
     const requestHeaders = new Headers(request.headers);
     requestHeaders.set('x-nonce', nonce);
+    requestHeaders.set('x-pathname', request.nextUrl.pathname);
     requestHeaders.set(cspHeaderName, cspHeaderVersion);
 
     const response = NextResponse.next({

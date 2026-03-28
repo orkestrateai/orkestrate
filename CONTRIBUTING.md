@@ -183,6 +183,10 @@ When working with AI agents (Claude, OpenCode, etc.) in the Orkestrate workspace
 4. **Avoid conflicts**: Don't touch files claimed by other active agents
 5. **Update progress**: Keep your state current as you work
 6. **Communicate**: Use `notesForTeam` for important decisions or blockers
+7. **Complete your work**: When finished, update your state to `status: "done"` or `status: "completed"` BEFORE releasing scope
+8. **Release scope**: After updating state to done, release all claimed paths
+
+**⚠️ IMPORTANT**: Always update your state to completed/done status when releasing scope after finishing work. This ensures the team knows your task is complete and prevents confusion about work status.
 
 ### Git Best Practices for Agents
 

@@ -330,3 +330,29 @@ export const workspaceInvites = pgTable(
     ),
   }),
 );
+
+// MCP Tool Permissions
+export type McpToolCategory = 'workspace' | 'messaging' | 'knowledge';
+
+export type McpSettings = {
+  workspace?: { enabled: boolean; disabledTools?: string[] };
+  messaging?: { enabled: boolean; disabledTools?: string[] };
+  knowledge?: { enabled: boolean; disabledTools?: string[] };
+};
+
+export const userMcpSettings = pgTable(
+  'user_mcp_settings',
+  {
+    id: text('id').primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => authUsers.id),
+    settings: jsonb('settings').$type<McpSettings>().notNull().default({}),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    userMcpSettingsUserIdx: uniqueIndex('user_mcp_settings_user_idx').on(table.userId),
+  }),
+);
+;

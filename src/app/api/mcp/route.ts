@@ -16,7 +16,10 @@ import {
   agentSessions,
   agentStates,
   knowledgeDocs,
+  userMcpSettings,
+  type McpSettings,
 } from "@/db/schema";
+import { getToolCategory, getAllTools } from "@/lib/mcp-categories";
 import { and, asc, desc, eq, ilike, isNull, lte, or } from "drizzle-orm";
 import { normalizeGitUrl } from "@/lib/git-context";
 import { getIntentDefinition } from "@/lib/intent-workflows/catalog";
@@ -88,6 +91,46 @@ type ActiveScopeClaim = {
 
 const DEFAULT_SCOPE_TTL_SECONDS = 900;
 const MAX_SCOPE_TTL_SECONDS = 3600;
+
+const DEFAULT_MCP_SETTINGS: McpSettings = {
+  workspace: { enabled: true, disabledTools: [] },
+  messaging: { enabled: true, disabledTools: [] },
+  knowledge: { enabled: true, disabledTools: [] },
+};
+
+async function getUserMcpSettings(userId: string): Promise<McpSettings> {
+  const rows = await db
+    .select()
+    .from(userMcpSettings)
+    .where(eq(userMcpSettings.userId, userId))
+    .limit(1);
+
+  if (rows.length === 0 || !rows[0].settings) {
+    return DEFAULT_MCP_SETTINGS;
+  }
+
+  const stored = rows[0].settings as McpSettings;
+  return {
+    workspace: { ...DEFAULT_MCP_SETTINGS.workspace!, ...stored.workspace },
+    messaging: { ...DEFAULT_MCP_SETTINGS.messaging!, ...stored.messaging },
+    knowledge: { ...DEFAULT_MCP_SETTINGS.knowledge!, ...stored.knowledge },
+  };
+}
+
+function isToolAllowedBySettings(
+  settings: McpSettings,
+  toolName: string,
+): boolean {
+  const category = getToolCategory(toolName);
+  if (!category) return true;
+
+  const categorySettings = settings[category];
+  if (!categorySettings) return true;
+  if (!categorySettings.enabled) return false;
+  if (categorySettings.disabledTools?.includes(toolName)) return false;
+
+  return true;
+}
 
 function normalizeScopePath(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
@@ -836,7 +879,8 @@ function buildJoinWorkspaceOrchestrationGuide(
   ].join("\n");
 }
 
-function buildMcpToolList() {
+async function buildMcpToolList(userId: string) {
+  await getUserMcpSettings(userId); // load settings into cache if needed
   return [
     // {
     //   name: "Orkestrate_initialize",
@@ -1264,7 +1308,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (method === "tools/list") {
-      return json(200, rpcResult(id, { tools: buildMcpToolList() }));
+      const settings = await getUserMcpSettings(userId);
+      const allToolsList = await buildMcpToolList(userId);
+      const filteredTools = allToolsList.filter((tool) =>
+        isToolAllowedBySettings(settings, tool.name),
+      );
+      return json(200, rpcResult(id, { tools: filteredTools }));
     }
 
     if (method !== "tools/call") {
@@ -1305,12 +1354,14 @@ export async function POST(req: NextRequest) {
       "release_scope",
       "update_my_state",
       "write_knowledge_base",
+      "send_message",
     ]);
     const readTools = new Set([
       "Orkestrate_initialize",
       "identify_intent",
       "read_team_state",
       "read_knowledge_base",
+      "read_messages",
     ]);
 
     if (writeTools.has(aliasName) && !hasWriteScope) {
@@ -1323,6 +1374,14 @@ export async function POST(req: NextRequest) {
       return json(
         403,
         rpcError(id, -32001, "insufficient_scope: requires mcp:read"),
+      );
+    }
+
+    const userSettings = await getUserMcpSettings(userId);
+    if (!isToolAllowedBySettings(userSettings, aliasName)) {
+      return json(
+        403,
+        rpcError(id, -32001, "tool_disabled: tool is disabled in user settings"),
       );
     }
 

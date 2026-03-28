@@ -22,9 +22,17 @@ program
 program
   .command("login")
   .description("Authenticate with Orkestrate via browser OAuth")
-  .action(async () => {
+  .option(
+    "--github",
+    "Run GitHub device authorization during login (optional)",
+  )
+  .option(
+    "--skip-github",
+    "Skip GitHub authorization during login (default behavior)",
+  )
+  .action(async (opts: { github?: boolean; skipGithub?: boolean }) => {
     const { loginCommand } = await import("./commands/login.js");
-    await loginCommand();
+    await loginCommand(opts);
   });
 
 // --- logout ---
@@ -103,6 +111,18 @@ program
   .action(async () => {
     const { whoamiCommand } = await import("./commands/whoami.js");
     await whoamiCommand();
+  });
+
+// --- tools ---
+program
+  .command("tools")
+  .description("Manage enabled/disabled tools for local MCP proxy")
+  .option("--list", "List current tool filter settings")
+  .option("--enable <tool>", "Enable a specific tool")
+  .option("--disable <tool>", "Disable a specific tool")
+  .action(async (opts) => {
+    const { toolsCommand } = await import("./commands/tools.js");
+    await toolsCommand(opts);
   });
 
 // --- Default: show banner + help ---

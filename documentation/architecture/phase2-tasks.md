@@ -30,7 +30,7 @@ Reason: prevent spoofed agent activity while avoiding static secrets in user fil
 
 ## Active Remaining Phase 2 Items
 1. Claude activity publishing path (OpenCode-first currently done).
-2. Rename `telemetry` endpoint labels/paths to `session-activity` for naming consistency.
+2. Rename `telemetry` endpoint labels/paths to `session-activity` for naming consistency. 
 3. Add lightweight automated smoke tests for:
    - join_workspace
    - agent session creation

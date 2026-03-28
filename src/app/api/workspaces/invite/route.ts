@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { randomBytes, createHash } from "node:crypto";
-import { and, eq, gt, or, isNull, sql } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
+import { and, eq, count } from "drizzle-orm";
 import { db } from "@/db";
 import { members, workspaces, workspaceInvites } from "@/db/schema";
 import { authenticateRequestUser } from "@/lib/auth-user-request";
+import { setActiveWorkspaceForUser } from "@/lib/workspaces-core";
 import { nanoid } from "nanoid";
 
 function noStoreJson(payload: unknown, status = 200) {
@@ -15,6 +16,12 @@ function noStoreJson(payload: unknown, status = 200) {
 
 function generateInviteCode(): string {
   return randomBytes(24).toString("base64url");
+}
+
+function normalizeInviteCode(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 // POST - create/accept/revoke invites
@@ -60,10 +67,14 @@ export async function POST(req: NextRequest) {
         createdAt: now,
       });
 
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://orkestrate.space";
+      const baseUrl =
+        process.env.NEXT_PUBLIC_APP_URL ??
+        req.nextUrl.origin ??
+        "https://orkestrate.space";
       return noStoreJson({
         invite: {
-          id: inviteId, code,
+          id: inviteId,
+          code,
           url: baseUrl + "/invite/" + code,
           workspaceId: body.workspaceId,
           role: body.role === "admin" ? "admin" : "member",
@@ -73,9 +84,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.action === "accept") {
-      if (!body.code) return noStoreJson({ error: "code is required" }, 400);
+      const inviteCode = normalizeInviteCode(body.code);
+      if (!inviteCode) return noStoreJson({ error: "code is required" }, 400);
       const now = new Date();
-      const invite = await db.query.workspaceInvites.findFirst({ where: eq(workspaceInvites.code, body.code) });
+      const invite = await db.query.workspaceInvites.findFirst({
+        where: eq(workspaceInvites.code, inviteCode),
+      });
       if (!invite) return noStoreJson({ error: "Invalid invite code" }, 404);
       if (invite.expiresAt && invite.expiresAt <= now) return noStoreJson({ error: "Invite has expired" }, 410);
       if (invite.maxUses !== null && invite.usedCount >= invite.maxUses) return noStoreJson({ error: "Invite has been fully used" }, 410);
@@ -85,21 +99,45 @@ export async function POST(req: NextRequest) {
       });
       if (existing) return noStoreJson({ success: true, message: "Already a member", workspaceId: invite.workspaceId });
 
+      const [memberCountRow] = await db
+        .select({ count: count() })
+        .from(members)
+        .where(eq(members.workspaceId, invite.workspaceId));
+      const memberCount = Number(memberCountRow?.count ?? 0);
+
+      const workspace = await db.query.workspaces.findFirst({
+        where: eq(workspaces.id, invite.workspaceId),
+        columns: { maxMembers: true },
+      });
+      if (!workspace) return noStoreJson({ error: "Workspace not found" }, 404);
+      if (memberCount >= workspace.maxMembers) {
+        return noStoreJson({ error: "Workspace member limit reached" }, 409);
+      }
+
       await db.transaction(async (tx) => {
+        await tx
+          .update(members)
+          .set({ isActive: false, updatedAt: now })
+          .where(eq(members.userId, user.id));
         await tx.insert(members).values({
           id: "mem_" + nanoid(12),
           workspaceId: invite.workspaceId, userId: user.id, role: invite.role,
-          isActive: false, createdAt: now, updatedAt: now,
+          isActive: true, createdAt: now, updatedAt: now,
         });
         await tx.update(workspaceInvites).set({ usedCount: invite.usedCount + 1 }).where(eq(workspaceInvites.id, invite.id));
       });
+
+      await setActiveWorkspaceForUser(user.id, invite.workspaceId);
 
       return noStoreJson({ success: true, workspaceId: invite.workspaceId, role: invite.role });
     }
 
     if (body.action === "revoke") {
-      if (!body.code) return noStoreJson({ error: "code is required" }, 400);
-      const invite = await db.query.workspaceInvites.findFirst({ where: eq(workspaceInvites.code, body.code) });
+      const inviteCode = normalizeInviteCode(body.code);
+      if (!inviteCode) return noStoreJson({ error: "code is required" }, 400);
+      const invite = await db.query.workspaceInvites.findFirst({
+        where: eq(workspaceInvites.code, inviteCode),
+      });
       if (!invite) return noStoreJson({ error: "Invite not found" }, 404);
 
       const membership = await db.query.members.findFirst({
@@ -123,7 +161,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
-    const code = url.searchParams.get("code");
+    const code = normalizeInviteCode(url.searchParams.get("code"));
     const workspaceId = url.searchParams.get("workspaceId");
 
     if (code) {
@@ -153,7 +191,10 @@ export async function GET(req: NextRequest) {
       }
       const now = new Date();
       const invites = await db.query.workspaceInvites.findMany({ where: eq(workspaceInvites.workspaceId, workspaceId) });
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://orkestrate.space";
+      const baseUrl =
+        process.env.NEXT_PUBLIC_APP_URL ??
+        req.nextUrl.origin ??
+        "https://orkestrate.space";
       return noStoreJson({
         invites: invites.map((inv) => ({
           id: inv.id, code: inv.code, url: baseUrl + "/invite/" + inv.code,

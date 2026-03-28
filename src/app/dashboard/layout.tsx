@@ -1,9 +1,10 @@
 import { ReactNode } from "react";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { Sidebar } from "@/components/dashboard/Sidebar";
-import { SandBackground } from "@/components/sand-background";
 import { createClient } from "@/utils/supabase/server";
 import WaveBackground from "@/components/WaveBackground";
+import { getOnboardingStatus } from "@/lib/onboarding-core";
 
 export default async function DashboardLayout({
   children,
@@ -11,6 +12,8 @@ export default async function DashboardLayout({
   children: ReactNode;
 }) {
   const supabase = await createClient();
+  const requestPath = (await headers()).get("x-pathname") || "/dashboard";
+  const isOnboardingRoute = requestPath.startsWith("/dashboard/onboarding");
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -19,12 +22,33 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
+  const onboardingStatus = await getOnboardingStatus(user.id);
+  if (!onboardingStatus.completed && !isOnboardingRoute) {
+    redirect("/dashboard/onboarding");
+  }
+
+  if (onboardingStatus.completed && isOnboardingRoute) {
+    const fallbackWorkspaceId = onboardingStatus.activeWorkspace?.id;
+    if (fallbackWorkspaceId) {
+      redirect(`/dashboard/workspaces/${fallbackWorkspaceId}/agents`);
+    }
+    redirect("/dashboard");
+  }
+
+  if (isOnboardingRoute) {
+    return (
+      <main className="min-h-screen bg-[#050505] text-[#F2F2F2] relative overflow-hidden">
+        {children}
+      </main>
+    );
+  }
+
   return (
     <div className="flex h-screen w-screen bg-[#050505] text-[#F2F2F2] overflow-hidden">
       {/*<SandBackground />*/}
       <WaveBackground />
       <Sidebar />
-      <main className="flex-1 overflow-y-auto relative flex flex-col custom-scrollbar">
+      <main className="flex-1 overflow-y-auto relative flex flex-col custom-scrollbar pt-14 md:pt-0">
         {children}
       </main>
     </div>

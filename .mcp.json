@@ -4,9 +4,7 @@
       "type": "stdio",
       "command": "orkestrate",
       "args": [
-        "mcp",
-        "--parent-tool",
-        "claude"
+        "mcp"
       ],
       "env": {}
     }

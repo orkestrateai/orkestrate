@@ -1,4 +1,9 @@
-import { getServerUrl } from "../lib/config.js";
+import {
+  getServerUrl,
+  isToolAllowed,
+  getEnabledTools,
+  getDisabledTools,
+} from "../lib/config.js";
 import { getValidToken } from "../lib/auth.js";
 
 /**
@@ -130,7 +135,30 @@ async function processLine(
     }
 
     if (responseBody) {
-      process.stdout.write(responseBody + "\n");
+      // Handle tools/list: filter tools based on user settings
+      if (payload.method === "tools/list") {
+        const filtered = filterToolsList(responseBody);
+        process.stdout.write(filtered + "\n");
+      } else {
+        // Handle tools/call: check if tool is allowed
+        if (payload.method === "tools/call") {
+          const toolName = payload.params?.name;
+          if (toolName && !isToolAllowed(toolName)) {
+            process.stdout.write(
+              JSON.stringify({
+                jsonrpc: "2.0",
+                id: requestId,
+                error: {
+                  code: -32600,
+                  message: `Tool '${toolName}' is disabled. Use 'orkestrate tools --list' to see available tools and 'orkestrate tools --enable ${toolName}' to enable it.`,
+                },
+              }) + "\n",
+            );
+            return;
+          }
+        }
+        process.stdout.write(responseBody + "\n");
+      }
     }
   } catch (err) {
     if (isNotification) return;
@@ -145,5 +173,38 @@ async function processLine(
         },
       }) + "\n",
     );
+  }
+}
+
+/**
+ * Filter tools/list response based on user tool settings
+ */
+function filterToolsList(responseBody: string): string {
+  try {
+    const parsed = JSON.parse(responseBody);
+    if (!parsed.result?.tools) return responseBody;
+
+    const enabledTools = getEnabledTools();
+    const disabledTools = getDisabledTools();
+
+    let filteredTools = parsed.result.tools;
+
+    if (enabledTools !== null) {
+      // Additive mode: only include enabled tools
+      filteredTools = filteredTools.filter((tool: any) =>
+        enabledTools.includes(tool.name),
+      );
+    } else {
+      // Subtractive mode: exclude disabled tools
+      filteredTools = filteredTools.filter(
+        (tool: any) => !disabledTools.includes(tool.name),
+      );
+    }
+
+    parsed.result.tools = filteredTools;
+    return JSON.stringify(parsed);
+  } catch {
+    // If parsing fails, return original response
+    return responseBody;
   }
 }

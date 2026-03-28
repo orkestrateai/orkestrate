@@ -1,15 +1,20 @@
 /**
  * orkestrate login
  *
- * Authenticate with Orkestrate via Orkestrate OAuth + GitHub OAuth.
- * Both are required: Orkestrate for identity, GitHub for workspace creation.
+ * Authenticate with Orkestrate browser OAuth.
+ * GitHub authorization is optional and can be forced with --github.
  */
 
 import { performLogin } from "../lib/auth.js";
 import { getCredentials, getConfigPath } from "../lib/config.js";
 import { ui } from "../lib/ui.js";
 
-export async function loginCommand(): Promise<void> {
+type LoginOptions = {
+  github?: boolean;
+  skipGithub?: boolean;
+};
+
+export async function loginCommand(options: LoginOptions = {}): Promise<void> {
   const existing = getCredentials();
   if (existing?.accessToken) {
     ui.dim("Refreshing existing session...");
@@ -19,29 +24,41 @@ export async function loginCommand(): Promise<void> {
   ui.blank();
 
   try {
-    const result = await performLogin();
+    const githubMode = options.skipGithub
+      ? "skip"
+      : options.github
+        ? "force"
+        : "auto";
+
+    const result = await performLogin({ githubMode });
     ui.blank();
 
     ui.success("Logged in to Orkestrate!");
 
-    if (result.githubConnected) {
+    if (result.githubStatus === "connected") {
       ui.success("GitHub connected.");
+    } else if (result.githubStatus === "already_connected") {
+      ui.success("GitHub already connected on your Orkestrate account.");
+    } else if (result.githubStatus === "skipped") {
+      ui.dim(
+        "GitHub authorization skipped. Run `orkestrate login --github` to connect later.",
+      );
     } else {
       ui.warn(
-        "GitHub not connected — workspace creation will require GitHub access.",
+        "GitHub not connected - workspace creation will require GitHub access.",
       );
     }
 
     ui.blank();
     ui.info("Next steps:");
     ui.line(
-      "  1. orkestrate init              — link your project to a workspace",
+      "  1. orkestrate init                - link your project to a workspace",
     );
     ui.line(
-      "  2. orkestrate connect <tool>      — configure your AI tool (claude, opencode, etc.)",
+      "  2. orkestrate connect <tool>      - configure your AI tool (claude, opencode, etc.)",
     );
     ui.line(
-      "  3. Run your AI tool               — your agent starts and joins the workspace",
+      "  3. Run your AI tool               - your agent starts and joins the workspace",
     );
     ui.line("  4. In your AI tool, call: join_workspace <workspace_id>");
     ui.blank();

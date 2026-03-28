@@ -282,6 +282,27 @@ async function pollGithubToken(
   }
 }
 
+async function getGithubConnectionStatus(
+  serverUrl: string,
+  accessToken: string,
+): Promise<boolean | null> {
+  try {
+    const res = await fetch(`${serverUrl}/api/github/status`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
+      },
+    });
+
+    if (!res.ok) return null;
+    const data = (await res.json()) as { connected?: boolean };
+    return Boolean(data.connected);
+  } catch {
+    return null;
+  }
+}
+
 // ─── Token Refresh ─────────────────────────────────────────────────────────────
 
 /**
@@ -354,15 +375,24 @@ export async function getValidToken(): Promise<string | null> {
  * GitHub is best-effort — if it fails, login still succeeds but
  * workspace creation won't work until GitHub is re-connected.
  */
-export async function performLogin(): Promise<{
+export type GithubLoginMode = "auto" | "force" | "skip";
+
+export type PerformLoginOptions = {
+  githubMode?: GithubLoginMode;
+};
+
+export async function performLogin(
+  options: PerformLoginOptions = {},
+): Promise<{
   clientId: string;
   userId: string;
   accessToken: string;
-  githubConnected: boolean;
+  githubStatus: "connected" | "already_connected" | "skipped" | "failed";
 }> {
   const serverUrl = getServerUrl();
   const port = 19274; // "ork" on phone keypad, roughly
   const redirectUri = `http://127.0.0.1:${port}/callback`;
+  const githubMode = options.githubMode ?? "auto";
 
   // ── Phase 1: Orkestrate OAuth ──────────────────────────────────────────────
 

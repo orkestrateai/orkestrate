@@ -81,6 +81,7 @@ export function useGitHubConnection(): UseGitHubConnectionReturn {
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
+    void checkConnection();
 
     // Handle Supabase OAuth callback redirect — sync token if ?code is present.
     // onAuthStateChange fires once the session is set so no explicit

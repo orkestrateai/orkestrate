@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import useSWR from "swr";
 import { createSupabaseBrowserClient } from "@/utils/supabase/client";
 import { Bot, Loader2, GitBranch, ChevronLeft, Trash2 } from "lucide-react";
@@ -87,6 +87,7 @@ function getStatusStyle(s: string) {
 
 export default function AgentsPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [selectedAgent, setSelectedAgent] = useState<AgentData | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<AgentData | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -97,6 +98,11 @@ export default function AgentsPage() {
     isLoading,
   } = useSWR(id ? `/api/workspaces/${id}/agents` : null, agentsFetcher, {
     refreshInterval: 5000,
+    onError: (err: any) => {
+      if (err.message === "Unauthorized" || err.message === "unauthorized") {
+        router.push(`/login?next=${encodeURIComponent(window.location.pathname)}`);
+      }
+    },
   });
 
   if (isLoading) {

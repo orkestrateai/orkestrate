@@ -2,7 +2,7 @@ import DocsLayout from "@/components/DocsLayout";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-    title: "Changelog",
+    title: "Changelog | Orkestrate",
 };
 
 const changelog = [
@@ -74,66 +74,101 @@ const changelog = [
     },
 ];
 
-const typeColors = {
-    added: { bg: "bg-[#34d399]/10", text: "text-[#34d399]", border: "border-[#34d399]/20", label: "Added" },
-    improved: { bg: "bg-[#3b82f6]/10", text: "text-[#3b82f6]", border: "border-[#3b82f6]/20", label: "Improved" },
-    fixed: { bg: "bg-[#f59e0b]/10", text: "text-[#f59e0b]", border: "border-[#f59e0b]/20", label: "Fixed" },
-    removed: { bg: "bg-[#ef4444]/10", text: "text-[#ef4444]", border: "border-[#ef4444]/20", label: "Removed" },
+const typeStyles = {
+    added: { 
+        bg: "bg-white/[0.04]", 
+        text: "text-[#EBEBEB]", 
+        border: "border-white/[0.1]", 
+        label: "Added" 
+    },
+    improved: { 
+        bg: "bg-[#0A0A0B]", 
+        text: "text-[#8A8F98]", 
+        border: "border-white/[0.05]", 
+        label: "Improved" 
+    },
+    fixed: { 
+        bg: "bg-transparent", 
+        text: "text-[#5E626B]", 
+        border: "border-dashed border-white/[0.05]", 
+        label: "Fixed" 
+    },
+    removed: { 
+        bg: "bg-transparent", 
+        text: "text-[#5E626B] line-through", 
+        border: "border border-white/[0.02]", 
+        label: "Removed" 
+    },
 };
 
 export default function ChangelogPage() {
     return (
         <DocsLayout>
-            <div className="mb-12">
-                <p className="text-sm text-[#34d399] font-medium mb-2">Changelog</p>
-                <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight mb-4">
-                    What&apos;s New
-                </h1>
-                <p className="text-muted-foreground leading-relaxed text-lg">
-                    Latest updates, improvements, and fixes to Orkestrate.
-                </p>
-            </div>
+            <div className="max-w-4xl mx-auto pt-8 pb-32">
+                {/* Header Sequence */}
+                <div className="mb-24">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.03] border border-white/[0.08] mb-6">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/[0.5] animate-pulse" />
+                        <span className="text-[10px] font-sans font-medium tracking-widest uppercase text-[#8A8F98]">
+                            Transmission Log
+                        </span>
+                    </div>
+                    <h1 className="text-4xl md:text-5xl font-light tracking-tight text-[#EBEBEB] mb-5">
+                        Changelog
+                    </h1>
+                    <p className="text-lg text-[#5E626B] leading-relaxed max-w-2xl font-light">
+                        New updates and improvements to the Orkestrate protocol.
+                    </p>
+                </div>
 
-            <div className="space-y-0">
-                {changelog.map((release, i) => (
-                    <div key={release.version} className="relative">
-                        {/* Timeline line */}
-                        {i < changelog.length - 1 && (
-                            <div className="absolute left-[7px] top-[28px] bottom-0 w-px bg-white/[0.06]" />
-                        )}
-
-                        <div className="flex gap-6 pb-16">
-                            {/* Timeline dot */}
-                            <div className="relative shrink-0 mt-[6px]">
-                                <div className={`w-[15px] h-[15px] rounded-full border-2 ${i === 0 ? "border-[#34d399] bg-[#34d399]/20" : "border-white/20 bg-white/5"
-                                    }`} />
+                {/* Release History */}
+                <div className="space-y-24">
+                    {changelog.map((release) => (
+                        <div key={release.version} className="relative md:flex md:gap-12 group">
+                            
+                            {/* Left: Version & Date (Sticky on Desktop) */}
+                            <div className="md:w-48 shrink-0 pb-6 md:pb-0 relative z-10">
+                                <div className="sticky top-32">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <h2 className="text-xl font-medium text-[#EBEBEB] tracking-tight">
+                                            v{release.version}
+                                        </h2>
+                                        {release.tag && (
+                                            <span className="text-[9px] font-sans font-medium tracking-[0.2em] uppercase px-2 py-0.5 rounded-full border border-white/[0.1] bg-white/[0.04] text-[#EBEBEB]">
+                                                {release.tag}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-[13px] text-[#5E626B] font-sans">
+                                        {release.date}
+                                    </p>
+                                </div>
                             </div>
 
-                            {/* Content */}
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-3 mb-1">
-                                    <h2 className="text-xl font-semibold">v{release.version}</h2>
-                                    {release.tag && (
-                                        <span className="text-[10px] font-mono tracking-wider uppercase px-2 py-0.5 rounded-full border border-[#34d399]/30 bg-[#34d399]/10 text-[#34d399]">
-                                            {release.tag}
-                                        </span>
-                                    )}
-                                </div>
-                                <p className="text-sm text-muted-foreground mb-6">{release.date}</p>
-
-                                <div className="space-y-6">
+                            {/* Right: Changes Content */}
+                            <div className="flex-1 relative">
+                                {/* Subtle divider line for structural framing */}
+                                <div className="absolute -left-6 md:-left-12 top-2 bottom-0 w-px bg-gradient-to-b from-white/[0.08] via-white/[0.02] to-transparent hidden md:block group-last:from-transparent" />
+                                
+                                <div className="space-y-12">
                                     {release.changes.map((group) => {
-                                        const colors = typeColors[group.type];
+                                        const style = typeStyles[group.type];
                                         return (
-                                            <div key={group.type}>
-                                                <span className={`inline-block text-xs font-medium tracking-wider uppercase px-2 py-0.5 rounded ${colors.bg} ${colors.text} ${colors.border} border mb-3`}>
-                                                    {colors.label}
+                                            <div key={group.type} className="relative">
+                                                {/* Bullet connecting to the divider line */}
+                                                <div className="hidden md:block absolute -left-[50px] top-2.5 w-1.5 h-1.5 rounded-full bg-[#16181A] border border-[#3A3F4A]" />
+
+                                                <span className={`inline-flex items-center px-2 py-1 rounded-[4px] text-[10px] font-sans font-medium tracking-widest uppercase border ${style.bg} ${style.text} ${style.border} mb-6`}>
+                                                    {style.label}
                                                 </span>
-                                                <ul className="space-y-2">
+                                                
+                                                <ul className="space-y-4">
                                                     {group.items.map((item, j) => (
-                                                        <li key={j} className="flex gap-2 text-sm text-muted-foreground leading-relaxed">
-                                                            <span className="text-white/20 mt-0.5 shrink-0">•</span>
-                                                            <span>{item}</span>
+                                                        <li key={j} className="flex items-start gap-4 group/item">
+                                                            <div className="mt-2.5 w-1 h-1 rounded-full bg-[#3A3F4A] shrink-0 group-hover/item:bg-[#8A8F98] transition-colors" />
+                                                            <span className="text-[14px] text-[#8A8F98] leading-relaxed group-hover/item:text-[#D1D3D8] transition-colors duration-300">
+                                                                {item}
+                                                            </span>
                                                         </li>
                                                     ))}
                                                 </ul>
@@ -142,11 +177,11 @@ export default function ChangelogPage() {
                                     })}
                                 </div>
                             </div>
+
                         </div>
-                    </div>
-                ))}
+                    ))}
+                </div>
             </div>
         </DocsLayout>
     );
 }
-

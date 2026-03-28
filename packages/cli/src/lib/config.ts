@@ -1,14 +1,31 @@
 /**
- * Orkestrate CLI — Configuration Management
+ * Orkestrate CLI - Configuration Management
  *
- * Stores credentials and preferences in the user's home directory.
- * Uses the `conf` package for cross-platform config storage.
+ * Stores credentials and preferences in a JSON file in the user's config dir.
+ * This avoids atomic rename behavior that can fail on Windows with EPERM.
  */
 
-import Conf from "conf";
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { dirname } from "node:path";
-import { mkdirSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
+
+export interface UserToolSettings {
+  enabledTools?: string[] | null; // null = all enabled
+  disabledTools?: string[]; // explicit disable list
+}
+
+export interface CliConfig {
+  credentials: StoredCredentials | null;
+  activeWorkspaceId: string | null;
+  activeWorkspaceName: string | null;
+  serverUrl: string;
+  userToolSettings?: UserToolSettings;
+}
 
 export interface StoredCredentials {
   clientId: string;
@@ -22,86 +39,162 @@ export interface StoredCredentials {
   githubExpiresAt?: number; // epoch seconds
 }
 
-export interface CliConfig {
-  credentials: StoredCredentials | null;
-  activeWorkspaceId: string | null;
-  activeWorkspaceName: string | null;
-  serverUrl: string;
+const DEFAULT_CONFIG: CliConfig = {
+  credentials: null,
+  activeWorkspaceId: null,
+  activeWorkspaceName: null,
+  serverUrl: "https://orkestrate.space",
+  userToolSettings: {},
+};
+
+function resolveConfigPath(): string {
+  if (process.platform === "win32") {
+    const appData =
+      process.env.APPDATA || join(homedir(), "AppData", "Roaming");
+    // Keep the existing Windows path used by current installs for compatibility.
+    return join(appData, "orkestrate", "Config", "config.json");
+  }
+
+  const xdgConfigHome = process.env.XDG_CONFIG_HOME || join(homedir(), ".config");
+  return join(xdgConfigHome, "orkestrate", "config.json");
 }
 
-const config = new Conf<CliConfig>({
-  projectName: "orkestrate",
-  projectSuffix: "",
-  defaults: {
-    credentials: null,
-    activeWorkspaceId: null,
-    activeWorkspaceName: null,
-    serverUrl: "https://orkestrate.space",
-  },
-});
+const configPath = resolveConfigPath();
 
-export function getConfig(): CliConfig {
+function sleepMs(delayMs: number): void {
+  const start = Date.now();
+  while (Date.now() - start < delayMs) {
+    // Busy wait is acceptable in short-lived CLI flows.
+  }
+}
+
+function isRetriableConfigWriteError(err: unknown): boolean {
+  if (!err) return false;
+  const code =
+    typeof err === "object" && err !== null && "code" in err
+      ? String((err as { code?: unknown }).code ?? "")
+      : "";
+  const message =
+    err instanceof Error
+      ? err.message
+      : typeof err === "string"
+        ? err
+        : String(err);
+
+  if (code === "EPERM" || code === "EBUSY") return true;
+  return /(EPERM|EBUSY|operation not permitted|resource busy|rename)/i.test(
+    message,
+  );
+}
+
+function cloneDefaults(): CliConfig {
   return {
-    credentials: config.get("credentials"),
-    activeWorkspaceId: config.get("activeWorkspaceId"),
-    activeWorkspaceName: config.get("activeWorkspaceName"),
-    serverUrl: config.get("serverUrl"),
+    credentials: DEFAULT_CONFIG.credentials,
+    activeWorkspaceId: DEFAULT_CONFIG.activeWorkspaceId,
+    activeWorkspaceName: DEFAULT_CONFIG.activeWorkspaceName,
+    serverUrl: DEFAULT_CONFIG.serverUrl,
+    userToolSettings: {},
   };
 }
 
-export function getServerUrl(): string {
-  return config.get("serverUrl");
+function normalizeUserToolSettings(input: unknown): UserToolSettings {
+  if (!input || typeof input !== "object") return {};
+
+  const source = input as Record<string, unknown>;
+  const enabledRaw = source.enabledTools;
+  const disabledRaw = source.disabledTools;
+
+  const enabledTools =
+    enabledRaw === null
+      ? null
+      : Array.isArray(enabledRaw)
+        ? enabledRaw.filter((item): item is string => typeof item === "string")
+        : undefined;
+
+  const disabledTools = Array.isArray(disabledRaw)
+    ? disabledRaw.filter((item): item is string => typeof item === "string")
+    : undefined;
+
+  return {
+    enabledTools,
+    disabledTools,
+  };
 }
 
-// Helper for config writes with retry and exponential backoff
-function setConfigWithRetry(
-  key: string,
-  value: unknown,
-  maxAttempts = 5,
-): void {
+function normalizeConfig(raw: unknown): CliConfig {
+  if (!raw || typeof raw !== "object") return cloneDefaults();
+  const source = raw as Partial<CliConfig>;
+
+  return {
+    credentials: source.credentials ?? null,
+    activeWorkspaceId: source.activeWorkspaceId ?? null,
+    activeWorkspaceName: source.activeWorkspaceName ?? null,
+    serverUrl:
+      typeof source.serverUrl === "string" && source.serverUrl.trim().length > 0
+        ? source.serverUrl
+        : DEFAULT_CONFIG.serverUrl,
+    userToolSettings: normalizeUserToolSettings(source.userToolSettings),
+  };
+}
+
+function readConfigFile(): CliConfig {
+  if (!existsSync(configPath)) {
+    return cloneDefaults();
+  }
+
+  try {
+    const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+    return normalizeConfig(raw);
+  } catch {
+    return cloneDefaults();
+  }
+}
+
+function writeConfigFile(next: CliConfig, maxAttempts = 6): void {
+  const dir = dirname(configPath);
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+
+  const payload = `${JSON.stringify(next, null, 2)}\n`;
+
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      config.set(key, value);
+      writeFileSync(configPath, payload, "utf-8");
       return;
-    } catch (err: any) {
-      // Only retry on EPERM/EBUSY (Windows file locking)
-      if (err?.code !== "EPERM" && err?.code !== "EBUSY") {
+    } catch (err) {
+      if (!isRetriableConfigWriteError(err)) {
         throw err;
       }
-      // Exponential backoff: 50ms, 100ms, 200ms, 400ms, 800ms
-      const delay = 50 * Math.pow(2, attempt);
+
       if (attempt < maxAttempts - 1) {
-        const start = Date.now();
-        while (Date.now() - start < delay) {
-          // busy wait
-        }
+        sleepMs(50 * Math.pow(2, attempt));
       }
     }
   }
 
-  // Fallback: direct file write bypassing conf's atomic operations
-  try {
-    const configPath = config.path;
-    const dir = dirname(configPath);
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
-    }
-    let currentConfig: Record<string, unknown> = {};
-    if (existsSync(configPath)) {
-      try {
-        currentConfig = JSON.parse(readFileSync(configPath, "utf-8"));
-      } catch {
-        currentConfig = {};
-      }
-    }
-    currentConfig[key] = value;
-    writeFileSync(configPath, JSON.stringify(currentConfig, null, 2), "utf-8");
-    return;
-  } catch (fallbackErr) {
-    throw new Error(
-      `Failed to save config after ${maxAttempts} attempts. Original error: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
-    );
-  }
+  throw new Error(
+    `Failed to write config file at ${configPath} after ${maxAttempts} attempts.`,
+  );
+}
+
+// Helper for config writes with retry and exponential backoff.
+function setConfigWithRetry(
+  key: keyof CliConfig,
+  value: CliConfig[keyof CliConfig],
+  maxAttempts = 6,
+): void {
+  const current = readConfigFile() as Record<string, unknown>;
+  current[key] = value;
+  writeConfigFile(normalizeConfig(current), maxAttempts);
+}
+
+export function getConfig(): CliConfig {
+  return readConfigFile();
+}
+
+export function getServerUrl(): string {
+  return readConfigFile().serverUrl;
 }
 
 export function setCredentials(creds: StoredCredentials): void {
@@ -109,7 +202,7 @@ export function setCredentials(creds: StoredCredentials): void {
 }
 
 export function getCredentials(): StoredCredentials | null {
-  return config.get("credentials");
+  return readConfigFile().credentials;
 }
 
 export function clearCredentials(): void {
@@ -125,9 +218,10 @@ export function getActiveWorkspace(): {
   id: string | null;
   name: string | null;
 } {
+  const config = readConfigFile();
   return {
-    id: config.get("activeWorkspaceId"),
-    name: config.get("activeWorkspaceName"),
+    id: config.activeWorkspaceId,
+    name: config.activeWorkspaceName,
   };
 }
 
@@ -136,11 +230,90 @@ export function setServerUrl(url: string): void {
 }
 
 export function clearAll(): void {
-  config.clear();
+  writeConfigFile(cloneDefaults());
 }
 
 export function getConfigPath(): string {
-  return config.path;
+  return configPath;
+}
+
+// --- User Tool Settings Management ---
+
+export function getUserToolSettings(): UserToolSettings {
+  return readConfigFile().userToolSettings || {};
+}
+
+export function setUserToolSettings(settings: UserToolSettings): void {
+  setConfigWithRetry("userToolSettings", settings);
+}
+
+export function getEnabledTools(): string[] | null {
+  const settings = getUserToolSettings();
+  return settings.enabledTools ?? null;
+}
+
+export function getDisabledTools(): string[] {
+  const settings = getUserToolSettings();
+  return settings.disabledTools || [];
+}
+
+export function setEnabledTools(tools: string[] | null): void {
+  const settings = getUserToolSettings();
+  settings.enabledTools = tools;
+  setUserToolSettings(settings);
+}
+
+export function setDisabledTools(tools: string[]): void {
+  const settings = getUserToolSettings();
+  settings.disabledTools = tools;
+  setUserToolSettings(settings);
+}
+
+export function isToolAllowed(toolName: string): boolean {
+  const enabledTools = getEnabledTools();
+  const disabledTools = getDisabledTools();
+
+  // If enabledTools is set (not null), only those tools are allowed.
+  if (enabledTools !== null) {
+    return enabledTools.includes(toolName);
+  }
+
+  // Otherwise, check disabledTools list.
+  return !disabledTools.includes(toolName);
+}
+
+export function enableTool(toolName: string): void {
+  const enabledTools = getEnabledTools();
+  const disabledTools = getDisabledTools();
+
+  if (enabledTools !== null) {
+    // Additive mode: add to enabled list if not present.
+    if (!enabledTools.includes(toolName)) {
+      setEnabledTools([...enabledTools, toolName]);
+    }
+  } else {
+    // Subtractive mode: remove from disabled list.
+    if (disabledTools.includes(toolName)) {
+      setDisabledTools(disabledTools.filter((t) => t !== toolName));
+    }
+  }
+}
+
+export function disableTool(toolName: string): void {
+  const enabledTools = getEnabledTools();
+  const disabledTools = getDisabledTools();
+
+  if (enabledTools !== null) {
+    // Additive mode: remove from enabled list.
+    if (enabledTools.includes(toolName)) {
+      setEnabledTools(enabledTools.filter((t) => t !== toolName));
+    }
+  } else {
+    // Subtractive mode: add to disabled list.
+    if (!disabledTools.includes(toolName)) {
+      setDisabledTools([...disabledTools, toolName]);
+    }
+  }
 }
 
 // --- GitHub Token Management ---
@@ -179,7 +352,7 @@ export function getValidGithubToken(): string | null {
 
   const now = Math.floor(Date.now() / 1000);
 
-  // Consider expired if within 60 seconds of expiry
+  // Consider expired if within 60 seconds of expiry.
   if (tokens.expiresAt <= now + 60) return null;
 
   return tokens.accessToken;

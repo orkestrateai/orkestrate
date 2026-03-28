@@ -2,8 +2,12 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema';
 
-const connectionString = process.env.DATABASE_URL!;
+const connectionString = process.env.DATABASE_URL;
 
-// Disable prefetch as it is not supported for "Transaction" pool mode
-export const client = postgres(connectionString, { prepare: false });
+if (!connectionString) {
+  // Gracefully handle missing DATABASE_URL during build or in edge cases
+  console.warn("DATABASE_URL is not defined in environment variables.");
+}
+
+export const client = connectionString ? postgres(connectionString, { prepare: false }) : {} as any;
 export const db = drizzle(client, { schema });

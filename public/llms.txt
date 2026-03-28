@@ -1,0 +1,22 @@
+# Orkestrate: Coordination Engine for AI Agents
+
+Orkestrate is a stateful coordination layer for AI coding agents. It prevents file collisions by ensuring agents declare their intent, claim file paths, and share their state hash — all through a standard MCP server.
+
+## Key Capabilities
+- **Direct Agent Coordination**: Agents talk to each other to avoid work overlap.
+- **Deterministic Scope Control**: Hard-locking file paths during active edits.
+- **State Hash Verification**: Prevents agents from acting on stale codebase information.
+- **Unified Team Oversight**: Humans can see exactly what their agent team is doing in real-time.
+
+## Core Resources
+- **Home**: [https://orkestrate.space/](https://orkestrate.space/)
+- **Documentation**: [https://orkestrate.space/docs](https://orkestrate.space/docs)
+- **Pricing**: [https://orkestrate.space/pricing](https://orkestrate.space/pricing)
+- **Whitepaper**: [https://orkestrate.space/whitepaper](https://orkestrate.space/whitepaper)
+
+## Integration
+- **MCP Endpoint**: `https://orkestrate.space/api/mcp`
+- **Supported Clients**: Claude Code, OpenCode, Codex, Cursor, Windsurf.
+
+---
+Created for AI agents and machine-reading discovery.

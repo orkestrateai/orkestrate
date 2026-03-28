@@ -211,7 +211,7 @@ export default function WhitepaperPage() {
               </div>
               <div className="min-w-0 flex-1">
                 {phase.fn && (
-                  <span className="inline-block text-[11px] font-mono text-white/20 bg-white/[0.04] rounded px-1.5 py-0.5 mb-1.5">{phase.fn}</span>
+                  <span className="inline-block text-[11px] font-sans text-white/20 bg-white/[0.04] rounded px-1.5 py-0.5 mb-1.5">{phase.fn}</span>
                 )}
                 <p className="text-[13px] text-white/30 leading-[1.7]">{phase.what}</p>
               </div>
@@ -236,7 +236,7 @@ export default function WhitepaperPage() {
             <div className="flex items-center gap-2 mb-3">
               <div className="w-2 h-2 rounded-full bg-[#10B981]" />
               <h3 className="text-sm font-semibold text-white/70">Hooks & Plugins</h3>
-              <span className="text-[10px] text-white/20 ml-auto font-mono">passive</span>
+              <span className="text-[10px] text-white/20 ml-auto font-sans">passive</span>
             </div>
             <p className="text-[13px] text-white/35 leading-relaxed mb-3">
               Fire automatically. They capture what happened — not what was planned.
@@ -252,7 +252,7 @@ export default function WhitepaperPage() {
             <div className="flex items-center gap-2 mb-3">
               <div className="w-2 h-2 rounded-full bg-[#6366F1]" />
               <h3 className="text-sm font-semibold text-white/70">MCP State Tools</h3>
-              <span className="text-[10px] text-white/20 ml-auto font-mono">active</span>
+              <span className="text-[10px] text-white/20 ml-auto font-sans">active</span>
             </div>
             <p className="text-[13px] text-white/35 leading-relaxed mb-3">
               Require the agent to explicitly call them. They represent declared intent.

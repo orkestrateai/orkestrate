@@ -5,9 +5,7 @@
       "type": "local",
       "command": [
         "orkestrate",
-        "mcp",
-        "--parent-tool",
-        "opencode"
+        "mcp"
       ],
       "enabled": true
     }

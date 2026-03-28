@@ -43,6 +43,17 @@ interface AgentData {
   updatedAt: string;
 }
 
+interface MemberData {
+  id: string;
+  userId: string;
+  role: string;
+  isCurrentUser: boolean;
+  displayName: string;
+  email: string;
+  avatarUrl: string;
+  joinedAt: string;
+}
+
 async function workspaceFetcher(url: string): Promise<WorkspaceData> {
   const supabase = createSupabaseBrowserClient();
   const {
@@ -81,6 +92,25 @@ async function agentsFetcher(url: string): Promise<AgentData[]> {
   return data.agents as AgentData[];
 }
 
+async function membersFetcher(url: string): Promise<MemberData[]> {
+  const supabase = createSupabaseBrowserClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${session?.access_token}` },
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? "Failed to load members");
+  }
+
+  const data = await res.json();
+  return data.members as MemberData[];
+}
+
 export default function WorkspaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -90,8 +120,10 @@ export default function WorkspaceDetailPage() {
     error,
     isLoading,
   } = useSWR(id ? `/api/workspaces/${id}` : null, workspaceFetcher, {
-    onError: (err) => {
-      if (err.message === "Unauthorized") router.push("/login");
+    onError: (err: any) => {
+      if (err.message === "Unauthorized" || err.message === "unauthorized") {
+        router.push(`/login?next=${encodeURIComponent(window.location.pathname)}`);
+      }
     },
   });
 
@@ -102,6 +134,12 @@ export default function WorkspaceDetailPage() {
   } = useSWR(id ? `/api/workspaces/${id}/agents` : null, agentsFetcher, {
     refreshInterval: 5000,
   });
+
+  const {
+    data: members,
+    error: membersError,
+    isLoading: membersLoading,
+  } = useSWR(id ? `/api/workspace-members?workspaceId=${id}` : null, membersFetcher);
 
   if (isLoading) {
     return (
@@ -217,15 +255,34 @@ export default function WorkspaceDetailPage() {
           </Link>
 
           <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col">
-            <div className="w-10 h-10 rounded-xl bg-white/[0.04] flex items-center justify-center mb-5">
-              <Users className="w-5 h-5 text-zinc-400" />
+            <div className="flex items-center justify-between mb-5">
+              <div className="w-10 h-10 rounded-xl bg-white/[0.04] flex items-center justify-center">
+                <Users className="w-5 h-5 text-zinc-400" />
+              </div>
+              <div className="flex -space-x-2">
+                {members?.slice(0, 3).map((m) => (
+                  <div key={m.id} className="w-6 h-6 rounded-full border border-[#050505] overflow-hidden bg-zinc-800">
+                    {m.avatarUrl ? (
+                      <img src={m.avatarUrl} alt={m.displayName} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-zinc-500">
+                        {m.displayName?.[0]}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {(members?.length || 0) > 3 && (
+                  <div className="w-6 h-6 rounded-full border border-[#050505] bg-zinc-900 flex items-center justify-center text-[9px] font-bold text-zinc-500">
+                    +{(members?.length || 0) - 3}
+                  </div>
+                )}
+              </div>
             </div>
             <h3 className="text-base font-semibold text-zinc-100 mb-1">
               Members
             </h3>
             <p className="text-sm text-zinc-500">
-              Up to {workspace.maxMembers} member
-              {workspace.maxMembers !== 1 ? "s" : ""}.
+              {members?.length || 0} / {workspace.maxMembers} seats occupied.
             </p>
           </div>
         </div>

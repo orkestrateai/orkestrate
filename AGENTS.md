@@ -12,6 +12,9 @@
 - Prefer breaking changes that simplify the protocol and make behavior deterministic.
 - Optimize for correctness and fast iteration for one active tester/maintainer.
 
+## Design Policy
+- **STRICTLY FORBIDDEN:** Do not use `font-mono` or any monospaced fonts anywhere in the application styling. Always rely on sleek, proportional `sans` or `sans-serif` typography to maintain the high-end aesthetic.
+
 ## Command Examples
 - Install dependencies: `bun install`
 - Add dependency: `bun add <package>`
