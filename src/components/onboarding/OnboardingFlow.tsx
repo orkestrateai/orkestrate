@@ -115,6 +115,52 @@ export function OnboardingFlow() {
     }
   }, [error, router]);
 
+  // Handle Supabase OAuth redirects that tuck errors into the URL hash
+  // e.g. `#error=server_error&error_code=identity_already_exists`
+  // Also handle `?error=...` query parameters
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    let caughtError = false;
+    
+    // Parse Hash Fragment logic
+    if (window.location.hash.includes("error=")) {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const errorCode = hashParams.get("error_code");
+      const errorDesc = hashParams.get("error_description");
+      
+      if (errorCode === "identity_already_exists") {
+        setStepError(
+          "This GitHub account is already tied to another Orkestrate user account. Please log out and sign in with GitHub, or connect a different GitHub account.",
+        );
+      } else if (errorDesc) {
+        setStepError(decodeURIComponent(errorDesc).replace(/\+/g, " "));
+      } else {
+        setStepError("Failed to connect GitHub. Please try again.");
+      }
+      caughtError = true;
+    } 
+    // Parse Query Parameter logic
+    else if (window.location.search.includes("error=")) {
+      const searchParams = new URLSearchParams(window.location.search);
+      const errorVal = searchParams.get("error");
+      const errorDesc = searchParams.get("error_description");
+      
+      if (errorVal === "auth_callback_failed") {
+        setStepError("GitHub connection failed or was cancelled. Please try again.");
+      } else if (errorDesc) {
+        setStepError(decodeURIComponent(errorDesc).replace(/\+/g, " "));
+      } else if (errorVal) {
+        setStepError(errorVal.replace(/_/g, " "));
+      }
+      caughtError = true;
+    }
+    
+    if (caughtError) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
+
   const statusStep = useMemo<LocalStep>(() => {
     if (!status) return "welcome";
     if (status.completed || status.nextStep === "completed") {
@@ -177,7 +223,30 @@ export function OnboardingFlow() {
     router.push("/dashboard");
   };
 
-  if (isLoading || !status) {
+  if (error && !status) {
+    return (
+      <OnboardingShell
+        title="Connection Error"
+        subtitle="We hit a roadblock checking your account state."
+        stepIndex={0}
+        totalSteps={STEP_ORDER.length}
+      >
+        <div className="flex flex-col items-center justify-center gap-4 py-10">
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300 text-center max-w-sm">
+            {error.message || "An unexpected network error occurred."}
+          </div>
+          <button
+            onClick={() => void refreshStatus()}
+            className="rounded-full border border-white/10 bg-zinc-800 px-6 py-2 text-sm font-semibold text-zinc-300 hover:bg-zinc-700"
+          >
+            Retry Connection
+          </button>
+        </div>
+      </OnboardingShell>
+    );
+  }
+
+  if (!status) {
     return (
       <OnboardingShell
         title="Preparing setup"

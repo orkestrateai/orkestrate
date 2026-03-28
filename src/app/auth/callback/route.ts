@@ -81,16 +81,37 @@ export async function GET(request: Request) {
           );
         }
       }
-      // Preserve OAuth flow - don't redirect to dashboard if coming from /oauth/authorize
-      const target = next.startsWith("/oauth/authorize")
-        ? next
-        : next === "/"
-          ? "/dashboard"
-          : next;
-      return NextResponse.redirect(`${origin}${target}`);
+        const target = next.startsWith("/oauth/authorize")
+          ? next
+          : next === "/"
+            ? "/dashboard"
+            : next;
+        return NextResponse.redirect(new URL(target, origin));
+      } else {
+        console.error("Supabase exchangeCodeForSession failed:", error.message);
+        // Fall back to handling the error without kicking to root "/"
+      }
     }
-  }
 
-  // Return the user to an error page with instructions
-  return NextResponse.redirect(`${origin}/?error=auth_callback_failed`);
-}
+    // Determine fallback target instead of blindly kicking users out of the app
+    const fallbackTarget = next.startsWith("/oauth/authorize")
+      ? next
+      : next === "/"
+        ? "/login"
+        : next;
+
+    const errorUrl = new URL(fallbackTarget, origin);
+    errorUrl.searchParams.set(
+      "error",
+      searchParams.get("error") || "auth_callback_failed",
+    );
+    if (searchParams.get("error_description")) {
+      errorUrl.searchParams.set(
+        "error_description",
+        searchParams.get("error_description")!,
+      );
+    }
+
+    // Return the user to an error page with instructions but preserve their flow location
+    return NextResponse.redirect(errorUrl);
+  }

@@ -23,11 +23,15 @@ export default async function DashboardLayout({
   }
 
   const onboardingStatus = await getOnboardingStatus(user.id);
-  if (!onboardingStatus.completed && !isOnboardingRoute) {
+  const isMinimallyOnboarded = onboardingStatus.mcpPolicyConfigured;
+
+  // If they haven't finished the mandatory backend configurations, lock them in onboarding.
+  if (!isMinimallyOnboarded && !isOnboardingRoute) {
     redirect("/dashboard/onboarding");
   }
 
-  if (onboardingStatus.completed && isOnboardingRoute) {
+  // If they have full agent connection and attempt to revisit the onboarding wrapper, reroute them safely.
+  if (onboardingStatus.hasEverJoinedAgent && isOnboardingRoute) {
     const fallbackWorkspaceId = onboardingStatus.activeWorkspace?.id;
     if (fallbackWorkspaceId) {
       redirect(`/dashboard/workspaces/${fallbackWorkspaceId}/agents`);
