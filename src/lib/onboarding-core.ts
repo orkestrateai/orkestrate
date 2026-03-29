@@ -18,7 +18,7 @@ function resolveNextStep(input: {
   hasEverJoinedAgent: boolean;
 }): OnboardingStepId {
   if (input.hasEverJoinedAgent) return "completed";
-  if (!input.githubConnected) return "github";
+  // GitHub is now optional, so we skip to workspace if it's not connected or we just move on
   if (!input.workspaceReady) return "workspace";
   if (!input.mcpPolicyConfigured) return "mcp-policy";
   return "connect-agent";
@@ -97,7 +97,7 @@ export async function getOnboardingStatus(
     activeWorkspace,
     steps: [
       { id: "welcome", complete: true },
-      { id: "github", complete: githubConnected },
+      { id: "github", complete: githubConnected, optional: true },
       { id: "workspace", complete: workspaceReady },
       { id: "mcp-policy", complete: mcpPolicyConfigured },
       { id: "invite-team", complete: inviteCount > 0, optional: true },

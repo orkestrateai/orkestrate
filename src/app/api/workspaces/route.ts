@@ -80,25 +80,10 @@ export async function POST(req: NextRequest) {
           ? payload.baseBranch.trim() || "main"
           : "main";
 
-      if (!repoUrl) {
-        return noStoreJson({ error: "Git repository URL is required." }, 400);
-      }
-
-      const githubConnected = await hasGithubConnection(user.id);
-      if (!githubConnected) {
-        return noStoreJson(
-          {
-            error:
-              "GitHub account not connected. Connect GitHub in Settings before creating a workspace.",
-          },
-          403,
-        );
-      }
-
       const result = await createWorkspaceForUser(
         user.id,
         name || undefined,
-        repoUrl,
+        repoUrl || undefined,
         baseBranch,
       );
 
@@ -118,14 +103,16 @@ export async function POST(req: NextRequest) {
 
       const { workspace } = result;
 
-      const branchResult = await createWorkspaceBranchOnGitHub(
-        user.id,
-        repoUrl,
-        workspace.id,
-        baseBranch,
-      );
-      if (!branchResult.success) {
-        console.error("Failed to create workspace branch:", branchResult.error);
+      if (repoUrl) {
+        const branchResult = await createWorkspaceBranchOnGitHub(
+          user.id,
+          repoUrl,
+          workspace.id,
+          baseBranch,
+        );
+        if (!branchResult.success) {
+          console.error("Failed to create workspace branch:", branchResult.error);
+        }
       }
 
       return noStoreJson({ workspace });
