@@ -1,0 +1,39 @@
+[package]
+name = "orkestrate"
+version = "0.1.0"
+description = "Orkestrate"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "orkestrate_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["image-png", "image-ico"] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+sqlite-vec = "0.1.0"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+futures-util = "0.3.32"
+dotenvy = "0.15.7"
+tauri-plugin-notification = "2.0.0-rc"
+r2d2_sqlite = "0.25.0"
+r2d2 = "0.8.10"
+async-trait = "0.1"
+async-openai = "0.35.0"
+dirs = "5.0"
+

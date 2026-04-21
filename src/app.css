@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-accent: #007AFF;
+}
+
+:root {
+  /* Littlebird Warm Palette */
+  --bg: #FAFAF8;
+  --fg: #1A1A1A;
+  --fg-secondary: #6B6B6B;
+  --fg-tertiary: #9E9E9E;
+  --border: rgba(0, 0, 0, 0.06);
+
+  /* User bubble — warm light gray */
+  --user-bubble: #EFEFED;
+
+  /* Thinking block — slightly warmer than page */
+  --thinking-bg: #F7F7F5;
+  --thinking-hover: rgba(0, 0, 0, 0.02);
+
+  /* Search tags */
+  --tag-bg: #EFEFED;
+  --tag-border: rgba(0, 0, 0, 0.04);
+
+  /* Input */
+  --chat-input-bg: #FFFFFF;
+  --chat-input-border: rgba(0, 0, 0, 0.08);
+
+  /* Hover states */
+  --hover-bg: rgba(0, 0, 0, 0.04);
+
+  /* Links */
+  --link: #0066CC;
+
+  /* Code blocks */
+  --code-bg: #F2F2F0;
+
+  /* Header */
+  --header-bg: #FAFAF8;
+  --header-fg: #1A1A1A;
+  --header-fg-secondary: rgba(0, 0, 0, 0.4);
+
+  color-scheme: light;
+}
+
+:root.dark {
+  --bg: #0C0C0C;
+  --fg: #E5E5E5;
+  --fg-secondary: #777777;
+  --fg-tertiary: #555555;
+  --border: rgba(255, 255, 255, 0.06);
+
+  --user-bubble: #1A1A1A;
+  --thinking-bg: #141414;
+  --thinking-hover: rgba(255, 255, 255, 0.02);
+
+  --tag-bg: rgba(255, 255, 255, 0.06);
+  --tag-border: rgba(255, 255, 255, 0.04);
+
+  --chat-input-bg: #111111;
+  --chat-input-border: rgba(255, 255, 255, 0.08);
+
+  --hover-bg: rgba(255, 255, 255, 0.04);
+
+  --link: #4DA3FF;
+
+  --code-bg: #1A1A1A;
+
+  --header-bg: #0A0A0A;
+  --header-fg: #E5E5E5;
+  --header-fg-secondary: rgba(255, 255, 255, 0.5);
+
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  transition: background-color 150ms ease, color 150ms ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Hide scrollbars globally */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+::-webkit-scrollbar {
+  display: none;
+}
+
+/* Contenteditable placeholder styling */
+[contenteditable]:empty:before {
+  content: attr(placeholder);
+  color: var(--fg-secondary);
+  opacity: 0.5;
+  pointer-events: none;
+}
