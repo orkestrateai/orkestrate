@@ -3,10 +3,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tauri::Emitter;
 
-use crate::agents::query_expander;
-use crate::agents::storage_classifier;
-use crate::memory::retrieve;
-use crate::memory::store;
 use crate::tools::ToolRegistry;
 use crate::{HistoryMessage, ToolCallEvent, ToolResultEvent};
 
@@ -66,7 +62,6 @@ struct AccumulatedToolCall {
 }
 
 /// Run the ReAct agent loop using raw reqwest + manual JSON.
-/// Now with integrated memory retrieval and storage.
 pub async fn run_agent(
     window: tauri::Window,
     request_id: String,
@@ -78,28 +73,7 @@ pub async fn run_agent(
     let registry = ToolRegistry::new();
     let tools_json = registry_to_json(&registry);
 
-    // Extract the user's last message for memory operations
-    let last_user_message = history
-        .iter()
-        .rev()
-        .find(|m| m.role == "user")
-        .map(|m| m.content.clone())
-        .unwrap_or_default();
-
-    // Retrieve memory context asynchronously
-    let memory_context = if !last_user_message.is_empty() {
-        match retrieve_memory_context(&last_user_message, &api_key).await {
-            Ok(ctx) => ctx,
-            Err(e) => {
-                eprintln!("Memory retrieval failed: {}", e);
-                String::new()
-            }
-        }
-    } else {
-        String::new()
-    };
-
-    let mut messages = build_messages(history, &memory_context);
+    let mut messages = build_messages(history);
     let mut step = 0;
 
     loop {
@@ -312,40 +286,6 @@ pub async fn run_agent(
         break;
     }
 
-    // Store memories in background (non-blocking)
-    if !last_user_message.is_empty() {
-        let assistant_response = messages
-            .iter()
-            .rev()
-            .find(|m| m.get("role") == Some(&json!("assistant")))
-            .and_then(|m| m.get("content"))
-            .and_then(|c| c.as_str())
-            .unwrap_or("")
-            .to_string();
-
-        let turn_id = request_id.clone();
-        let api_key_clone = api_key.clone();
-
-        tokio::spawn(async move {
-            // Store classified memories
-            if let Err(e) = store_memories(&last_user_message, &assistant_response, &turn_id, &api_key_clone).await {
-                eprintln!("Background memory storage failed: {}", e);
-            }
-
-            // Process any pending embedding jobs
-            match crate::memory::embedding_queue::process_embedding_queue().await {
-                Ok(count) => {
-                    if count > 0 {
-                        println!("Processed {} embedding jobs", count);
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Embedding queue processing failed: {}", e);
-                }
-            }
-        });
-    }
-
     let _ = window.emit("done", json!({ "requestId": request_id }));
     Ok(())
 }
@@ -368,20 +308,11 @@ fn registry_to_json(registry: &ToolRegistry) -> Vec<serde_json::Value> {
         .collect()
 }
 
-/// Build initial message list from history, injecting memory context.
-fn build_messages(history: Vec<HistoryMessage>, memory_context: &str) -> Vec<serde_json::Value> {
-    let system_content = if memory_context.is_empty() {
-        "You are Orkestrate, a helpful AI assistant. You have access to tools that let you control the application. When the user asks to change the theme, switch models, or reset the chat, use the appropriate tool.".to_string()
-    } else {
-        format!(
-            "You are Orkestrate, a helpful AI assistant. You have access to tools that let you control the application.\n\n## Relevant Context from Memory\n{}\n\nUse this context to personalize your response. Ground everything in what you know about the user.",
-            memory_context
-        )
-    };
-
+/// Build initial message list from history.
+fn build_messages(history: Vec<HistoryMessage>) -> Vec<serde_json::Value> {
     let mut messages = vec![json!({
         "role": "system",
-        "content": system_content
+        "content": "You are Orkestrate, a helpful AI assistant. You have access to tools that let you control the application. When the user asks to change the theme, switch models, or reset the chat, use the appropriate tool."
     })];
 
     for msg in history {
@@ -392,130 +323,6 @@ fn build_messages(history: Vec<HistoryMessage>, memory_context: &str) -> Vec<ser
     }
 
     messages
-}
-
-/// Retrieve relevant memory context for a user message.
-async fn retrieve_memory_context(user_message: &str, api_key: &str) -> Result<String, String> {
-    // Expand the query into multiple search queries
-    let expanded = query_expander::expand_query(user_message, api_key).await?;
-
-    // Retrieve memories
-    let memories = retrieve::retrieve_context(&expanded, 15).await?;
-
-    if memories.is_empty() {
-        return Ok(String::new());
-    }
-
-    // Also get the life document
-    let life_doc = retrieve::get_life_document().unwrap_or(json!({}));
-
-    // Format into a readable context block
-    let mut sections = Vec::new();
-
-    // Add life document summary if available
-    if let Some(identity) = life_doc.get("identity") {
-        sections.push(format!("**User Identity**: {}", identity));
-    }
-    if let Some(current_state) = life_doc.get("current_state") {
-        sections.push(format!("**Current State**: {}", current_state));
-    }
-
-    // Group memories by capacity
-    let mut entity_mems = Vec::new();
-    let mut rel_mems = Vec::new();
-    let mut hist_mems = Vec::new();
-    let mut constraint_mems = Vec::new();
-    let mut state_mems = Vec::new();
-    let mut goal_mems = Vec::new();
-    let mut pattern_mems = Vec::new();
-
-    for mem in memories {
-        match mem.capacity.as_str() {
-            "entity" => entity_mems.push(mem),
-            "relationship" => rel_mems.push(mem),
-            "history" => hist_mems.push(mem),
-            "constraint" => constraint_mems.push(mem),
-            "state" => state_mems.push(mem),
-            "goal" => goal_mems.push(mem),
-            "pattern" => pattern_mems.push(mem),
-            _ => {}
-        }
-    }
-
-    if !entity_mems.is_empty() {
-        sections.push("**People & Entities**:".to_string());
-        for m in entity_mems {
-            sections.push(format!("- {}", m.content));
-        }
-    }
-    if !rel_mems.is_empty() {
-        sections.push("**Relationships & Dynamics**:".to_string());
-        for m in rel_mems {
-            sections.push(format!("- {}", m.content));
-        }
-    }
-    if !constraint_mems.is_empty() {
-        sections.push("**Constraints & Limits**:".to_string());
-        for m in constraint_mems {
-            sections.push(format!("- {}", m.content));
-        }
-    }
-    if !state_mems.is_empty() {
-        sections.push("**Recent States**:".to_string());
-        for m in state_mems {
-            sections.push(format!("- {}", m.content));
-        }
-    }
-    if !hist_mems.is_empty() {
-        sections.push("**Relevant History**:".to_string());
-        for m in hist_mems {
-            sections.push(format!("- {}", m.content));
-        }
-    }
-    if !goal_mems.is_empty() {
-        sections.push("**Active Goals**:".to_string());
-        for m in goal_mems {
-            sections.push(format!("- {}", m.content));
-        }
-    }
-    if !pattern_mems.is_empty() {
-        sections.push("**Patterns**:".to_string());
-        for m in pattern_mems {
-            sections.push(format!("- {}", m.content));
-        }
-    }
-
-    Ok(sections.join("\n"))
-}
-
-/// Store classified memories from a conversation turn (background task).
-async fn store_memories(
-    user_message: &str,
-    assistant_response: &str,
-    turn_id: &str,
-    api_key: &str,
-) -> Result<(), String> {
-    // Classify what to store
-    let classified = storage_classifier::classify_storage(
-        user_message,
-        assistant_response,
-        turn_id,
-        api_key,
-    )
-    .await?;
-
-    if classified.is_empty() {
-        return Ok(());
-    }
-
-    // Store each classified memory
-    for memory in classified {
-        if let Err(e) = store::store_classified(&memory).await {
-            eprintln!("Failed to store memory: {}", e);
-        }
-    }
-
-    Ok(())
 }
 
 /// Emit Tauri events for tool side effects.

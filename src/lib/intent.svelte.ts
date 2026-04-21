@@ -1,6 +1,6 @@
 import { themeManager, type Theme } from './theme.svelte';
 import { modelService } from './services/models.svelte';
-import { Moon, Sun, LogOut, Cpu, AlertCircle, RotateCcw, Brain, GitMerge } from 'lucide-svelte';
+import { Moon, Sun, LogOut, Cpu, AlertCircle, RotateCcw } from 'lucide-svelte';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 
 export interface ActionResponse {
@@ -41,8 +41,6 @@ class IntentEngine {
             { names: ['model', 'models'], handler: (args: string) => this.executeModel(args) },
             { names: ['theme'], handler: (args: string) => this.executeTheme(args) },
             { names: ['reset', 'clear'], handler: () => this.executeReset() },
-            { names: ['memories', 'memory', 'mem'], handler: () => this.executeMemories() },
-            { names: ['consolidate', 'merge'], handler: () => this.executeConsolidate() },
         ];
         
         for (const cmd of commands) {
@@ -144,29 +142,6 @@ class IntentEngine {
         };
     }
 
-    private executeMemories(): ActionResponse {
-        // Emit event for the page to open memory browser
-        if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('memory-browser-open'));
-        }
-        return {
-            type: "action",
-            content: "Opening memory browser...",
-            icon: Brain,
-        };
-    }
-
-    private executeConsolidate(): ActionResponse {
-        if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('memory-consolidate'));
-        }
-        return {
-            type: "action",
-            content: "Consolidating memories...",
-            icon: GitMerge,
-        };
-    }
-
     /**
      * Checks if the input might be a command while typing.
      * Used for chip styling in ChatInput.
@@ -174,7 +149,7 @@ class IntentEngine {
     isCommandLikely(input: string): boolean {
         const normalized = input.toLowerCase().trim();
         return normalized.startsWith(":") || 
-               ['dark', 'night', 'light', 'bright', 'model', 'theme', 'quit', 'exit', 'reset', 'clear', 'memories', 'consolidate'].some(k => 
+               ['dark', 'night', 'light', 'bright', 'model', 'theme', 'quit', 'exit', 'reset', 'clear'].some(k => 
                    normalized.includes(':' + k)
                );
     }

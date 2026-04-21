@@ -2,7 +2,6 @@
     import ChatInput from "$lib/components/ChatInput.svelte";
      import Message from "$lib/components/Message.svelte";
     import ModelSelector from "$lib/components/ModelSelector.svelte";
-    import MemoryBrowser from "$lib/components/MemoryBrowser.svelte";
     import Logo from "$lib/components/Logo.svelte";
     import { intentEngine } from "$lib/intent.svelte";
     import { llmService } from "$lib/services/llm.svelte";
@@ -232,5 +231,4 @@
     </footer>
 
     <ModelSelector />
-    <MemoryBrowser />
 </main>
