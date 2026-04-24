@@ -27,3 +27,12 @@ tokio = { version = "1", features = ["full"] }
 futures-util = "0.3.32"
 dotenvy = "0.15.7"
 async-trait = "0.1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+dirs = "5.0"
+r2d2 = "0.8.10"
+r2d2_sqlite = "0.25.0"
+tiktoken-rs = "0.6"
+html2md = "0.2"
+pdf-extract = "0.7"

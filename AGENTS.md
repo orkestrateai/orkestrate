@@ -36,7 +36,6 @@ Good: "Noted. This connects to what you said last week about the consent engine 
 Bad: "Here are your recent memories related to your projects: 1. Orkestrate... 2. Keiyara... 3. Coding agent..."
 
 Good: "You've got three threads running — Orkestrate, Keiyara, and the coding agent memory system. But you keep coming back to Orkestrate. You said yourself it should be first because you need it. I think you've already decided, you just haven't committed yet."
-'t committed yet."
 
 ### Core Behavioral Rules
 
@@ -71,7 +70,7 @@ Human memory is not a library. It is:
 
 Orkestrate's memory system is designed to replicate these properties. Not perfectly. Not neuroscience-faithfully. But functionally.
 
-### Memory Architecture
+### Memory Architecture: What Actually Exists
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -80,461 +79,346 @@ Orkestrate's memory system is designed to replicate these properties. Not perfec
 │  ┌─────────────────────────────────────────────────────┐ │
 │  │ LAYER 1: WORKING MEMORY                             │ │
 │  │                                                      │ │
-│  │ The current conversation context.                    │ │
-│  │ Recent messages + relevant retrieved memories        │ │
-│  │ injected into the LLM context window.               │ │
+│  │ Current conversation context (5,000-token budget).   │ │
+│  │ Windowed history + compiled user profile (user.md)   │ │
+│  │ + continuity summary block injected into system msg. │ │
 │  │                                                      │ │
-│  │ This is what the agent is "thinking about right now."│ │
-│  │ Small. Focused. Constantly refreshed.                │ │
+│  │ Retrieved memories from search_memory are NOT        │ │
+│  │ auto-injected; the agent must call the tool.         │ │
 │  └──────────────────────────┬──────────────────────────┘ │
 │                             │                             │
 │  ┌──────────────────────────▼──────────────────────────┐ │
 │  │ LAYER 2: EPISODIC MEMORY                            │ │
 │  │                                                      │ │
-│  │ Individual memories — things the user said,          │ │
-│  │ decisions they made, ideas they had.                 │ │
+│  │ Individual memories stored in SQLite episodes table. │ │
+│  │ Each episode has:                                    │ │
+│  │   - Raw content (atomic fact, preference, habit)     │ │
+│  │   - Type (fact/preference/goal/relationship/habit)   │ │
+│  │   - Confidence score (0-1)                           │ │
+│  │   - Importance score (0-1), boosted on dedup         │ │
+│  │   - Compression level (ephemeral/episodic/semantic)  │ │
+│  │   - Schema section (preferences, projects, etc.)     │ │
+│  │   - Embedding vector (2048-dim, OpenRouter)          │ │
+│  │   - Session ID + timestamp                           │ │
 │  │                                                      │ │
-│  │ Each memory has:                                     │ │
-│  │   - Raw input (exactly what was said)                │ │
-│  │   - Processed content (cleaned, complete version)    │ │
-│  │   - Memory type (thought/task/decision/plan/etc)     │ │
-│  │   - Tags (auto-generated)                           │ │
-│  │   - Entities (people, projects, tools, concepts)     │ │
-│  │   - Importance score (0-1)                          │ │
-│  │   - Derived insights (what was implied, not said)    │ │
-│  │   - Embedding vector (768d, nomic-embed-text)       │ │
-│  │   - Timestamp                                       │ │
-│  │   - Access count and last accessed time             │ │
-│  │   - Edges to related memories                       │ │
-│  │                                                      │ │
-│  │ Stored in SQLite. Searchable by vector similarity,   │ │
-│  │ by time, by entity, by type, by tag.                │ │
+│  │ Created by a 4-expert background batch pipeline.     │ │
+│  │ The agent does NOT write episodes directly.          │ │
 │  └──────────────────────────┬──────────────────────────┘ │
 │                             │                             │
 │  ┌──────────────────────────▼──────────────────────────┐ │
-│  │ LAYER 3: SEMANTIC MEMORY                            │ │
+│  │ LAYER 3: SEMANTIC MEMORY (Compiled Profile)         │ │
 │  │                                                      │ │
-│  │ The knowledge graph. Entities and their              │ │
-│  │ relationships. This is Orkestrate's understanding of │ │
-│  │ the user's WORLD — the people, projects, tools,     │ │
-│  │ places, and concepts that matter to them and how     │ │
-│  │ they all connect.                                    │ │
+│  │ A single markdown file (user.md) with sections:      │ │
+│  │ Identity, Projects, Relationships, Preferences,      │ │
+│  │ Patterns, Open Questions.                            │ │
 │  │                                                      │ │
-│  │ Entities table: name, type, mention_count,          │ │
-│  │   first_seen, last_seen                             │ │
-│  │ Edges table: source, target, relation, weight       │ │
+│  │ Rewritten periodically by the Compiler expert from   │ │
+│  │ raw episodes + contradictions. Not a graph. No       │ │
+│  │ entities table. No edges table. No graph walk.       │ │
 │  │                                                      │ │
-│  │ This layer is BUILT from episodic memory, not        │ │
-│  │ maintained separately. Every time a memory is        │ │
-│  │ stored, entities are extracted and the graph grows.  │ │
+│  │ The profile is injected into every chat context.     │ │
 │  └──────────────────────────┬──────────────────────────┘ │
 │                             │                             │
 │  ┌──────────────────────────▼──────────────────────────┐ │
-│  │ LAYER 4: CONSOLIDATED MEMORY                        │ │
-│  │ *** THIS IS WHAT DOESN'T EXIST ANYWHERE ***         │ │
+│  │ LAYER 4: CONSOLIDATED MEMORY (Partial)              │ │
 │  │                                                      │ │
-│  │ Periodically, Orkestrate reviews its memory store and │ │
-│  │ performs consolidation — the "sleep cycle."          │ │
+│  │ Contradictions tracked with pressure scores.         │ │
+│  │ Gap observations stored as ephemeral episodes.       │ │
+│  │ Session + global summaries compiled every 3/5 turns. │ │
 │  │                                                      │ │
-│  │ This generates:                                      │ │
-│  │   - Pattern memories: "User consistently does X"     │ │
-│  │   - Trajectory memories: "User's thinking on X       │ │
-│  │     has evolved from A to B to C"                   │ │
-│  │   - Contradiction flags: "User said X but also Y"   │ │
-│  │   - Gap observations: "User has been building Z     │ │
-│  │     for 3 weeks and hasn't mentioned testing"       │ │
-│  │   - Relationship summaries: "User and Alex          │ │
-│  │     collaborate on technical decisions, Alex        │ │
-│  │     is more cautious"                               │ │
-│  │   - Priority models: "User's current top concerns   │ │
-│  │     are A, B, C based on frequency and recency"     │ │
-│  │                                                      │ │
-│  │ These are SYNTHESIZED memories — they were never     │ │
-│  │ said by the user. They were generated by Orkestrate  │ │
-│  │ by thinking across many memories. They are stored    │ │
-│  │ as a special memory type and are retrievable just   │ │
-│  │ like any other memory.                              │ │
-│  │                                                      │ │
-│  │ This is generative memory. This is what makes       │ │
-│  │ Orkestrate get smarter over time rather than just   │ │
-│  │ accumulating facts.                                 │ │
+│  │ NO automated sleep cycle. NO pattern/trajectory      │ │
+│  │ memory types. NO belief revision beyond manual       │ │
+│  │ contradiction resolution via UI.                     │ │
 │  └──────────────────────────┬──────────────────────────┘ │
 │                             │                             │
 │  ┌──────────────────────────▼──────────────────────────┐ │
 │  │ LAYER 5: PROSPECTIVE MEMORY                         │ │
-│  │ *** ALSO DOESN'T EXIST ANYWHERE ***                 │ │
+│  │ *** DOES NOT EXIST ***                              │ │
 │  │                                                      │ │
-│  │ Forward-looking memory triggers.                     │ │
-│  │                                                      │ │
-│  │ When Orkestrate stores or consolidates memories, it may │ │
-│  │ generate prospective triggers:                      │ │
-│  │                                                      │ │
-│  │   "IF user mentions deploying to production         │ │
-│  │    THEN remind them they never set up monitoring"   │ │
-│  │                                                      │ │
-│  │   "IF user talks about Keiyara again                │ │
-│  │    THEN surface the consent engine connection"      │ │
-│  │                                                      │ │
-│  │   "IF it's been 2 weeks since user mentioned        │ │
-│  │    their exercise goal THEN gently ask about it"    │ │
-│  │                                                      │ │
-│  │ These are checked against every incoming message.   │ │
-│  │ If a trigger fires, the relevant memory is          │ │
-│  │ injected into the working memory for that response. │ │
+│  │ No trigger table. No IF-THEN forward-looking system. │ │
 │  └──────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────┘
 ```
+
+### The Four-Expert Batch Extraction Pipeline
+
+Memory creation happens asynchronously, NOT during the chat turn. After each assistant response, the latest user+assistant exchange is queued for background processing.
+
+```
+USER + ASSISTANT EXCHANGE
+       │
+       ▼
+┌─────────────────────────────────────────┐
+│  BATCH QUEUE (per-session buffers)      │
+│  - Batch size = 5 exchanges             │
+│  - OR 30-second timeout                 │
+│  - LRU cap: 50 concurrent sessions      │
+└─────────────┬───────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────┐
+│  EXPERT 1: Triage-Extractor             │
+│  (minimax-m2.5-free, max_tokens: 4096)  │
+│                                          │
+│  Input: 1-5 conversation exchanges       │
+│  Output: atomic candidates + raw         │
+│          inferences (low-confidence)     │
+│                                          │
+│  Saves raw inferences as ephemeral       │
+│  episodes immediately.                   │
+└─────────────┬───────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────┐
+│  EMBEDDING + DEDUPLICATION              │
+│                                          │
+│  - Primary: Ollama nomic-embed-text      │
+│    (768-dim, local, ~50ms)              │
+│  - Fallback: OpenRouter nvidia/llama-   │
+│    nemotron (2048-dim, remote)          │
+│  - Provider recorded per episode for     │
+│    dimension-compatible retrieval        │
+│  - Load last 5,000 existing embeddings   │
+│  - Semantic dedup: cosine > 0.85         │
+│    → skip duplicate, boost existing      │
+│    importance by +0.1                    │
+│  - Collect top-15 similar episodes per   │
+│    candidate for mapper context          │
+└─────────────┬───────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────┐
+│  EXPERT 2: Schema Mapper                │
+│  (minimax-m2.5-free, max_tokens: 4096)  │
+│                                          │
+│  Input: candidates + semantic context   │
+│         (top-15 similar episodes)        │
+│  Output: new episodes, contradictions,  │
+│          schema patches                  │
+│                                          │
+│  Uses 5 recent episodes + semantic      │
+│  neighbors for contradiction detection.  │
+└─────────────┬───────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────┐
+│  EXPERT 3: Compiler                     │
+│  (minimax-m2.5-free, max_tokens: 4096)  │
+│                                          │
+│  Rewrites user.md from episodes +       │
+│  active contradictions. Triggered by:   │
+│  - Default profile + >=3 episodes       │
+│  - Every 3 episodes (early user)        │
+│  - Every 10 episodes (growing profile)  │
+│  - Every 25 episodes (mature profile)   │
+│  - High-pressure contradiction (>=2-3)  │
+└─────────────┬───────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────┐
+│  EXPERT 4: Gap Auditor                  │
+│  (minimax-m2.5-free, max_tokens: 4096)  │
+│                                          │
+│  Detects negative space — what HASN'T   │
+│  been said. Stores gaps as ephemeral    │
+│  episodes for future consolidation.     │
+└─────────────────────────────────────────┘
+```
+
+**Why batch extraction?** Previously, the extractor ran on every turn with full history (~70-80% token waste). Now only the latest exchange is queued, and extraction runs once per 5 exchanges. This saves tokens without losing coverage.
 
 ### Memory Operations
 
 #### Storing
 
-When the agent calls `store_memory`, this cascade happens:
+When the user shares something worth remembering, this cascade happens in the background:
 
 ```
-1. Raw input preserved exactly as said
-2. LLM processes into clean content + metadata
-3. Embedding generated via nomic-embed-text
-4. Memory inserted into SQLite
-5. Entities extracted and upserted into entities table
-6. Top 5 similar existing memories found via vector search
-7. Edges created for any similarity above threshold
-8. If similar memory found with contradictory content:
-   → Flag for belief revision
-   → Agent should call update_memory on the old one
-9. Prospective triggers checked — does this new memory
-   fire any existing triggers?
-10. If importance > 0.7, generate prospective triggers
-    for this memory
+1. Latest exchange extracted from conversation history
+2. Exchange queued in session buffer
+3. When batch reaches 5 exchanges or 30s timeout:
+   a. Triage-Extractor processes into candidates + inferences
+   b. Raw inferences stored as ephemeral episodes
+   c. Embeddings generated for all candidates (OpenRouter)
+   d. Semantic dedup against existing episodes (>0.85 similarity)
+      → duplicate skipped, existing importance boosted
+   e. Schema Mapper maps candidates to episodes/contradictions
+   f. New episodes stored in SQLite with embeddings
+   g. Contradictions stored with pressure_score = 1
+4. Every 3 turns: session summary compiled
+5. Every 5 turns: global summary compiled
+6. When compiler triggers: user.md rewritten from episodes
 ```
+
+**Important:** The agent CAN use `store_memory` (>= 0.8 confidence) and `connect_memories` (>= 0.7 confidence) tools proactively. Background pipeline (Triage-Extractor + Schema Mapper) also creates memories automatically. Agent-native writes are verified before committing.
 
 #### Retrieving
 
-Retrieval is not a single search. It's a multi-step process:
+The agent has two memory tools: `search_memory` (retrieval) and `store_memory` / `connect_memories` (curation).
+
+**`search_memory` — 4-Channel Retrieval (GAM v2)**
+
+Before retrieval, the query is parsed for schema hints:
+- Entity detection: capitalized words → entity graph lookup
+- Temporal flags: "recent", "last", "ago" → recency boosting
+- Contradiction sensitivity: "still", "now", "changed" → inject both sides of known conflicts
 
 ```
-1. Semantic search (vector similarity) for direct matches
-2. Entity lookup — find all memories connected to
-   mentioned entities
-3. Temporal context — what was the user thinking about
-   around the same time as the matched memories?
-4. Graph walk — follow edges from matched memories
-   to find memories that are connected but not
-   directly similar to the query
-5. Consolidated memories — check if any pattern/trajectory
-   memories are relevant
-6. Prospective triggers — check if any triggers fire
-7. All results ranked by: similarity × recency × importance
-   × access_frequency
-8. Top results injected into working memory for the agent
+1. Schema Parser: extract entities, intent, temporal scope
+2. Run 4 channels in parallel:
+   a. Semantic (40%): Ollama/OpenRouter embedding → cosine similarity
+   b. Keyword (20%): SQLite FTS5-like LIKE search
+   c. Entity Graph (25%): entity → linked episodes → graph walk
+   d. Temporal (15%): recency-boosted with 14-day half-life
+3. Weighted fusion across channels
+4. If contradiction-sensitive: inject BOTH sides of conflicts
+5. Return top 10 results with combined scores
 ```
 
-#### Consolidation (The Sleep Cycle)
+**What the agent CAN do (GAM v2 — implemented):**
+- `store_memory`: Agent can proactively store high-confidence observations (>= 0.8 confidence)
+- `connect_memories`: Agent can create explicit edges between related episodes
+- Walk a knowledge graph via `episode_edges` (progression, association, contradiction)
+- Entity-aware retrieval via `entities` + `episode_entities` tables
+- Multi-channel retrieval: semantic + keyword + entity graph + temporal
 
-This is a batch process. It can be triggered manually or run on a schedule. It is the most important differentiating feature of Orkestrate.
-
-```
-Input: All memories since last consolidation
-       + random sample of older memories (for cross-pollination)
-
-Process:
-  1. CLUSTER recent memories by topic/entity
-     "User had 12 thoughts about Keiyara this week"
-
-  2. EXTRACT PATTERNS within each cluster
-     "User's thinking about Keiyara has shifted from
-      technical architecture to trust/consent concerns"
-
-  3. IDENTIFY TRAJECTORIES across time
-     "User started with 3 project ideas. Over the past
-      week, Orkestrate has received increasing focus while
-      the coding agent idea hasn't been mentioned in 5 days"
-
-  4. DETECT CONTRADICTIONS
-     "User said they'd prioritize Orkestrate but spent most
-      of their conversation time on Keiyara"
-
-  5. DETECT GAPS (negative space)
-     Compare what the user HAS discussed against what
-     a reasonable schema would expect.
-     "User is building a software product and has discussed
-      architecture, features, UX, naming. Has NOT discussed:
-      target users, monetization, launch timeline, testing."
-
-  6. GENERATE RELATIONSHIP SUMMARIES
-     For entities with many connections:
-     "Alex: collaborator, mentioned 8 times, usually in
-      context of technical decisions and Keiyara. User
-      seems to value Alex's opinion on architecture."
-
-  7. GENERATE PROSPECTIVE TRIGGERS
-     Based on patterns and gaps, create forward-looking
-     triggers that will fire on relevant future messages.
-
-  8. COMPRESS old episodic memories
-     Memories older than N days with low importance and
-     low access count get compressed: raw details removed,
-     only gist + insights + connections preserved.
-     This is natural forgetting.
-
-  9. STRENGTHEN important memories
-     Memories that keep getting accessed or connected to
-     get their importance score boosted.
-     This is natural reinforcement.
-
-Output:
-  - New consolidated memories (type: "pattern", "trajectory",
-    "contradiction", "gap", "relationship_summary")
-  - Updated importance scores
-  - New prospective triggers
-  - Compressed old memories
-```
+**What the agent CANNOT do (remaining limitations):**
+- Access prospective triggers (none exist)
+- Retrieve pattern or trajectory memories (none exist)
 
 ### Memory Scoring
 
-Every memory has a relevance score that evolves over time:
+Every episode has an `importance` score (0-1) that evolves:
 
 ```
 relevance = base_importance
           × recency_decay(time_since_created)
           × access_boost(access_count)
           × connection_boost(edge_count)
-          × reinforcement(times_corroborated_by_other_memories)
 
-recency_decay: exponential decay, half-life of ~14 days
-  (but accessed memories reset their decay clock)
-
-access_boost: log(access_count + 1)
-  (diminishing returns — accessing something 100 times
-   isn't 100x more important than accessing it once)
-
-connection_boost: log(edge_count + 1)
-  (highly connected memories are structurally important)
-
-reinforcement: count of other memories that corroborate
-  or build on this one
+recency_decay: not currently implemented
+access_boost: not currently implemented
+connection_boost: not currently implemented
 ```
 
-This scoring is used for:
-- Retrieval ranking (more relevant memories surface first)
-- Consolidation decisions (low-relevance memories get compressed)
-- Proactive surfacing (high-relevance memories get volunteered)
+**Current reality:** Importance is set by the Schema Mapper at creation time and only changes via:
+- Semantic dedup boost (+0.1 when duplicate detected)
+- Manual resolution of contradictions
+
+The full dynamic scoring formula from the original AGENTS.md is aspirational. It is not implemented.
+
+### Memory Continuity
+
+The system supports three continuity modes (configurable in Settings):
+
+| Mode | Behavior |
+|---|---|
+| **session** | On first exchange, inject previous session's summary + last 3 messages. Otherwise inject current session summary. |
+| **global** | Inject global rolling summary across all sessions. |
+| **off** | No summary injection beyond current session's own summary. |
+
+Session-scoped summaries are compiled every 3 turns. Global summaries every 5 turns. Both are plain-text narratives (100-250 words), not structured data.
 
 ---
 
-## The Cognitive Pipeline (Multi-Agent Architecture)
+## The Cognitive Pipeline
 
-Orkestrate does NOT use a single-agent ReAct loop. That approach is too brittle for a lifelong thinking partner — it forces the Main Engine to simultaneously reason about the user's question AND figure out what context it needs. These are fundamentally different cognitive tasks.
+### What Exists: Single-Agent ReAct + Background Batch
 
-Instead, Orkestrate uses a **two-agent, two-stage pipeline** with a feedback loop:
-
-### The Full Cognitive Loop
+Orkestrate currently uses a **single-agent ReAct loop** with a background memory pipeline. The two-agent Alpha+Omega architecture described in earlier versions of this document was partially implemented and then reverted in favor of a simpler, more reliable MVP.
 
 ```
 USER PROMPT IN
        │
        ▼
-┌─────────────────────────────────────────────────┐
-│  STAGE 1 — THE READ PATH (Agent Alpha)          │
-│                                                  │
-│  The Pre-Flight Daemon compiles context BEFORE   │
-│  the Main Engine is allowed to see the prompt.   │
-│                                                  │
-│  HOP 1: Intent Decomposition                     │
-│    → Decompose the prompt into search queries    │
-│    → Identify which wiki files are relevant      │
-│    → Generate a reasoning trace explaining why   │
-│                                                  │
-│  RUST FETCHER: Orthogonal Search                 │
-│    → Vector search against Episodic DB           │
-│    → Filesystem reads against Semantic Wiki      │
-│    → Results gathered in parallel                │
-│                                                  │
-│  HOP 2: Hypothesis Engine & Compression          │
-│    → Run contradiction scan across results       │
-│    → Flag unresolved gaps                        │
-│    → Elevate hard constraints                    │
-│    → Discard irrelevant tokens                   │
-│    → Output: Structured JSON Payload             │
-└─────────────────────┬───────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────────┐
-│  STAGE 2 — MAIN INFERENCE ENGINE (Agent Omega)   │
-│                                                  │
-│  Receives:                                       │
-│    - System prompt with personality + rules       │
-│    - Windowed conversation history               │
-│    - Compiled Context JSON from Agent Alpha      │
-│    - User's raw message                          │
-│                                                  │
-│  The JSON is injected as a system message with    │
-│  the directive: "Use this explicitly fetched      │
-│  state over anything else."                      │
-│                                                  │
-│  Agent Omega generates the response AND triggers  │
-│  Write Path tools to mutate state.               │
-└─────────────────────┬───────────────────────────┘
-                      │
-            ┌─────────┴──────────┐
-            ▼                    ▼
-     RESPONSE OUT         WRITE PATH
-     (streamed)       (state mutation)
+┌─────────────────────────────────────────┐
+│  CONTEXT BUILDER (synchronous)          │
+│                                          │
+│  1. Load persona prompt                 │
+│  2. Load compiled user.md profile       │
+│  3. Build summary block (session/global)│
+│  4. Inject memory hint + temporal ctx   │
+│  5. Truncate history to 5,000 tokens    │
+│     (tiktoken cl100k_base)              │
+└─────────────┬───────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────┐
+│  AGENT: ReAct LOOP (max 5 steps)        │
+│  (minimax-m2.5-free via OpenCode Zen)   │
+│                                          │
+│  Available tools:                        │
+│  - search_memory (hybrid semantic+lex)  │
+│  - set_theme                             │
+│  - select_model                          │
+│  - reset_chat                            │
+│                                          │
+│  max_tokens: 8192                        │
+└─────────────┬───────────────────────────┘
+              │
+    ┌─────────┴──────────┐
+    ▼                    ▼
+RESPONSE OUT      BACKGROUND PIPELINE
+(streamed)        (batch_queue::flush)
 ```
 
-### Why Two Agents, Not One
+### Why This Architecture (For Now)
 
-A single agent doing search + reasoning in one loop has a fatal flaw: **it can only search for what it already suspects.** If the user says "I'm cooking for Mia tonight," a single agent might search for "Mia" but miss that the user is vegetarian, that Mia has a nut allergy, and that there was a fight about finances three days ago that might affect the emotional tone.
+A single-agent ReAct loop is simpler, faster, and more debuggable than the two-agent preflight pipeline. The tradeoff:
 
-Agent Alpha's job is to think about **what context is missing** before the Main Engine even starts reasoning. It maps the entire orthogonal search space — dietary rules, relationship context, recent emotional state — and compresses it into a structured payload. The Main Engine never has to guess what it doesn't know.
+- **Pro:** Lower latency (~2-4s saved per turn), fewer failure modes, easier to reason about
+- **Con:** The agent must decide when to search. It can only search for what it suspects. It misses orthogonal context (the "Mia has a nut allergy" problem)
 
-### Agent Alpha: The Pre-Flight Daemon
-
-**Model:** External reasoning model via OpenRouter (elephant-alpha)
-**Location:** `src-tauri/src/engine/preflight.rs`
-
-Agent Alpha operates in two hops:
-
-**Hop 1 — Intent Decomposition:**
-- Input: Raw user prompt + list of available wiki files on disk
-- Output: JSON with `reasoning_trace`, `search_queries`, `wiki_files`
-- The reasoning trace forces the model to articulate WHY it needs each piece of context
-- Search queries must be dense keyword clusters optimized for vector similarity, not conversational questions
-- Wiki files are selected from the actual filesystem inventory — no hallucinated paths
-
-**Rust Orthogonal Fetcher (between hops):**
-- Executes the search plan from Hop 1 natively in Rust
-- Vector searches run concurrently via `tokio::spawn`
-- Wiki file reads use async filesystem I/O
-- Core identity files (`identity.md`, `preferences.md`) are always injected as baseline context
-- Results above similarity threshold (0.6) are included
-
-**Hop 2 — Hypothesis Engine & Compression:**
-- Input: User prompt + raw dump of all retrieved data
-- Output: Structured JSON payload with:
-  - `user_profile`: Key traits needed for this interaction
-  - `context_for_recipient`: If someone else is mentioned
-  - `response_constraints`: Hard rules (dietary, tone, open questions)
-  - `prospective_triggers`: Future-looking flags
-- The model actively scans for contradictions between retrieved facts
-- Irrelevant context is compressed away to save tokens
-
-### Agent Omega: The Main Inference Engine
-
-**Model:** Gemma 4 e2b (local via Ollama) or Gemini (cloud)
-**Location:** `src-tauri/src/agent/mod.rs`
-
-Agent Omega receives the compiled JSON as ground truth and operates with a standard tool-calling loop (max 5 iterations). It can:
-- Respond directly to the user
-- Call `store_memory` to commit new facts (Write Path)
-- Call `write_wiki_fact` to mutate the Semantic Wiki (Write Path)
-- Call `log_contradiction` to flag conflicts
-- Call `connect_memories` to build the knowledge graph
-- Call `update_memory` to revise existing beliefs
-
-The key insight: Agent Omega trusts the compiled context. It does NOT need to search or retrieve — that was already done by Alpha. It focuses entirely on reasoning, responding, and writing.
+The context builder mitigates this by injecting the compiled profile and continuity summary. The agent is instructed to call `search_memory` when the profile looks thin or the question is broad. This is a heuristic, not a guarantee.
 
 ### Context Window Management
 
-The context window is managed with strict budgets:
-
 ```
-System prompt:               ~500 tokens (fixed)
-Conversation history:        Windowed, 6000-token budget
-Compiled context (Alpha):    Variable, ~1000-2000 tokens
-Tool results per step:       Variable
+System prompt (persona + user.md + summary):  ~1,500-3,000 tokens
+Conversation history (windowed):                ~5,000 tokens max
+Tool results per step:                          Variable
 
 History Windowing:
-  - Messages are loaded in reverse chronological order
-  - Each message's token cost is estimated (max of char/4, word count)
-  - Messages are included until the 6000-token budget is hit
-  - Minimum 2 messages are always preserved
-  - Future: oldest messages will be summarized, not dropped
-
-Contextual Tool Pruning:
-  - If the user's message doesn't contain memory-related keywords
-    ("remember", "save", "store", "note"), mutation tools
-    (store_memory, update_memory) are pruned from the tool spec
-  - This saves tokens and reduces hallucinated tool calls
+  - Messages loaded in reverse chronological order
+  - Token cost estimated via tiktoken (cl100k_base)
+  - Included until 5,000-token budget is hit
+  - Minimum 2 messages always preserved
 ```
-
-### The Feedback Loop
-
-The architecture forms a closed loop:
-
-1. **Read Pass:** User prompt → Agent Alpha compiles context from DBs
-2. **Inference:** Agent Omega generates response using compiled context
-3. **Write Pass:** Agent Omega calls tools → state is mutated (DB + Wiki)
-4. **Next Read Pass:** Alpha now pulls from the updated, hardened state
-5. **Async Rest:** Sleep Cycle Consolidator scrubs DBs between interactions
-
----
-
-## What Doesn't Exist Yet (Anywhere)
-
-These are the features that no current AI memory system implements. They are what make Orkestrate fundamentally different:
-
-### 1. Consolidation / Sleep Cycle
-No system periodically reviews its own memory store to extract patterns, trajectories, contradictions, and gaps. Every system only processes memories at input time. Orkestrate generates NEW knowledge from EXISTING memories.
-
-### 2. Generative Memory
-The ability to create memories that were never explicitly stated by the user. "User tends to abandon projects at the 3-week mark" is knowledge that emerges from observing multiple memories over time. It was never said. It was discovered.
-
-### 3. Negative Space Detection
-Noticing what HASN'T been said. Recognizing gaps against an expected schema. "You've been building this product for a month and never mentioned who it's for." This requires a model of what completeness looks like, which no system attempts.
-
-### 4. Prospective Memory
-Forward-looking triggers that fire on future events. "Next time the user mentions deployment, remind them about the monitoring gap." Memory systems are universally retrospective. Orkestrate remembers the future.
-
-### 5. Preference Trajectories
-Not "user prefers X" as a static fact, but "user's preference evolved from A to B to C over time, currently at C, likely heading toward D." Modeling the direction of change, not just the current state.
-
-### 6. Importance Decay and Reinforcement
-Memories that naturally fade if never accessed or corroborated, and strengthen if repeatedly relevant. No system implements a forgetting curve. They treat all memories as equally permanent.
-
-### 7. Inferential Storage
-Storing not just what was said but what was MEANT. The emotional subtext. The implied priorities. The unstated assumptions. Current systems extract facts. Orkestrate extracts understanding.
 
 ---
 
 ## Technical Decisions
 
-### Why Multi-Agent (Alpha + Omega)
-- Separates context retrieval from reasoning — each agent has a single, focused job
-- Alpha can use a more powerful external model for search decomposition
-- Omega operates with pre-compiled ground truth, reducing hallucination
-- The pipeline is deterministic: Hop 1 → Fetch → Hop 2 → Inference
-- Latency tradeoff: ~2-4s added for Alpha's hops, but context quality is dramatically higher
+### Why Single-Agent ReAct (Current)
+- Simpler to implement, debug, and maintain
+- Acceptable latency for interactive chat
+- The `search_memory` tool gives the agent explicit retrieval capability
+- Future: evaluate re-introducing Agent Alpha as an optional preflight layer
 
-### Why OpenRouter / elephant-alpha for Agent Alpha
-- Agent Alpha needs strong reasoning for intent decomposition and hypothesis generation
-- elephant-alpha is a capable reasoning model available via OpenRouter API
-- The Pre-Flight task is small and bounded — the extra latency of a network call is acceptable
-- Future: evaluate moving Hop 1 to a local heuristic to reduce latency
-
-### Why Gemma 4 e2b for Agent Omega
-- Runs on CPU (Intel Iris Xe, 32GB RAM)
-- Fast enough for interactive chat when context is pre-compiled
-- Reasoning traces give transparency
-- Tool calling support via Ollama
+### Why OpenCode Zen / minimax-m2.5-free
+- Fast, capable reasoning model available via API
+- Supports tool calling and streaming
 - Good enough for structured extraction and synthesis
-- Upgrade path to e4b or larger models as hardware allows
+- Cost-effective for personal-scale usage
 
-### Why nomic-embed-text
-- Available through Ollama (same tool, simple stack)
-- 768-dimensional embeddings
-- Good quality for its size
-- Fast on CPU
-- Upgrade path to multimodal embeddings later (images, video, audio via ImageBind or similar)
+### Why OpenRouter for Embeddings
+- `nvidia/llama-nemotron-embed-vl-1b-v2:free` provides high-quality 2048-dim vectors
+- No local GPU required — runs on CPU-only machines
+- Simple HTTP API, no Ollama setup complexity
+- Downside: requires network call per batch (rate-limited)
+
+### Why Brute-Force Cosine Similarity
+- Zero deployment friction (no vector DB to install)
+- Fast enough at personal scale (5,000 embeddings × 2048 dims)
+- O(N) is acceptable for ~10K-100K memories
+- Future: evaluate sqlite-vec or native vector index when scale demands it
 
 ### Why SQLite
 - One file. Copy it to back up your entire mind.
 - No external services
-- Fast enough for personal-scale data (even 100K memories)
-- Manual cosine similarity for vector search (brute-force O(N), acceptable at personal scale)
 - Portable across machines
 - Inspectable — you can always look at your own data
-- Connection pooled via `get_db_conn()` with thread-local reuse
+- Connection pooled via r2d2 with thread-local reuse
 
 ### Why Tauri + Svelte 5
 - Native desktop performance
@@ -542,64 +426,137 @@ Storing not just what was said but what was MEANT. The emotional subtext. The im
 - Svelte 5 runes for reactive state without framework overhead
 - Rust backend handles all DB, embedding, and API orchestration
 - Local-first by architecture, not by policy
-- All DB operations run on `tokio::task::spawn_blocking` to avoid blocking the async runtime
 
 ### Modular Rust Backend
-The backend is organized into focused modules:
-- `src/agent/mod.rs` — Agent Omega's run loop, tool dispatch, context window management
-- `src/agent/tools.rs` — Tool implementations (store, search, connect, update, wiki)
-- `src/engine/preflight.rs` — Agent Alpha's two-hop Pre-Flight pipeline
-- `src/engine/ollama.rs` — Local model interface (chat, embed, tokenize)
-- `src/engine/gemini.rs` — Cloud model interface
-- `src/blueprints/` — Shared types (ChatMessage, ModelConfig, Memory, etc.)
-- `src/db.rs` — Schema setup and migrations
-- `src/wiki.rs` — Semantic Wiki filesystem operations
-- `src/vector.rs` — Embedding serialization and cosine similarity
+
+```
+src-tauri/src/
+├── lib.rs              (Tauri commands, module registration, batch_queue timer spawn)
+├── main.rs             (App entry)
+├── agent/mod.rs        (ReAct loop, tool dispatch, streaming, max_tokens: 8192)
+├── llm/mod.rs          (OpenAI-compatible wrapper — currently unused)
+├── prompt/mod.rs       (Persona file management)
+├── tools/              (Tool registry + 4 tools)
+│   ├── mod.rs
+│   ├── search_memory.rs     (hybrid 70/30 semantic+lexical search)
+│   ├── reset_chat.rs
+│   ├── select_model.rs
+│   └── set_theme.rs
+├── memory/             (Background extraction pipeline)
+│   ├── mod.rs               (process_turn: turn counting, queueing, summary triggers)
+│   ├── batch_queue.rs       (SessionBuffer, flush logic, 4-expert orchestration)
+│   ├── triage_extractor.rs  (Expert 1: atomic extraction, max_tokens: 4096)
+│   ├── schema_mapper.rs     (Expert 2: mapping + contradictions, max_tokens: 4096)
+│   ├── compiler.rs          (Expert 3: user.md rewriter, max_tokens: 4096)
+│   ├── gap_auditor.rs       (Expert 4: negative space detection, max_tokens: 4096)
+│   ├── schema.rs            (user.md I/O)
+│   ├── recent_summary.rs    (session/global summary compilation, max_tokens: 1024)
+│   └── gam.rs               (semantic shift detection for events table)
+├── db.rs               (SQLite schema, migrations, episode/contradiction/event ops)
+├── embed.rs            (OpenRouter embedding client, 2048-dim)
+├── vector.rs           (cosine similarity, top-k, hybrid merge)
+├── context.rs          (ContextBuilder: profile injection, history truncation)
+├── config.rs           (AppConfig: memory_continuity_mode)
+└── timer.rs            (Performance timing instrumentation)
+```
+
+**Files that DO NOT exist (despite earlier documentation):**
+- `src/engine/preflight.rs` (Agent Alpha)
+- `src/engine/ollama.rs`
+- `src/engine/gemini.rs`
+- `src/wiki.rs`
+- `src/blueprints/`
+- `src/agent/tools.rs` (tools live in `src/tools/`)
+
+---
+
+## What Doesn't Exist Yet (Honest Roadmap)
+
+These features were described in earlier versions of this document. They are NOT implemented. This section serves as a prioritized roadmap, not a promise.
+
+### 1. Two-Agent Alpha+Omega Pipeline
+**Status:** Partially implemented, then reverted.  
+**What it was:** A preflight daemon (Agent Alpha) that compiled context before the main agent saw the prompt, doing orthogonal search and contradiction scanning.  
+**Why it was reverted:** Added 2-4s latency, complex failure modes, marginal quality improvement at MVP stage.  
+**Path back:** Re-implement as optional tier, not mandatory. Local heuristic for Hop 1, external model only for edge cases.
+
+### 2. Knowledge Graph (Entities + Edges)
+**Status:** Not implemented.  
+**Current substitute:** `user.md` is a compiled markdown profile. Semantic relationships are implicit in the text, not explicit in a graph.  
+**What we need:** `entities` table (name, type, mention_count, first_seen, last_seen) + `edges` table (source, target, relation, weight). Graph-walk retrieval.  
+**Blocker:** Schema design for entity disambiguation and relation typing.
+
+### 3. Prospective Memory Triggers
+**Status:** Not implemented.  
+**What it is:** Forward-looking IF-THEN rules: "IF user mentions deploying to production THEN remind them they never set up monitoring."  
+**Blocker:** Trigger representation, matching engine, and false-positive suppression.
+
+### 4. Automated Sleep Cycle / Consolidation
+**Status:** Partial. Compiler + Gap Auditor run on episode count triggers, but there is no true "sleep" scheduler.  
+**What we need:** Background task that reviews all unprocessed memories on idle/app-startup, generates pattern/trajectory memories, and compresses old episodic memories.  
+**Blocker:** Pattern memory schema, trajectory detection algorithm, compression criteria.
+
+### 5. Dynamic Memory Scoring (Decay + Reinforcement)
+**Status:** Partial. Temporal channel applies recency decay (14-day half-life) during retrieval.  
+**What we need:** Full dynamic scoring with access_count boosting, connection_boost via graph edges, reinforcement from corroborating memories.  
+**Blocker:** Requires access logging and periodic recompute job.
+
+### 6. Agent Memory Mutation Tools
+**Status:** Implemented (GAM v2).  
+**Available tools:**
+- `store_memory`: Agent-stored episodes with >= 0.8 confidence, auto-embedded, entities extracted
+- `connect_memories`: Agent-created edges between episodes (caused, followed_by, related_to, contradicts, refines)
+- `search_memory`: 4-channel retrieval (semantic + keyword + entity graph + temporal)
+**Missing:** `update_memory`, `write_wiki_fact`, `log_contradiction`.
+
+### 7. GAM True Graph Structure
+**Status:** Implemented (GAM v2).  
+**What exists:**
+- `entities` table with canonical names and mention counts
+- `episode_entities` table linking episodes to entities
+- `episode_edges` table with progression, association, contradiction edges
+- Entity-graph retrieval channel in `search_memory`
+**Gap:** No explicit topic associative network layer (topics are implicit via entity clusters).
 
 ---
 
 ## Future: Multimodal Memory
 
-The architecture is designed to extend to:
+The architecture is designed to extend to images, voice, video, and documents. The memory system doesn't care about modality. Everything becomes a memory object with content, embedding, entities, and connections. The intake pipeline varies. The memory fabric is universal.
 
-### Images
-- Gemma 4 describes the image → text embedding for semantic search
-- Later: ImageBind/LanguageBind for perceptual embeddings in parallel
-- Photos become memories with the same entity extraction, tagging, and connection logic
-
-### Voice
-- Whisper (local) for transcription → same text pipeline
-- Tone/emotion detection as metadata
-
-### Video
-- Keyframe extraction + Gemma 4 description
-- Audio track via Whisper
-- Later: native video embeddings
-
-### Documents / Files
-- PDF, markdown, etc. ingested and chunked
-- Each chunk becomes a memory linked to the source document
-
-The memory system doesn't care about modality. Everything becomes a memory object with content, embedding, entities, and connections. The intake pipeline varies. The memory fabric is universal.
+**Current reality:** Text only.
 
 ---
 
-## Future: Consolidation Implementation Plan
+## Consolidation Implementation Plan (Revised)
 
-Phase 1 — Manual trigger:
-  User can type "consolidate" or click a button.
-  Glade reviews all memories since last consolidation.
-  Generates pattern and trajectory memories.
-  Shows the user what it found.
+**Phase 1 — Manual trigger (DONE):**
+  The Compiler + Gap Auditor run automatically on episode count triggers.
+  User can view memory state via UI panel.
+  Summaries are auto-compiled every 3/5 turns.
 
-Phase 2 — Scheduled:
-  Runs automatically when the app has been idle for N minutes.
-  Or on app startup if last consolidation was >24h ago.
-  Results available as a "morning briefing" on next interaction.
+**Phase 2 — Knowledge graph + entity extraction (DONE):**
+  ✅ `entities` table + `episode_entities` + `episode_edges` tables
+  ✅ Entity extraction in Triage-Extractor (Alpha)
+  ✅ Entity linking during batch storage (Beta)
+  ✅ Graph-walk retrieval via entity graph channel (Gamma)
 
-Phase 3 — Continuous background:
-  Lightweight pattern detection runs on every new memory.
-  Full consolidation runs on schedule.
-  Prospective triggers generated continuously.
-  The system gets smarter with every interaction,
-  not just during consolidation windows.
+**Phase 3 — Multi-channel retrieval + dynamic scoring (DONE):**
+  ✅ 4-channel retrieval: semantic (40%) + keyword (20%) + entity graph (25%) + temporal (15%)
+  ✅ Schema-constrained query parsing (entity detection, temporal flags, contradiction sensitivity)
+  ✅ Recency decay in temporal channel (14-day half-life)
+  🔄 TODO: access_count boosting, connection_boost via graph edges
+
+**Phase 4 — Agent-native memory curation (DONE):**
+  ✅ `store_memory` tool with >= 0.8 confidence threshold + auto-embedding
+  ✅ `connect_memories` tool for explicit episode linking
+  ✅ Entity auto-extraction on agent-stored memories
+
+**Phase 5 — Sleep cycle automation (NEXT):**
+  Background scheduled task for full consolidation.
+  Pattern/trajectory memory generation.
+  Prospective trigger creation.
+
+**Phase 6 — Optional Alpha preflight (FUTURE):**
+  Re-introduce two-agent pipeline as opt-in feature.
+  Measure latency vs. quality tradeoff with real usage data.

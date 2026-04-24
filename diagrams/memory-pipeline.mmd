@@ -1,0 +1,78 @@
+flowchart TD
+    subgraph Queue["Batch Queue &#40;In-Memory&#41;"]
+        direction TB
+        ENQ["enqueue&#40;session_id, exchange, api_key&#41;"]
+        BUF["SessionBuffer<br/>messages: Vec&#60;HistoryMessage&#62;<br/>last_activity: Instant"]
+        LRU{"LRU Eviction?<br/>buffers.len&#40;&#41; >= 50"}
+        FLUSH{"Flush Trigger?<br/>messages >= 5 OR<br/>idle >= 30s"}
+    end
+
+    subgraph Extractor["Expert 1: Triage Extractor"]
+        direction TB
+        E_IN["Input: batch of messages + user.md"]
+        E_PROMPT["Prompt: Extract EVERY atomic memory<br/>Types: fact, preference, goal,<br/>relationship, habit, trait<br/>Confidence: explicit &#40;0.6-1.0&#41;<br/>inferences &#40;0.3-0.59&#41;"]
+        E_API["API Call<br/>model: minimax-m2.5-free<br/>max_tokens: 4096"]
+        E_OUT["Output: candidates&#91;&#93; + raw_inferences&#91;&#93;"]
+    end
+
+    subgraph Mapper["Expert 2: Schema Mapper"]
+        direction TB
+        M_IN["Input: candidates + existing_episodes &#40;20&#41;<br/>+ user.md"]
+        M_PROMPT["Prompt: Map to schema sections<br/>Detect contradictions<br/>Assign compression_level<br/>ephemeral | episodic | semantic | rule"]
+        M_API["API Call<br/>max_tokens: 4096"]
+        M_OUT["Output:<br/>new_episodes&#91;&#93;<br/>contradictions&#91;&#93;<br/>schema_patches&#91;&#93;"]
+    end
+
+    subgraph Store["SQLite Writes"]
+        direction TB
+        ST_EP["INSERT INTO episodes<br/>content, type, confidence,<br/>importance, compression_level,<br/>schema_section, session_id"]
+        ST_CT["INSERT/UPDATE contradictions<br/>existing_episode_id,<br/>pressure_score + 1 if exists"]
+    end
+
+    subgraph Compiler["Expert 3: Compiler"]
+        direction TB
+        C_TRIG{"Trigger?<br/>episodes % 3 &#40;&lt;10&#41;<br/>% 10 &#40;&lt;30&#41;<br/>% 25 &#40;≥30&#41;<br/>OR pressure >= threshold"}
+        C_IN["Input: uncompiled episodes +<br/>active_contradictions + current schema"]
+        C_PROMPT["Prompt: Rewrite user.md<br/>Integrate new facts<br/>Resolve contradictions<br/>Preserve trajectories<br/>Update Open Questions"]
+        C_API["API Call<br/>max_tokens: 4096"]
+        C_OUT["Output: rewritten user.md<br/>→ schema::write_schema&#40;&#41;"]
+    end
+
+    subgraph Auditor["Expert 4: Gap Auditor"]
+        direction TB
+        A_IN["Input: recent_episodes + user.md"]
+        A_PROMPT["Prompt: Detect gaps<br/>Empty sections with episode signals<br/>Under-developed areas<br/>Logical unanswered questions<br/>severity >= 0.6"]
+        A_API["API Call<br/>max_tokens: 4096"]
+        A_OUT["Output: gap observations&#91;&#93;<br/>→ stored as episodes type='gap'"]
+    end
+
+    ENQ --> BUF
+    BUF --> LRU
+    LRU -->|evict oldest| BUF
+    BUF --> FLUSH
+    FLUSH -->|yes| Extractor
+    FLUSH -->|no| BUF
+    
+    E_IN --> E_PROMPT --> E_API --> E_OUT
+    E_OUT -->|raw_inferences| ST_EP
+    E_OUT -->|candidates| Mapper
+    
+    M_IN --> M_PROMPT --> M_API --> M_OUT
+    M_OUT -->|new_episodes| ST_EP
+    M_OUT -->|contradictions| ST_CT
+    
+    ST_EP --> C_TRIG
+    ST_CT --> C_TRIG
+    C_TRIG -->|yes| C_IN --> C_PROMPT --> C_API --> C_OUT
+    C_TRIG -->|no| DONE["End Pipeline"]
+    
+    C_OUT --> Auditor
+    A_IN --> A_PROMPT --> A_API --> A_OUT
+    A_OUT --> ST_EP
+    
+    style Extractor fill:#e3f2fd
+    style Mapper fill:#e8f5e9
+    style Compiler fill:#fff3e0
+    style Auditor fill:#fce4ec
+    style Queue fill:#f3e5f5
+    style Store fill:#e0f2f1

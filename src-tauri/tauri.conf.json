@@ -13,8 +13,8 @@
     "windows": [
       {
         "title": "Orkestrate",
-        "width": 900,
-        "height": 650,
+        "width": 1150,
+        "height": 700,
         "minWidth": 600,
         "minHeight": 500,
         "resizable": true,

@@ -1,177 +1,159 @@
 <script lang="ts">
-    import { fade } from "svelte/transition";
-    import { Plus, Mic, ArrowUp, Wand2, Paperclip, ChevronDown } from "lucide-svelte";
-    import { intentEngine } from "$lib/intent.svelte";
-    import { modelService } from "$lib/services/models.svelte";
-
-    let {
-        value = $bindable(""),
-        placeholder = "Ask anything...",
-        onsend,
-    } = $props();
-
-    let element: HTMLDivElement;
-    let isCommandLikely = $derived(intentEngine.isCommandLikely(value));
-
-    function createChipElement(fullMatch: string) {
-        const label = fullMatch.startsWith(":") ? fullMatch.slice(1) : fullMatch;
-        const span = document.createElement("span");
-        span.contentEditable = "false";
-        span.className = "inline-flex items-center bg-[var(--tag-bg)] text-[var(--fg)] px-1.5 py-0.5 rounded font-medium text-[13px] border border-[var(--tag-border)] mx-0.5 select-none";
-        span.innerHTML = `<span style="display:none">:</span>${label}`;
-        return span;
-    }
-
-    function handleInput() {
-        if (!element) return;
-        element.normalize();
-        value = element.textContent || "";
-
-        const selection = window.getSelection();
-        if (!selection || selection.rangeCount === 0) return;
-
-        const COMMAND_REGEX = /:([a-zA-Z]+)(?=[\s.,!?;])/g;
-
-        const walker = document.createTreeWalker(
-            element,
-            NodeFilter.SHOW_TEXT,
-            {
-                acceptNode(node) {
-                    if (node.parentElement?.closest('[contenteditable="false"]')) {
-                        return NodeFilter.FILTER_REJECT;
-                    }
-                    return NodeFilter.FILTER_ACCEPT;
-                },
-            },
-        );
-
-        let node;
-        while ((node = walker.nextNode())) {
-            const text = node.nodeValue || "";
-            const matches = [...text.matchAll(COMMAND_REGEX)];
-
-            if (matches.length > 0) {
-                const match = matches[0];
-                const fullMatch = match[0];
-                const index = match.index!;
-                const matchEnd = index + fullMatch.length;
-
-                const isCaretAtEnd = selection.anchorNode === node && selection.anchorOffset === matchEnd;
-                if (isCaretAtEnd) continue;
-
-                const range = document.createRange();
-                range.setStart(node, index);
-                range.setEnd(node, matchEnd);
-
-                const chip = createChipElement(fullMatch);
-
-                range.deleteContents();
-                range.insertNode(chip);
-
-                const newRange = document.createRange();
-                newRange.setStartAfter(chip);
-                newRange.collapse(true);
-                selection.removeAllRanges();
-                selection.addRange(newRange);
-
-                value = element.textContent || "";
-                return;
-            }
-        }
-    }
-
-    function handleKeydown(e: KeyboardEvent) {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            if (value.trim()) {
-                onsend?.(value);
-                value = "";
-                if (element) element.innerHTML = "";
-            }
-        }
-    }
-
-    $effect(() => {
-        if (value === "" && element) {
-            element.innerHTML = "";
-        }
-    });
-
-    export function focus() {
-        element?.focus();
-    }
+	import { fade } from "svelte/transition";
+	import { SIIcon } from "@willingtonortiz/svelte-simple-icons";
+	import { siGmail, siGoogledrive, siGooglecalendar } from "simple-icons";
+	import {
+		Plus,
+		Mic,
+		ArrowUp,
+		SlidersHorizontal,
+		Sparkles,
+		X,
+	} from "lucide-svelte";
+	let {
+		value = $bindable(""),
+		placeholder = "Ask Orkestrate",
+		onsend,
+		compact = false,
+		disabled = false,
+	} = $props<{
+		value?: string;
+		placeholder?: string;
+		onsend?: (msg: string) => void;
+		compact?: boolean;
+		disabled?: boolean;
+	}>();
+	let element: HTMLTextAreaElement;
+	let showConnectBar = $state(true);
+	function autoResize() {
+		if (!element) return;
+		element.style.height = "auto";
+		element.style.height = Math.min(element.scrollHeight, 200) + "px";
+	}
+	function handleInput() {
+		value = element.value;
+		autoResize();
+	}
+	function handleKeydown(e: KeyboardEvent) {
+		if (e.key === "Enter" && !e.shiftKey && !disabled) {
+			e.preventDefault();
+			send();
+		}
+	}
+	function send() {
+		if (disabled) return;
+		const trimmed = value.trim();
+		if (!trimmed) return;
+		onsend?.(trimmed);
+		value = "";
+		if (element) {
+			element.value = "";
+			element.style.height = "auto";
+		}
+	}
+	export function focus() {
+		element?.focus();
+	}
+	$effect(() => {
+		if (value === "" && element) {
+			element.value = "";
+			element.style.height = "auto";
+		}
+	});
 </script>
 
-<div class="w-full max-w-[680px] mx-auto px-4 pb-6">
-    <div
-        class="relative flex flex-col bg-[var(--chat-input-bg)] rounded-xl border transition-all duration-200"
-        style="border-color: {isCommandLikely ? 'var(--fg-secondary)' : 'var(--chat-input-border)'};"
-    >
-        <!-- Text area with placeholder -->
-        <div class="relative w-full">
-            {#if !value}
-                <div class="absolute inset-0 px-4 pt-3.5 pb-0 text-[15px] leading-[1.5] text-[var(--fg-secondary)] opacity-50 pointer-events-none select-none z-0">
-                    {placeholder}
-                </div>
-            {/if}
+<div class="w-full max-w-[760px] mx-auto">
+	<!-- Unified Input Container -->
+	<div
+		class="relative flex flex-col bg-[var(--chat-input-bg)] rounded-2xl border border-[var(--chat-input-border)] transition-all duration-200"
+	>
+		<!-- Textarea -->
+		<textarea
+			bind:this={element}
+			{placeholder}
+			oninput={handleInput}
+			onkeydown={handleKeydown}
+			spellcheck="false"
+			disabled={disabled}
+			class="w-full bg-transparent border-none outline-none text-[var(--fg)] text-[var(--font-size-md)] leading-[1.5] tracking-[-0.01em] resize-none overflow-hidden px-4 pt-4 pb-2 placeholder:text-[#6B6B6B] selection:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+			style="min-height: 64px;"
+		></textarea>
+		<!-- Bottom Toolbar -->
+		<div class="flex justify-between items-center px-4 pb-4 pt-1">
+			<!-- Left tools: Bordered Chips -->
+			<div class="flex items-center gap-2">
+				<button
+					class="p-2 rounded-lg border border-white/[0.06] bg-white/[0.02] text-[#8a8a8a] hover:text-[#e0e0e0] hover:bg-white/[0.05] transition-all duration-150"
+					title="Attach"
+				>
+					<Plus size={18} strokeWidth={1.5} />
+				</button>
+				<button
+					class="p-2 rounded-lg border border-white/[0.06] bg-white/[0.02] text-[#8a8a8a] hover:text-[#e0e0e0] hover:bg-white/[0.05] transition-all duration-150"
+					title="Settings"
+				>
+					<SlidersHorizontal size={18} strokeWidth={1.5} />
+				</button>
+				<button
+					class="p-2 rounded-lg border border-white/[0.06] bg-white/[0.02] text-[#8a8a8a] hover:text-[#e0e0e0] hover:bg-white/[0.05] transition-all duration-150"
+					title="Enhance"
+				>
+					<Sparkles size={18} strokeWidth={1.5} />
+				</button>
+			</div>
 
-            <div
-                bind:this={element}
-                contenteditable="true"
-                role="textbox"
-                tabindex="0"
-                aria-multiline="true"
-                oninput={handleInput}
-                onkeydown={handleKeydown}
-                spellcheck="false"
-                class="relative z-10 w-full min-h-[48px] max-h-[200px] px-4 pt-3.5 pb-0 bg-transparent border-none outline-none text-[var(--fg)] text-[15px] leading-[1.5] resize-none overflow-y-auto selection:bg-zinc-300/30"
-            ></div>
-        </div>
+			<!-- Right: Mic + Send -->
+			<div class="flex items-center gap-3">
+				<button
+					class="p-1.5 rounded-lg text-[#8a8a8a] hover:text-[#e0e0e0] hover:bg-white/[0.05] transition-colors duration-150"
+					title="Voice"
+				>
+					<Mic size={20} strokeWidth={1.5} />
+				</button>
 
-        <!-- Bottom toolbar -->
-        <div class="flex justify-between items-center px-3 pb-2 pt-1">
-            <!-- Left tools -->
-            <div class="flex items-center gap-0.5">
-                <button
-                    class="p-2 rounded-lg text-[var(--fg-tertiary)] hover:text-[var(--fg-secondary)] hover:bg-[var(--hover-bg)] transition-colors duration-150"
-                    title="Attach"
-                >
-                    <Plus size={18} strokeWidth={1.5} />
-                </button>
-                <button
-                    class="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[var(--fg-tertiary)] hover:text-[var(--fg-secondary)] hover:bg-[var(--hover-bg)] transition-colors duration-150 max-w-[140px]"
-                    title="Select model"
-                    onclick={() => modelService.openSelector()}
-                >
-                    <span class="text-[12px] truncate">{modelService.activeModel.name}</span>
-                    <ChevronDown size={12} strokeWidth={1.5} />
-                </button>
-            </div>
+				<button
+					onclick={send}
+					disabled={disabled}
+					class="w-10 h-10 flex items-center justify-center rounded-full bg-[#d0d0d0] text-[#121214] hover:bg-white transition-all duration-150 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+					title="Send message"
+				>
+					<ArrowUp size={22} strokeWidth={2.5} />
+				</button>
+			</div>
+		</div>
 
-            <!-- Right: Mic + Send -->
-            <div class="flex items-center gap-1">
-                <button
-                    class="p-2 rounded-lg text-[var(--fg-tertiary)] hover:text-[var(--fg-secondary)] hover:bg-[var(--hover-bg)] transition-colors duration-150"
-                    title="Voice"
-                >
-                    <Mic size={18} strokeWidth={1.5} />
-                </button>
-
-                {#if value.trim()}
-                    <div transition:fade={{ duration: 100 }}>
-                        <button
-                            class="ml-1 w-8 h-8 flex items-center justify-center rounded-full bg-[var(--fg)] text-[var(--bg)] hover:opacity-90 transition-opacity duration-150"
-                            onclick={() => {
-                                onsend?.(value);
-                                value = "";
-                                if (element) element.innerHTML = "";
-                            }}
-                        >
-                            <ArrowUp size={16} strokeWidth={2} />
-                        </button>
-                    </div>
-                {/if}
-            </div>
-        </div>
-    </div>
+		{#if showConnectBar && !compact}
+			<div
+				class="flex items-center justify-between px-5 py-3 border-t border-white/[0.04]"
+				transition:fade={{ duration: 150 }}
+			>
+				<span
+					class="text-[13px] font-normal text-[#8a8a8a] tracking-tight"
+					>Connect your apps to get better answers</span
+				>
+				<div class="flex items-center gap-3">
+					<!-- Brand Icons -->
+					<div class="flex items-center gap-3.5">
+						<SIIcon icon={siGmail} color="#EA4335" size={16} />
+						<SIIcon
+							icon={siGoogledrive}
+							color="#4285F4"
+							size={16}
+						/>
+						<SIIcon
+							icon={siGooglecalendar}
+							color="#FBBC04"
+							size={16}
+						/>
+					</div>
+					<button
+						onclick={() => (showConnectBar = false)}
+						class="p-0.5 rounded text-[#5a5a5a] hover:text-[#9a9a9a] transition-colors"
+					>
+						<X size={14} strokeWidth={2} />
+					</button>
+				</div>
+			</div>
+		{/if}
+	</div>
 </div>

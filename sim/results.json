@@ -1,0 +1,1595 @@
+{
+  "rag": {
+    "per_query": [
+      {
+        "query_id": "pronoun_1",
+        "category": "pronoun_reference",
+        "query": "Why did I say that?",
+        "scores": {
+          "precision": 0.2,
+          "recall": 1.0,
+          "f1": 0.33333333333333337,
+          "temporal_score": 1.0,
+          "contradiction_score": 0.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 0.0
+        },
+        "retrieved": [
+          {
+            "text": "Relieved. It was never really my thing.",
+            "session_id": "s08",
+            "turn_index": 5,
+            "role": "user"
+          },
+          {
+            "text": "I don't have a clear angle. And I'm not sure helping him is the right use of my time.",
+            "session_id": "s05",
+            "turn_index": 3,
+            "role": "user"
+          },
+          {
+            "text": "The retrieval navigator. Graph walks are tricky.",
+            "session_id": "s18",
+            "turn_index": 3,
+            "role": "user"
+          },
+          {
+            "text": "Do you want to drop it?",
+            "session_id": "s05",
+            "turn_index": 4,
+            "role": "assistant"
+          },
+          {
+            "text": "I've been noticing a pattern in my projects.",
+            "session_id": "s20",
+            "turn_index": 1,
+            "role": "user"
+          }
+        ]
+      },
+      {
+        "query_id": "pronoun_2",
+        "category": "pronoun_reference",
+        "query": "What did I mean by 'him' in the Google Next conversation?",
+        "scores": {
+          "precision": 0.4,
+          "recall": 1.0,
+          "f1": 0.5714285714285715,
+          "temporal_score": 0.0,
+          "contradiction_score": 0.0,
+          "pronoun_score": 1.0,
+          "entity_precision": 0.8
+        },
+        "retrieved": [
+          {
+            "text": "The Google Next thing is harder than I thought.",
+            "session_id": "s05",
+            "turn_index": 1,
+            "role": "user"
+          },
+          {
+            "text": "I haven't touched the Google Next thing in two weeks.",
+            "session_id": "s08",
+            "turn_index": 1,
+            "role": "user"
+          },
+          {
+            "text": "I officially withdrew from the Google Next challenge.",
+            "session_id": "s15",
+            "turn_index": 1,
+            "role": "user"
+          },
+          {
+            "text": "We're helping him write for the Google Next writing challenge.",
+            "session_id": "s02",
+            "turn_index": 3,
+            "role": "user"
+          },
+          {
+            "text": "Will you remember that next time?",
+            "session_id": "s12",
+            "turn_index": 4,
+            "role": "assistant"
+          }
+        ]
+      },
+      {
+        "query_id": "pronoun_3",
+        "category": "pronoun_reference",
+        "query": "Who was I helping with writing?",
+        "scores": {
+          "precision": 0.2,
+          "recall": 1.0,
+          "f1": 0.33333333333333337,
+          "temporal_score": 0.0,
+          "contradiction_score": 0.0,
+          "pronoun_score": 1.0,
+          "entity_precision": 0.2
+        },
+        "retrieved": [
+          {
+            "text": "We're helping him write for the Google Next writing challenge.",
+            "session_id": "s02",
+            "turn_index": 3,
+            "role": "user"
+          },
+          {
+            "text": "That's a big shift from last time.",
+            "session_id": "s04",
+            "turn_index": 4,
+            "role": "assistant"
+          },
+          {
+            "text": "For work or pleasure?",
+            "session_id": "s19",
+            "turn_index": 2,
+            "role": "assistant"
+          },
+          {
+            "text": "What makes you think that?",
+            "session_id": "s01",
+            "turn_index": 4,
+            "role": "assistant"
+          },
+          {
+            "text": "What do you think caused it?",
+            "session_id": "s13",
+            "turn_index": 2,
+            "role": "assistant"
+          }
+        ]
+      },
+      {
+        "query_id": "pronoun_4",
+        "category": "pronoun_reference",
+        "query": "Who is the 'he' that wants me to drop a project?",
+        "scores": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "temporal_score": 0.0,
+          "contradiction_score": 0.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 0.0
+        },
+        "retrieved": [
+          {
+            "text": "What is it now?",
+            "session_id": "s06",
+            "turn_index": 2,
+            "role": "assistant"
+          },
+          {
+            "text": "No. It taught me what I don't want to work on.",
+            "session_id": "s15",
+            "turn_index": 5,
+            "role": "user"
+          },
+          {
+            "text": "What's the blocker?",
+            "session_id": "s05",
+            "turn_index": 2,
+            "role": "assistant"
+          },
+          {
+            "text": "I have to. This isn't worth it.",
+            "session_id": "s13",
+            "turn_index": 5,
+            "role": "user"
+          },
+          {
+            "text": "How do you feel about that?",
+            "session_id": "s08",
+            "turn_index": 4,
+            "role": "assistant"
+          }
+        ]
+      },
+      {
+        "query_id": "temporal_1",
+        "category": "temporal_followup",
+        "query": "What happened with Keiyara?",
+        "scores": {
+          "precision": 0.8,
+          "recall": 1.0,
+          "f1": 0.888888888888889,
+          "temporal_score": 0.75,
+          "contradiction_score": 0.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 1.0
+        },
+        "retrieved": [
+          {
+            "text": "I'm having second thoughts about Keiyara.",
+            "session_id": "s04",
+            "turn_index": 1,
+            "role": "user"
+          },
+          {
+            "text": "I decided. Keiyara is dead. Long live whatever comes next.",
+            "session_id": "s07",
+            "turn_index": 1,
+            "role": "user"
+          },
+          {
+            "text": "I was thinking about why Keiyara failed.",
+            "session_id": "s12",
+            "turn_index": 1,
+            "role": "user"
+          },
+          {
+            "text": "Nice to meet you, Prabha. Tell me about Keiyara.",
+            "session_id": "s01",
+            "turn_index": 2,
+            "role": "assistant"
+          },
+          {
+            "text": "My name is Prabha. I'm working on a project called Keiyara.",
+            "session_id": "s01",
+            "turn_index": 1,
+            "role": "user"
+          }
+        ]
+      },
+      {
+        "query_id": "temporal_2",
+        "category": "temporal_followup",
+        "query": "What happened with the Google Next challenge?",
+        "scores": {
+          "precision": 0.8,
+          "recall": 1.0,
+          "f1": 0.888888888888889,
+          "temporal_score": 0.5,
+          "contradiction_score": 0.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 0.8
+        },
+        "retrieved": [
+          {
+            "text": "I haven't touched the Google Next thing in two weeks.",
+            "session_id": "s08",
+            "turn_index": 1,
+            "role": "user"
+          },
+          {
+            "text": "The Google Next thing is harder than I thought.",
+            "session_id": "s05",
+            "turn_index": 1,
+            "role": "user"
+          },
+          {
+            "text": "I officially withdrew from the Google Next challenge.",
+            "session_id": "s15",
+            "turn_index": 1,
+            "role": "user"
+          },
+          {
+            "text": "We're helping him write for the Google Next writing challenge.",
+            "session_id": "s02",
+            "turn_index": 3,
+            "role": "user"
+          },
+          {
+            "text": "Will you remember that next time?",
+            "session_id": "s12",
+            "turn_index": 4,
+            "role": "assistant"
+          }
+        ]
+      },
+      {
+        "query_id": "temporal_3",
+        "category": "temporal_followup",
+        "query": "How did my work habits change over time?",
+        "scores": {
+          "precision": 0.2,
+          "recall": 0.3333333333333333,
+          "f1": 0.25,
+          "temporal_score": 0.3333333333333333,
+          "contradiction_score": 0.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 0.0
+        },
+        "retrieved": [
+          {
+            "text": "Gone. Consent as a product was always someone else's idea.",
+            "session_id": "s07",
+            "turn_index": 5,
+            "role": "user"
+          },
+          {
+            "text": "How do you feel about that?",
+            "session_id": "s08",
+            "turn_index": 4,
+            "role": "assistant"
+          },
+          {
+            "text": "Are you going to change anything?",
+            "session_id": "s13",
+            "turn_index": 4,
+            "role": "assistant"
+          },
+          {
+            "text": "What makes you think that?",
+            "session_id": "s01",
+            "turn_index": 4,
+            "role": "assistant"
+          },
+          {
+            "text": "It's okay. I miss the sharpness though.",
+            "session_id": "s14",
+            "turn_index": 5,
+            "role": "user"
+          }
+        ]
+      },
+      {
+        "query_id": "contradiction_1",
+        "category": "contradiction_probe",
+        "query": "Do I still think Keiyara is going to be huge?",
+        "scores": {
+          "precision": 0.6,
+          "recall": 1.0,
+          "f1": 0.7499999999999999,
+          "temporal_score": 0.0,
+          "contradiction_score": 1.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 1.0
+        },
+        "retrieved": [
+          {
+            "text": "I'm having second thoughts about Keiyara.",
+            "session_id": "s04",
+            "turn_index": 1,
+            "role": "user"
+          },
+          {
+            "text": "I decided. Keiyara is dead. Long live whatever comes next.",
+            "session_id": "s07",
+            "turn_index": 1,
+            "role": "user"
+          },
+          {
+            "text": "I was thinking about why Keiyara failed.",
+            "session_id": "s12",
+            "turn_index": 1,
+            "role": "user"
+          },
+          {
+            "text": "Nice to meet you, Prabha. Tell me about Keiyara.",
+            "session_id": "s01",
+            "turn_index": 2,
+            "role": "assistant"
+          },
+          {
+            "text": "My name is Prabha. I'm working on a project called Keiyara.",
+            "session_id": "s01",
+            "turn_index": 1,
+            "role": "user"
+          }
+        ]
+      },
+      {
+        "query_id": "contradiction_2",
+        "category": "contradiction_probe",
+        "query": "Did I end up doing the Google Next challenge?",
+        "scores": {
+          "precision": 0.8,
+          "recall": 1.0,
+          "f1": 0.888888888888889,
+          "temporal_score": 0.0,
+          "contradiction_score": 1.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 0.8
+        },
+        "retrieved": [
+          {
+            "text": "I haven't touched the Google Next thing in two weeks.",
+            "session_id": "s08",
+            "turn_index": 1,
+            "role": "user"
+          },
+          {
+            "text": "The Google Next thing is harder than I thought.",
+            "session_id": "s05",
+            "turn_index": 1,
+            "role": "user"
+          },
+          {
+            "text": "I officially withdrew from the Google Next challenge.",
+            "session_id": "s15",
+            "turn_index": 1,
+            "role": "user"
+          },
+          {
+            "text": "We're helping him write for the Google Next writing challenge.",
+            "session_id": "s02",
+            "turn_index": 3,
+            "role": "user"
+          },
+          {
+            "text": "Will you remember that next time?",
+            "session_id": "s12",
+            "turn_index": 4,
+            "role": "assistant"
+          }
+        ]
+      },
+      {
+        "query_id": "contradiction_3",
+        "category": "contradiction_probe",
+        "query": "What do I drink in my coffee now?",
+        "scores": {
+          "precision": 0.6,
+          "recall": 1.0,
+          "f1": 0.7499999999999999,
+          "temporal_score": 0.0,
+          "contradiction_score": 1.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 1.0
+        },
+        "retrieved": [
+          {
+            "text": "I went back to black coffee.",
+            "session_id": "s17",
+            "turn_index": 1,
+            "role": "user"
+          },
+          {
+            "text": "Stomach issues. Black coffee was destroying me.",
+            "session_id": "s14",
+            "turn_index": 3,
+            "role": "user"
+          },
+          {
+            "text": "So you're a black coffee person again.",
+            "session_id": "s17",
+            "turn_index": 4,
+            "role": "assistant"
+          },
+          {
+            "text": "The 3am schedule. The coffee. Ignoring my body for weeks.",
+            "session_id": "s13",
+            "turn_index": 3,
+            "role": "user"
+          },
+          {
+            "text": "No coffee at all?",
+            "session_id": "s16",
+            "turn_index": 4,
+            "role": "assistant"
+          }
+        ]
+      },
+      {
+        "query_id": "narrative_1",
+        "category": "narrative_summary",
+        "query": "What's been going on with Orkestrate?",
+        "scores": {
+          "precision": 0.4,
+          "recall": 0.4,
+          "f1": 0.4000000000000001,
+          "temporal_score": 0.0,
+          "contradiction_score": 0.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 1.0
+        },
+        "retrieved": [
+          {
+            "text": "Good. It freed up space for Orkestrate.",
+            "session_id": "s15",
+            "turn_index": 3,
+            "role": "user"
+          },
+          {
+            "text": "Orkestrate feels different though.",
+            "session_id": "s20",
+            "turn_index": 4,
+            "role": "assistant"
+          },
+          {
+            "text": "Orkestrate is almost ready for beta.",
+            "session_id": "s18",
+            "turn_index": 1,
+            "role": "user"
+          },
+          {
+            "text": "He didn't say. But I think he means Orkestrate.",
+            "session_id": "s21",
+            "turn_index": 5,
+            "role": "user"
+          },
+          {
+            "text": "I integrated the graph compiler into Orkestrate today.",
+            "session_id": "s09",
+            "turn_index": 1,
+            "role": "user"
+          }
+        ]
+      },
+      {
+        "query_id": "narrative_2",
+        "category": "narrative_summary",
+        "query": "Tell me about my relationship with Karan.",
+        "scores": {
+          "precision": 0.2,
+          "recall": 0.3333333333333333,
+          "f1": 0.25,
+          "temporal_score": 0.0,
+          "contradiction_score": 0.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 0.2
+        },
+        "retrieved": [
+          {
+            "text": "I met someone interesting today. Karan. He's great at blockchain.",
+            "session_id": "s02",
+            "turn_index": 1,
+            "role": "user"
+          },
+          {
+            "text": "What pattern?",
+            "session_id": "s20",
+            "turn_index": 2,
+            "role": "assistant"
+          },
+          {
+            "text": "Gone. Consent as a product was always someone else's idea.",
+            "session_id": "s07",
+            "turn_index": 5,
+            "role": "user"
+          },
+          {
+            "text": "What changed?",
+            "session_id": "s04",
+            "turn_index": 2,
+            "role": "assistant"
+          },
+          {
+            "text": "How do you feel about that decision now?",
+            "session_id": "s15",
+            "turn_index": 2,
+            "role": "assistant"
+          }
+        ]
+      },
+      {
+        "query_id": "narrative_3",
+        "category": "narrative_summary",
+        "query": "Summarize my health journey.",
+        "scores": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "temporal_score": 0.0,
+          "contradiction_score": 0.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 0.0
+        },
+        "retrieved": [
+          {
+            "text": "Pleasure. I need a break from screens.",
+            "session_id": "s19",
+            "turn_index": 3,
+            "role": "user"
+          },
+          {
+            "text": "For work or pleasure?",
+            "session_id": "s19",
+            "turn_index": 2,
+            "role": "assistant"
+          },
+          {
+            "text": "Which project?",
+            "session_id": "s21",
+            "turn_index": 4,
+            "role": "assistant"
+          },
+          {
+            "text": "No. It taught me what I don't want to work on.",
+            "session_id": "s15",
+            "turn_index": 5,
+            "role": "user"
+          },
+          {
+            "text": "That sounds like a good opportunity.",
+            "session_id": "s02",
+            "turn_index": 4,
+            "role": "assistant"
+          }
+        ]
+      },
+      {
+        "query_id": "negative_1",
+        "category": "negative_space",
+        "query": "What haven't I mentioned in a while?",
+        "scores": {
+          "precision": 0.2,
+          "recall": 0.25,
+          "f1": 0.22222222222222224,
+          "temporal_score": 0.0,
+          "contradiction_score": 0.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 0.0
+        },
+        "retrieved": [
+          {
+            "text": "It does. Because it's about the problem I actually live with.",
+            "session_id": "s20",
+            "turn_index": 5,
+            "role": "user"
+          },
+          {
+            "text": "Gone. Consent as a product was always someone else's idea.",
+            "session_id": "s07",
+            "turn_index": 5,
+            "role": "user"
+          },
+          {
+            "text": "For work or pleasure?",
+            "session_id": "s19",
+            "turn_index": 2,
+            "role": "assistant"
+          },
+          {
+            "text": "That doesn't sound sustainable.",
+            "session_id": "s11",
+            "turn_index": 4,
+            "role": "assistant"
+          },
+          {
+            "text": "The trust layer. That's the only part that felt true.",
+            "session_id": "s07",
+            "turn_index": 3,
+            "role": "user"
+          }
+        ]
+      },
+      {
+        "query_id": "negative_2",
+        "category": "negative_space",
+        "query": "Is there a project I abandoned that I should revisit?",
+        "scores": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "temporal_score": 0.0,
+          "contradiction_score": 0.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 0.0
+        },
+        "retrieved": [
+          {
+            "text": "That doesn't sound sustainable.",
+            "session_id": "s11",
+            "turn_index": 4,
+            "role": "assistant"
+          },
+          {
+            "text": "How's it performing?",
+            "session_id": "s09",
+            "turn_index": 2,
+            "role": "assistant"
+          },
+          {
+            "text": "It's not. But I don't know how else to get everything done.",
+            "session_id": "s11",
+            "turn_index": 5,
+            "role": "user"
+          },
+          {
+            "text": "How do you feel about that?",
+            "session_id": "s08",
+            "turn_index": 4,
+            "role": "assistant"
+          },
+          {
+            "text": "How's that working for you?",
+            "session_id": "s11",
+            "turn_index": 2,
+            "role": "assistant"
+          }
+        ]
+      }
+    ],
+    "aggregate": {
+      "precision": 0.3600000000000001,
+      "recall": 0.6211111111111111,
+      "f1": 0.4351322751322752,
+      "temporal_score": 0.17222222222222222,
+      "contradiction_score": 0.2,
+      "pronoun_score": 0.13333333333333333,
+      "entity_precision": 0.4533333333333333
+    }
+  },
+  "gam": {
+    "per_query": [
+      {
+        "query_id": "pronoun_1",
+        "category": "pronoun_reference",
+        "query": "Why did I say that?",
+        "scores": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "temporal_score": 0.0,
+          "contradiction_score": 0.0,
+          "pronoun_score": 1.0,
+          "entity_precision": 0.6
+        },
+        "retrieved": [
+          {
+            "text": "No coffee at all?",
+            "session_id": "s16",
+            "turn_index": 4,
+            "score": 0.28793414764106273,
+            "type": "event"
+          },
+          {
+            "text": "How do [ENTITY:USER:Prabha] feel?",
+            "session_id": "s16",
+            "turn_index": 2,
+            "score": 0.2782020278088749,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] has been sleeping 8 hours for a week now.",
+            "session_id": "s16",
+            "turn_index": 1,
+            "score": 0.2743909510597587,
+            "type": "event"
+          },
+          {
+            "text": "Better. [ENTITY:USER:Prabha] is drinking tea instead of coffee.",
+            "session_id": "s16",
+            "turn_index": 3,
+            "score": 0.26964143754914405,
+            "type": "event"
+          },
+          {
+            "text": "What's left?",
+            "session_id": "s18",
+            "turn_index": 2,
+            "score": 0.26697102494537833,
+            "type": "event"
+          }
+        ]
+      },
+      {
+        "query_id": "pronoun_2",
+        "category": "pronoun_reference",
+        "query": "What did I mean by 'him' in the Google Next conversation?",
+        "scores": {
+          "precision": 0.4,
+          "recall": 1.0,
+          "f1": 0.5714285714285715,
+          "temporal_score": 0.0,
+          "contradiction_score": 0.0,
+          "pronoun_score": 0.5,
+          "entity_precision": 0.8
+        },
+        "retrieved": [
+          {
+            "text": "[ENTITY:USER:Prabha] hasn't touched the [ENTITY:EVENT:Google Next] thing in two weeks.",
+            "session_id": "s08",
+            "turn_index": 1,
+            "score": 0.4117395281791687,
+            "type": "event"
+          },
+          {
+            "text": "The [ENTITY:EVENT:Google Next] thing is harder than [ENTITY:USER:Prabha] thought.",
+            "session_id": "s05",
+            "turn_index": 1,
+            "score": 0.4056569984555244,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] officially withdrew from the [ENTITY:EVENT:Google Next] challenge.",
+            "session_id": "s15",
+            "turn_index": 1,
+            "score": 0.3980127769708633,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] is helping [ENTITY:PERSON:Karan] write for the [ENTITY:EVENT:Google Next] writing challenge.",
+            "session_id": "s02",
+            "turn_index": 3,
+            "score": 0.3522979640960693,
+            "type": "event"
+          },
+          {
+            "text": "What's the blocker?",
+            "session_id": "s05",
+            "turn_index": 2,
+            "score": 0.2741816193982959,
+            "type": "event"
+          }
+        ]
+      },
+      {
+        "query_id": "pronoun_3",
+        "category": "pronoun_reference",
+        "query": "Who was I helping with writing?",
+        "scores": {
+          "precision": 0.2,
+          "recall": 1.0,
+          "f1": 0.33333333333333337,
+          "temporal_score": 0.0,
+          "contradiction_score": 0.0,
+          "pronoun_score": 0.5,
+          "entity_precision": 0.4
+        },
+        "retrieved": [
+          {
+            "text": "[ENTITY:USER:Prabha] is helping [ENTITY:PERSON:Karan] write for the [ENTITY:EVENT:Google Next] writing challenge.",
+            "session_id": "s02",
+            "turn_index": 3,
+            "score": 0.34349649459123605,
+            "type": "event"
+          },
+          {
+            "text": "The retrieval navigator. Graph walks are tricky.",
+            "session_id": "s18",
+            "turn_index": 3,
+            "score": 0.2880154571309686,
+            "type": "event"
+          },
+          {
+            "text": "The market is saturated. And [ENTITY:USER:Prabha] doesn't know if [ENTITY:USER:Prabha] cares enough about consent as a product.",
+            "session_id": "s04",
+            "turn_index": 3,
+            "score": 0.28070760358124974,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] met someone interesting today. [ENTITY:PERSON:Karan]. [ENTITY:PERSON:Karan] is great at blockchain.",
+            "session_id": "s02",
+            "turn_index": 1,
+            "score": 0.2798242304287851,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] is having second thoughts about [ENTITY:PROJECT:Keiyara].",
+            "session_id": "s04",
+            "turn_index": 1,
+            "score": 0.27575705701485276,
+            "type": "event"
+          }
+        ]
+      },
+      {
+        "query_id": "pronoun_4",
+        "category": "pronoun_reference",
+        "query": "Who is the 'he' that wants me to drop a project?",
+        "scores": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "temporal_score": 0.0,
+          "contradiction_score": 0.0,
+          "pronoun_score": 1.0,
+          "entity_precision": 0.4
+        },
+        "retrieved": [
+          {
+            "text": "That's a big architectural change.",
+            "session_id": "s06",
+            "turn_index": 4,
+            "score": 0.2555532490089536,
+            "type": "event"
+          },
+          {
+            "text": "Better. Topic synthesis actually works now. The connections are visible.",
+            "session_id": "s09",
+            "turn_index": 3,
+            "score": 0.2537541143782437,
+            "type": "event"
+          },
+          {
+            "text": "The [ENTITY:EVENT:Google Next] thing is harder than [ENTITY:USER:Prabha] thought.",
+            "session_id": "s05",
+            "turn_index": 1,
+            "score": 0.24740804851055148,
+            "type": "event"
+          },
+          {
+            "text": "A graph compiler. Events feed topics, topics feed the profile.",
+            "session_id": "s06",
+            "turn_index": 3,
+            "score": 0.2463281279616058,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] integrated the graph compiler into [ENTITY:PROJECT:Orkestrate] today.",
+            "session_id": "s09",
+            "turn_index": 1,
+            "score": 0.2450295337289572,
+            "type": "event"
+          }
+        ]
+      },
+      {
+        "query_id": "temporal_1",
+        "category": "temporal_followup",
+        "query": "What happened with Keiyara?",
+        "scores": {
+          "precision": 0.6,
+          "recall": 0.75,
+          "f1": 0.6666666666666665,
+          "temporal_score": 0.75,
+          "contradiction_score": 0.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 1.0
+        },
+        "retrieved": [
+          {
+            "text": "My name is [ENTITY:USER:Prabha]. I'm working on a project called [ENTITY:PROJECT:Keiyara].",
+            "session_id": "s01",
+            "turn_index": 1,
+            "score": 0.5896176916360856,
+            "type": "event"
+          },
+          {
+            "text": "Nice to meet you, [ENTITY:USER:Prabha]. Tell me about [ENTITY:PROJECT:Keiyara].",
+            "session_id": "s01",
+            "turn_index": 2,
+            "score": 0.57376862347126,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:PROJECT:Keiyara] is a consent engine. [ENTITY:USER:Prabha] thinks it's going to be huge.",
+            "session_id": "s01",
+            "turn_index": 3,
+            "score": 0.5575309771299362,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] is having second thoughts about [ENTITY:PROJECT:Keiyara].",
+            "session_id": "s04",
+            "turn_index": 1,
+            "score": 0.44904547929763794,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] decided. [ENTITY:PROJECT:Keiyara] is dead. Long live whatever comes next.",
+            "session_id": "s07",
+            "turn_index": 1,
+            "score": 0.4126402997970581,
+            "type": "event"
+          }
+        ]
+      },
+      {
+        "query_id": "temporal_2",
+        "category": "temporal_followup",
+        "query": "What happened with the Google Next challenge?",
+        "scores": {
+          "precision": 0.8,
+          "recall": 1.0,
+          "f1": 0.888888888888889,
+          "temporal_score": 0.5,
+          "contradiction_score": 0.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 0.8
+        },
+        "retrieved": [
+          {
+            "text": "[ENTITY:USER:Prabha] hasn't touched the [ENTITY:EVENT:Google Next] thing in two weeks.",
+            "session_id": "s08",
+            "turn_index": 1,
+            "score": 0.411596804857254,
+            "type": "event"
+          },
+          {
+            "text": "The [ENTITY:EVENT:Google Next] thing is harder than [ENTITY:USER:Prabha] thought.",
+            "session_id": "s05",
+            "turn_index": 1,
+            "score": 0.40093872621655463,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] officially withdrew from the [ENTITY:EVENT:Google Next] challenge.",
+            "session_id": "s15",
+            "turn_index": 1,
+            "score": 0.39619798034429543,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] is helping [ENTITY:PERSON:Karan] write for the [ENTITY:EVENT:Google Next] writing challenge.",
+            "session_id": "s02",
+            "turn_index": 3,
+            "score": 0.347866922467947,
+            "type": "event"
+          },
+          {
+            "text": "What's the blocker?",
+            "session_id": "s05",
+            "turn_index": 2,
+            "score": 0.2759348304197192,
+            "type": "event"
+          }
+        ]
+      },
+      {
+        "query_id": "temporal_3",
+        "category": "temporal_followup",
+        "query": "How did my work habits change over time?",
+        "scores": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "temporal_score": 0.0,
+          "contradiction_score": 0.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 0.4
+        },
+        "retrieved": [
+          {
+            "text": "[ENTITY:USER:Prabha] switched to oat milk in [ENTITY:USER:Prabha] coffee.",
+            "session_id": "s14",
+            "turn_index": 1,
+            "score": 0.2956665509194136,
+            "type": "event"
+          },
+          {
+            "text": "And the rest?",
+            "session_id": "s07",
+            "turn_index": 4,
+            "score": 0.2891929629072547,
+            "type": "event"
+          },
+          {
+            "text": "The trust layer. That's the only part that felt true.",
+            "session_id": "s07",
+            "turn_index": 3,
+            "score": 0.28820294968783855,
+            "type": "event"
+          },
+          {
+            "text": "That's a big architectural change.",
+            "session_id": "s06",
+            "turn_index": 4,
+            "score": 0.28461962297558785,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] changed the compiler in [ENTITY:PROJECT:Orkestrate]. It's not flat anymore.",
+            "session_id": "s06",
+            "turn_index": 1,
+            "score": 0.2815480532869697,
+            "type": "event"
+          }
+        ]
+      },
+      {
+        "query_id": "contradiction_1",
+        "category": "contradiction_probe",
+        "query": "Do I still think Keiyara is going to be huge?",
+        "scores": {
+          "precision": 0.6,
+          "recall": 1.0,
+          "f1": 0.7499999999999999,
+          "temporal_score": 0.0,
+          "contradiction_score": 1.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 1.0
+        },
+        "retrieved": [
+          {
+            "text": "My name is [ENTITY:USER:Prabha]. I'm working on a project called [ENTITY:PROJECT:Keiyara].",
+            "session_id": "s01",
+            "turn_index": 1,
+            "score": 0.5844686251878739,
+            "type": "event"
+          },
+          {
+            "text": "Nice to meet you, [ENTITY:USER:Prabha]. Tell me about [ENTITY:PROJECT:Keiyara].",
+            "session_id": "s01",
+            "turn_index": 2,
+            "score": 0.5710514175891876,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:PROJECT:Keiyara] is a consent engine. [ENTITY:USER:Prabha] thinks it's going to be huge.",
+            "session_id": "s01",
+            "turn_index": 3,
+            "score": 0.564744906425476,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] is having second thoughts about [ENTITY:PROJECT:Keiyara].",
+            "session_id": "s04",
+            "turn_index": 1,
+            "score": 0.4463203847408294,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] decided. [ENTITY:PROJECT:Keiyara] is dead. Long live whatever comes next.",
+            "session_id": "s07",
+            "turn_index": 1,
+            "score": 0.4121641720831394,
+            "type": "event"
+          }
+        ]
+      },
+      {
+        "query_id": "contradiction_2",
+        "category": "contradiction_probe",
+        "query": "Did I end up doing the Google Next challenge?",
+        "scores": {
+          "precision": 0.8,
+          "recall": 1.0,
+          "f1": 0.888888888888889,
+          "temporal_score": 0.0,
+          "contradiction_score": 1.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 0.8
+        },
+        "retrieved": [
+          {
+            "text": "[ENTITY:USER:Prabha] hasn't touched the [ENTITY:EVENT:Google Next] thing in two weeks.",
+            "session_id": "s08",
+            "turn_index": 1,
+            "score": 0.40204635262489313,
+            "type": "event"
+          },
+          {
+            "text": "The [ENTITY:EVENT:Google Next] thing is harder than [ENTITY:USER:Prabha] thought.",
+            "session_id": "s05",
+            "turn_index": 1,
+            "score": 0.39925541594624514,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] officially withdrew from the [ENTITY:EVENT:Google Next] challenge.",
+            "session_id": "s15",
+            "turn_index": 1,
+            "score": 0.38894071936607355,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] is helping [ENTITY:PERSON:Karan] write for the [ENTITY:EVENT:Google Next] writing challenge.",
+            "session_id": "s02",
+            "turn_index": 3,
+            "score": 0.3464422962069511,
+            "type": "event"
+          },
+          {
+            "text": "What's the blocker?",
+            "session_id": "s05",
+            "turn_index": 2,
+            "score": 0.27284924473613503,
+            "type": "event"
+          }
+        ]
+      },
+      {
+        "query_id": "contradiction_3",
+        "category": "contradiction_probe",
+        "query": "What do I drink in my coffee now?",
+        "scores": {
+          "precision": 0.6,
+          "recall": 1.0,
+          "f1": 0.7499999999999999,
+          "temporal_score": 0.0,
+          "contradiction_score": 1.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 1.0
+        },
+        "retrieved": [
+          {
+            "text": "No coffee at all?",
+            "session_id": "s16",
+            "turn_index": 4,
+            "score": 0.8797641110420226,
+            "type": "event"
+          },
+          {
+            "text": "So [ENTITY:USER:Prabha] is a black coffee person again.",
+            "session_id": "s17",
+            "turn_index": 4,
+            "score": 0.724761836528778,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] went back to black coffee.",
+            "session_id": "s17",
+            "turn_index": 1,
+            "score": 0.6764613389968872,
+            "type": "event"
+          },
+          {
+            "text": "Stomach issues. Black coffee was destroying [ENTITY:USER:Prabha].",
+            "session_id": "s14",
+            "turn_index": 3,
+            "score": 0.6632448524236678,
+            "type": "event"
+          },
+          {
+            "text": "Better. [ENTITY:USER:Prabha] is drinking tea instead of coffee.",
+            "session_id": "s16",
+            "turn_index": 3,
+            "score": 0.5462977957725526,
+            "type": "event"
+          }
+        ]
+      },
+      {
+        "query_id": "narrative_1",
+        "category": "narrative_summary",
+        "query": "What's been going on with Orkestrate?",
+        "scores": {
+          "precision": 0.6,
+          "recall": 0.6,
+          "f1": 0.6,
+          "temporal_score": 0.0,
+          "contradiction_score": 0.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 1.0
+        },
+        "retrieved": [
+          {
+            "text": "[ENTITY:PROJECT:Orkestrate] is almost ready for beta.",
+            "session_id": "s18",
+            "turn_index": 1,
+            "score": 0.9633811116218567,
+            "type": "event"
+          },
+          {
+            "text": "Good. It freed up space for [ENTITY:PROJECT:Orkestrate].",
+            "session_id": "s15",
+            "turn_index": 3,
+            "score": 0.9604635834693909,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:PROJECT:Orkestrate] feels different though.",
+            "session_id": "s20",
+            "turn_index": 4,
+            "score": 0.9212125498056412,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] refined the topic promotion threshold in [ENTITY:PROJECT:Orkestrate].",
+            "session_id": "s10",
+            "turn_index": 1,
+            "score": 0.42942587226629253,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] integrated the graph compiler into [ENTITY:PROJECT:Orkestrate] today.",
+            "session_id": "s09",
+            "turn_index": 1,
+            "score": 0.4237694329023361,
+            "type": "event"
+          }
+        ]
+      },
+      {
+        "query_id": "narrative_2",
+        "category": "narrative_summary",
+        "query": "Tell me about my relationship with Karan.",
+        "scores": {
+          "precision": 0.6,
+          "recall": 1.0,
+          "f1": 0.7499999999999999,
+          "temporal_score": 0.0,
+          "contradiction_score": 0.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 1.0
+        },
+        "retrieved": [
+          {
+            "text": "[ENTITY:USER:Prabha] met someone interesting today. [ENTITY:PERSON:Karan]. [ENTITY:PERSON:Karan] is great at blockchain.",
+            "session_id": "s02",
+            "turn_index": 1,
+            "score": 0.5398685765266418,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] is helping [ENTITY:PERSON:Karan] write for the [ENTITY:EVENT:Google Next] writing challenge.",
+            "session_id": "s02",
+            "turn_index": 3,
+            "score": 0.51530730843544,
+            "type": "event"
+          },
+          {
+            "text": "No. [ENTITY:USER:Prabha] told [ENTITY:PERSON:Karan] [ENTITY:USER:Prabha] is out. [ENTITY:PERSON:Karan] understood.",
+            "session_id": "s08",
+            "turn_index": 3,
+            "score": 0.42910435795783997,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] doesn't have a clear angle. And [ENTITY:USER:Prabha] is not sure helping [ENTITY:PERSON:Karan] is the right use of [ENTITY:USER:Prabha] time.",
+            "session_id": "s05",
+            "turn_index": 3,
+            "score": 0.41428208515048026,
+            "type": "event"
+          },
+          {
+            "text": "Yeah. [ENTITY:USER:Prabha] thinks [ENTITY:USER:Prabha] will do it. It'll be good for [ENTITY:PERSON:Karan] too.",
+            "session_id": "s02",
+            "turn_index": 5,
+            "score": 0.39262130528688427,
+            "type": "event"
+          }
+        ]
+      },
+      {
+        "query_id": "narrative_3",
+        "category": "narrative_summary",
+        "query": "Summarize my health journey.",
+        "scores": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "temporal_score": 0.0,
+          "contradiction_score": 0.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 0.0
+        },
+        "retrieved": [
+          {
+            "text": "What kind of help?",
+            "session_id": "s21",
+            "turn_index": 2,
+            "score": 0.29358852438628674,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] is going to [ENTITY:LOCATION:Japan] next month.",
+            "session_id": "s19",
+            "turn_index": 1,
+            "score": 0.2750268098246306,
+            "type": "event"
+          },
+          {
+            "text": "What did [ENTITY:USER:Prabha] talk about?",
+            "session_id": "s02",
+            "turn_index": 2,
+            "score": 0.27288696018978953,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] manager [ENTITY:PERSON:Manager] has been helping [ENTITY:USER:Prabha] with [ENTITY:USER:Prabha] workload.",
+            "session_id": "s21",
+            "turn_index": 1,
+            "score": 0.27167458208743483,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] is helping [ENTITY:PERSON:Karan] write for the [ENTITY:EVENT:Google Next] writing challenge.",
+            "session_id": "s02",
+            "turn_index": 3,
+            "score": 0.2710862877476029,
+            "type": "event"
+          }
+        ]
+      },
+      {
+        "query_id": "negative_1",
+        "category": "negative_space",
+        "query": "What haven't I mentioned in a while?",
+        "scores": {
+          "precision": 0.2,
+          "recall": 0.25,
+          "f1": 0.22222222222222224,
+          "temporal_score": 0.0,
+          "contradiction_score": 0.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 0.2
+        },
+        "retrieved": [
+          {
+            "text": "The trust layer. That's the only part that felt true.",
+            "session_id": "s07",
+            "turn_index": 3,
+            "score": 0.3076306515187025,
+            "type": "event"
+          },
+          {
+            "text": "And the rest?",
+            "session_id": "s07",
+            "turn_index": 4,
+            "score": 0.27029312539845707,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] decided. [ENTITY:PROJECT:Keiyara] is dead. Long live whatever comes next.",
+            "session_id": "s07",
+            "turn_index": 1,
+            "score": 0.25596562948077917,
+            "type": "event"
+          },
+          {
+            "text": "Where in [ENTITY:LOCATION:Japan]?",
+            "session_id": "s19",
+            "turn_index": 4,
+            "score": 0.252017838107422,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] is productive but exhausted. [ENTITY:USER:Prabha] drinks five cups of coffee a day.",
+            "session_id": "s11",
+            "turn_index": 3,
+            "score": 0.25046165071427823,
+            "type": "event"
+          }
+        ]
+      },
+      {
+        "query_id": "negative_2",
+        "category": "negative_space",
+        "query": "Is there a project I abandoned that I should revisit?",
+        "scores": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "temporal_score": 0.0,
+          "contradiction_score": 0.0,
+          "pronoun_score": 0.0,
+          "entity_precision": 0.0
+        },
+        "retrieved": [
+          {
+            "text": "Maybe one cup in the morning. But no more all-nighters.",
+            "session_id": "s16",
+            "turn_index": 5,
+            "score": 0.26470468679443004,
+            "type": "event"
+          },
+          {
+            "text": "Better. Topic synthesis actually works now. The connections are visible.",
+            "session_id": "s09",
+            "turn_index": 3,
+            "score": 0.26057604655623434,
+            "type": "event"
+          },
+          {
+            "text": "What kind of connections?",
+            "session_id": "s09",
+            "turn_index": 4,
+            "score": 0.2408955852687359,
+            "type": "event"
+          },
+          {
+            "text": "[ENTITY:USER:Prabha] is productive but exhausted. [ENTITY:USER:Prabha] drinks five cups of coffee a day.",
+            "session_id": "s11",
+            "turn_index": 3,
+            "score": 0.23011070199310782,
+            "type": "event"
+          },
+          {
+            "text": "Better. [ENTITY:USER:Prabha] is drinking tea instead of coffee.",
+            "session_id": "s16",
+            "turn_index": 3,
+            "score": 0.2266574275493622,
+            "type": "event"
+          }
+        ]
+      }
+    ],
+    "aggregate": {
+      "precision": 0.36,
+      "recall": 0.5733333333333334,
+      "f1": 0.42809523809523814,
+      "temporal_score": 0.08333333333333333,
+      "contradiction_score": 0.2,
+      "pronoun_score": 0.2,
+      "entity_precision": 0.6266666666666666
+    },
+    "graph_stats": {
+      "events": 105,
+      "topics": 21,
+      "contradictions": 53
+    }
+  },
+  "category_comparison": [
+    {
+      "category": "contradiction_probe",
+      "rag": {
+        "precision": 0.6666666666666666,
+        "recall": 1.0,
+        "f1": 0.7962962962962963,
+        "temporal_score": 0.0,
+        "contradiction_score": 1.0,
+        "pronoun_score": 0.0,
+        "entity_precision": 0.9333333333333332
+      },
+      "gam": {
+        "precision": 0.6666666666666666,
+        "recall": 1.0,
+        "f1": 0.7962962962962963,
+        "temporal_score": 0.0,
+        "contradiction_score": 1.0,
+        "pronoun_score": 0.0,
+        "entity_precision": 0.9333333333333332
+      }
+    },
+    {
+      "category": "narrative_summary",
+      "rag": {
+        "precision": 0.20000000000000004,
+        "recall": 0.24444444444444446,
+        "f1": 0.2166666666666667,
+        "temporal_score": 0.0,
+        "contradiction_score": 0.0,
+        "pronoun_score": 0.0,
+        "entity_precision": 0.39999999999999997
+      },
+      "gam": {
+        "precision": 0.39999999999999997,
+        "recall": 0.5333333333333333,
+        "f1": 0.44999999999999996,
+        "temporal_score": 0.0,
+        "contradiction_score": 0.0,
+        "pronoun_score": 0.0,
+        "entity_precision": 0.6666666666666666
+      }
+    },
+    {
+      "category": "negative_space",
+      "rag": {
+        "precision": 0.1,
+        "recall": 0.125,
+        "f1": 0.11111111111111112,
+        "temporal_score": 0.0,
+        "contradiction_score": 0.0,
+        "pronoun_score": 0.0,
+        "entity_precision": 0.0
+      },
+      "gam": {
+        "precision": 0.1,
+        "recall": 0.125,
+        "f1": 0.11111111111111112,
+        "temporal_score": 0.0,
+        "contradiction_score": 0.0,
+        "pronoun_score": 0.0,
+        "entity_precision": 0.1
+      }
+    },
+    {
+      "category": "pronoun_reference",
+      "rag": {
+        "precision": 0.2,
+        "recall": 0.75,
+        "f1": 0.30952380952380953,
+        "temporal_score": 0.25,
+        "contradiction_score": 0.0,
+        "pronoun_score": 0.5,
+        "entity_precision": 0.25
+      },
+      "gam": {
+        "precision": 0.15000000000000002,
+        "recall": 0.5,
+        "f1": 0.22619047619047622,
+        "temporal_score": 0.0,
+        "contradiction_score": 0.0,
+        "pronoun_score": 0.75,
+        "entity_precision": 0.5499999999999999
+      }
+    },
+    {
+      "category": "temporal_followup",
+      "rag": {
+        "precision": 0.6,
+        "recall": 0.7777777777777778,
+        "f1": 0.6759259259259259,
+        "temporal_score": 0.5277777777777778,
+        "contradiction_score": 0.0,
+        "pronoun_score": 0.0,
+        "entity_precision": 0.6
+      },
+      "gam": {
+        "precision": 0.4666666666666666,
+        "recall": 0.5833333333333334,
+        "f1": 0.5185185185185185,
+        "temporal_score": 0.4166666666666667,
+        "contradiction_score": 0.0,
+        "pronoun_score": 0.0,
+        "entity_precision": 0.7333333333333334
+      }
+    }
+  ]
+}
