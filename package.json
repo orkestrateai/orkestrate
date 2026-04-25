@@ -1,0 +1,15 @@
+{
+  "name": "orkestrate",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently --names 'SERVER,UI' --prefix-colors 'cyan,green' 'bun run dev:server' 'bun run dev:ui'",
+    "dev:server": "cd desktop/memory-server && bunx tsx src/index.ts",
+    "dev:ui": "cd desktop && bun run dev",
+    "build": "cd desktop && bun run build",
+    "build:server": "cd desktop/memory-server && bunx tsc"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
