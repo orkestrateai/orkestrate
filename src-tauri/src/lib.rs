@@ -10,6 +10,7 @@ mod db;
 mod embed;
 mod mcp;
 mod memory;
+mod pscm;
 mod prompt;
 mod timer;
 mod tools;
@@ -206,7 +207,7 @@ Output ONLY a JSON array of strings:"#,
             { "role": "user", "content": prompt }
         ],
         "stream": false,
-        "max_tokens": 1024
+        "max_tokens": 2048
     });
 
     let response = client
@@ -407,7 +408,7 @@ Rules:
             { "role": "user", "content": prompt }
         ],
         "stream": false,
-        "max_tokens": 128
+        "max_tokens": 256
     });
 
     let response = client
@@ -563,6 +564,228 @@ async fn discover_mcp_tools() -> Result<Vec<serde_json::Value>, String> {
     Ok(results)
 }
 
+// ─── PSCM Commands ─────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn pscm_search_memory(query: String, limit: Option<usize>) -> Result<Vec<serde_json::Value>, String> {
+    let limit = limit.unwrap_or(10);
+    let state_guard = pscm::state()
+        .ok_or("PSCM not initialized")?
+        .read()
+        .await;
+    let db = &state_guard.db;
+    let graph = &state_guard.graph;
+    let index = &state_guard.index;
+
+    let results = pscm::retrieve::retrieve(&query, db, graph, index, limit).await?;
+
+    let json_results: Vec<serde_json::Value> = results.into_iter().map(|r| {
+        serde_json::json!({
+            "trace_id": r.trace.id,
+            "session_id": r.trace.session_id,
+            "content": r.trace.raw_text,
+            "role": r.trace.role,
+            "timestamp": r.trace.timestamp,
+            "system1_score": r.system1_score,
+            "system2_score": r.system2_score,
+            "composite_score": r.composite_score,
+            "route": match r.route {
+                pscm::retrieve::Route::System1 => "system1",
+                pscm::retrieve::Route::System2 => "system2",
+                pscm::retrieve::Route::Both => "both",
+            }
+        })
+    }).collect();
+
+    Ok(json_results)
+}
+
+#[tauri::command]
+fn pscm_get_concept_graph() -> Result<serde_json::Value, String> {
+    let state = pscm::state().ok_or("PSCM not initialized")?;
+    let state_guard = match state.try_read() {
+        Ok(guard) => guard,
+        Err(_) => return Err("PSCM state locked".to_string()),
+    };
+    let graph = &state_guard.graph;
+
+    let mut nodes = Vec::new();
+    for node_idx in graph.graph.node_indices() {
+        let node = &graph.graph[node_idx];
+        nodes.push(serde_json::json!({
+            "id": node.id,
+            "name": node.canonical_name,
+            "type": node.node_type
+        }));
+    }
+
+    let mut edges = Vec::new();
+    use petgraph::visit::{IntoEdgeReferences, EdgeRef};
+    for edge_ref in graph.graph.edge_references() {
+        let edge: &crate::pscm::graph::CausalEdge = edge_ref.weight();
+        let source = &graph.graph[edge_ref.source()];
+        let target = &graph.graph[edge_ref.target()];
+        edges.push(serde_json::json!({
+            "source": source.id,
+            "target": target.id,
+            "source_name": source.canonical_name,
+            "target_name": target.canonical_name,
+            "type": edge.edge_type,
+            "weight": edge.weight,
+            "confidence": edge.confidence
+        }));
+    }
+
+    Ok(serde_json::json!({ "nodes": nodes, "edges": edges }))
+}
+
+#[tauri::command]
+async fn pscm_add_concept_alias(
+    canonical_name: String,
+    alias: String,
+    node_type: Option<String>,
+) -> Result<(), String> {
+    let mut state_guard = pscm::state()
+        .ok_or("PSCM not initialized")?
+        .write()
+        .await;
+    let timestamp = chrono::Utc::now().to_rfc3339();
+
+    // Create the alias concept in graph
+    let alias_id = uuid::Uuid::new_v4().to_string();
+    let type_ = node_type.unwrap_or_else(|| "sense".to_string());
+    state_guard.graph.upsert_concept(&alias_id, &alias, &type_)?;
+
+    // Find the canonical concept
+    let canonical_idx = state_guard.graph.name_to_index.get(&canonical_name)
+        .ok_or_else(|| format!("Canonical concept '{}' not found", canonical_name))?;
+    let canonical_id = state_guard.graph.graph[*canonical_idx].id.clone();
+
+    // Create ALIASES edge in graph
+    state_guard.graph.upsert_edge(&alias_id, &canonical_id, "ALIASES", 1.0, &timestamp, None, 1.0)?;
+    
+    // Persist to DB
+    state_guard.db.upsert_concept(&alias_id, &alias, &type_, None, &timestamp)?;
+    state_guard.db.upsert_edge(&alias_id, &canonical_id, "ALIASES", 1.0, &timestamp, None, 1.0)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn pscm_delete_concept_edge(
+    from_id: String,
+    to_id: String,
+    edge_type: String,
+) -> Result<(), String> {
+    let mut state_guard = pscm::state()
+        .ok_or("PSCM not initialized")?
+        .write()
+        .await;
+
+    state_guard.db.delete_edge(&from_id, &to_id, &edge_type)?;
+
+    let graph = &mut state_guard.graph;
+    if let (Some(&from_idx), Some(&to_idx)) = (
+        graph.name_to_index.get(&from_id),
+        graph.name_to_index.get(&to_id),
+    ) {
+        if let Some(edge_idx) = graph.graph.find_edge(from_idx, to_idx) {
+            if graph.graph[edge_idx].edge_type == edge_type {
+                graph.graph.remove_edge(edge_idx);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn pscm_get_traces(limit: Option<i64>) -> Result<Vec<serde_json::Value>, String> {
+    let limit = limit.unwrap_or(50);
+    let state = pscm::state().ok_or("PSCM not initialized")?;
+    let state_guard = match state.try_read() {
+        Ok(guard) => guard,
+        Err(_) => return Err("PSCM state locked".to_string()),
+    };
+    let traces = state_guard.db.load_recent_traces(limit)?;
+
+    let json_traces: Vec<serde_json::Value> = traces.into_iter().map(|t| {
+        serde_json::json!({
+            "id": t.id,
+            "session_id": t.session_id,
+            "turn_index": t.turn_index,
+            "content": t.raw_text,
+            "role": t.role,
+            "timestamp": t.timestamp
+        })
+    }).collect();
+
+    Ok(json_traces)
+}
+
+#[tauri::command]
+async fn pscm_run_dream_state() -> Result<serde_json::Value, String> {
+    let dream = pscm::dream::DreamState::new();
+    let report = dream.run_once().await?;
+
+    Ok(serde_json::json!({
+        "drift_count": report.drift_reports.len(),
+        "causal_links": report.causal_links.len(),
+        "pruned": report.prune_report.compressed_count
+    }))
+}
+
+#[tauri::command]
+fn pscm_get_embedding_provider() -> Result<String, String> {
+    let state = pscm::state().ok_or("PSCM not initialized")?;
+    let state_guard = match state.try_read() {
+        Ok(guard) => guard,
+        Err(_) => return Err("PSCM state locked".to_string()),
+    };
+    match state_guard.db.get_config("embedding_provider")? {
+        Some(p) => Ok(p),
+        None => Ok("openrouter".to_string()),
+    }
+}
+
+#[tauri::command]
+fn pscm_set_embedding_provider(provider: String) -> Result<(), String> {
+    let state = pscm::state().ok_or("PSCM not initialized")?;
+    let state_guard = match state.try_read() {
+        Ok(guard) => guard,
+        Err(_) => return Err("PSCM state locked".to_string()),
+    };
+    state_guard.db.set_config("embedding_provider", &provider)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn clear_old_memories() -> Result<(), String> {
+    let data_dir = dirs::data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("Orkestrate");
+    
+    let old_db = data_dir.join("orkestrate.db");
+    if old_db.exists() {
+        std::fs::remove_file(&old_db)
+            .map_err(|e| format!("Failed to delete old memory DB: {}", e))?;
+    }
+    
+    let new_db = data_dir.join("orkestrate_v2.db");
+    if new_db.exists() {
+        std::fs::remove_file(&new_db)
+            .map_err(|e| format!("Failed to delete new memory DB: {}", e))?;
+    }
+    
+    let tantivy_dir = data_dir.join("tantivy_index");
+    if tantivy_dir.exists() {
+        std::fs::remove_dir_all(&tantivy_dir)
+            .map_err(|e| format!("Failed to delete Tantivy index: {}", e))?;
+    }
+    
+    Ok(())
+}
+
 // ─── Tauri App Entry ───────────────────────────────────────────────────
 
 pub fn run() {
@@ -593,13 +816,31 @@ pub fn run() {
             get_suggestions,
             get_mcp_config,
             set_mcp_config,
-            discover_mcp_tools
+            discover_mcp_tools,
+            pscm_search_memory,
+            pscm_get_concept_graph,
+            pscm_add_concept_alias,
+            pscm_delete_concept_edge,
+            pscm_get_traces,
+            pscm_run_dream_state,
+            pscm_get_embedding_provider,
+            pscm_set_embedding_provider,
+            clear_old_memories
         ])
         .setup(|app| {
             // Ensure prompt file exists in app data for runtime editing
             prompt::ensure_prompt_file();
 
-            // Start batch queue background timer for memory extraction
+            // Initialize PSCM (new dual-route memory system)
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = pscm::init().await {
+                    eprintln!("[PSCM] Failed to initialize: {}", e);
+                } else {
+                    println!("[PSCM] Initialized successfully");
+                }
+            });
+
+            // Start batch queue background timer for legacy memory extraction
             dotenvy::dotenv().ok();
             if let Ok(api_key) = std::env::var("OPENCODE_ZEN_API_KEY") {
                 memory::batch_queue::spawn_background_timer(api_key);

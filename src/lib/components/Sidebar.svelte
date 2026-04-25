@@ -2,7 +2,8 @@
 	import { sidebarStore } from "$lib/stores/sidebar.svelte";
 	import { chatStore } from "$lib/stores/chat.svelte";
 	import { learnStore } from "$lib/stores/learn.svelte";
-	import { Plus, Search, X, Gift, BookOpen } from "lucide-svelte";
+	import { viewStore, showChat, showMemory } from "$lib/stores/view.svelte";
+	import { Plus, Search, X, Gift, BookOpen, Brain } from "lucide-svelte";
 	import { fly, fade } from "svelte/transition";
 	import ProfilePopup from "./ProfilePopup.svelte";
 	import SettingsModal from "./SettingsModal.svelte";
@@ -15,11 +16,17 @@
 	function handleNewChat() {
 		chatStore.reset();
 		sidebarStore.newChat();
+		showChat();
 	}
 
 	function handleSelectSession(id: string) {
 		sidebarStore.switchSession(id);
 		chatStore.loadMessages(id);
+		showChat();
+	}
+
+	function handleMemory() {
+		showMemory();
 	}
 
 	function toggleProfilePopup() {
@@ -105,6 +112,18 @@
 					{learnStore.pendingCount}
 				</span>
 			{/if}
+		</button>
+		<button
+			onclick={handleMemory}
+			class="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] text-left transition-colors"
+			class:text-[var(--fg)]={viewStore.currentView === "memory"}
+			class:bg-[var(--hover-bg)]={viewStore.currentView === "memory"}
+			class:text-[var(--fg-secondary)]={viewStore.currentView !== "memory"}
+			class:hover:bg-[var(--hover-bg)]={viewStore.currentView !== "memory"}
+			class:hover:text-[var(--fg)]={viewStore.currentView !== "memory"}
+		>
+			<Brain size={16} strokeWidth={1.5} />
+			Memory
 		</button>
 	</nav>
 

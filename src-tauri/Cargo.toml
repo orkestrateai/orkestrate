@@ -36,3 +36,8 @@ r2d2_sqlite = "0.25.0"
 tiktoken-rs = "0.6"
 html2md = "0.2"
 pdf-extract = "0.7"
+tantivy = "0.26"
+hnsw_rs = "0.3"
+petgraph = "0.6"
+swarms-rs = "0.2"
+cached = { version = "0.53", features = ["async"] }

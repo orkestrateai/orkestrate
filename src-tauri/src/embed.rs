@@ -20,13 +20,6 @@ pub enum EmbedProvider {
 }
 
 impl EmbedProvider {
-    pub fn dims(&self) -> usize {
-        match self {
-            EmbedProvider::Ollama => OLLAMA_DIMS,
-            EmbedProvider::OpenRouter => OPENROUTER_DIMS,
-        }
-    }
-
     pub fn model_name(&self) -> &'static str {
         match self {
             EmbedProvider::Ollama => OLLAMA_MODEL,
@@ -82,11 +75,6 @@ pub async fn embed(text: &str) -> Result<(Vec<f32>, EmbedProvider), String> {
         }
         Err(e) => Err(format!("Both Ollama and OpenRouter failed. Last error: {}", e)),
     }
-}
-
-/// Convenience: embed and ignore provider info.
-pub async fn embed_vec(text: &str) -> Result<Vec<f32>, String> {
-    embed(text).await.map(|(v, _)| v)
 }
 
 /// Batch embed multiple texts concurrently.

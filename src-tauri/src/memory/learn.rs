@@ -212,7 +212,7 @@ Output format:
             { "role": "user", "content": prompt }
         ],
         "stream": false,
-        "max_tokens": 1024
+        "max_tokens": 2048
     });
 
     let response = client

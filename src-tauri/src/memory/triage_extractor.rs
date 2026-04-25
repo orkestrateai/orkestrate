@@ -36,7 +36,7 @@ pub struct ExtractedCandidate {
     pub type_: String,
     pub confidence: f64,
     pub suggested_section: String,
-    pub entities: Vec<(String, String)>, // (name, entity_type)
+    pub _entities: Vec<(String, String)>, // (name, entity_type)
 }
 
 #[derive(Debug, Clone)]
@@ -72,7 +72,7 @@ pub async fn extract(
             "content": prompt
         })],
         stream: false,
-        max_tokens: 4096,
+        max_tokens: 8192,
     };
 
     let response = client
@@ -224,7 +224,7 @@ fn parse_extraction_output(content: &str) -> Result<ExtractionResult, String> {
                     type_: type_.to_string(),
                     confidence,
                     suggested_section: section.to_string(),
-                    entities,
+                    _entities: entities,
                 });
             }
         }

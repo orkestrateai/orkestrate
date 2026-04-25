@@ -81,6 +81,7 @@ pub fn decay_importance(importance: f64, created_at_iso: &str) -> f64 {
 /// - lexical_weight: weight for lexical (e.g., 0.3)
 ///
 /// Returns top results sorted by combined score.
+#[allow(dead_code)]
 pub fn hybrid_merge(
     semantic_results: &[(String, f32)],
     lexical_results: &[(String, f32)],

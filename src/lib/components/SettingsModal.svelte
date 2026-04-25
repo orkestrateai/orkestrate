@@ -12,6 +12,7 @@
 
 	let activeTab = $state("general");
 	let continuityMode = $state("session");
+	let embeddingProvider = $state("openrouter");
 	let mcpConfigText = $state("{}");
 	let mcpTools: Array<{ server: string; name: string; description: string }> = $state([]);
 	let mcpLoading = $state(false);
@@ -30,6 +31,23 @@
 			await invoke("set_memory_continuity_mode", { mode });
 		} catch (e) {
 			console.error("Failed to set continuity mode:", e);
+		}
+	}
+
+	async function loadEmbeddingProvider() {
+		try {
+			embeddingProvider = await invoke<string>("pscm_get_embedding_provider");
+		} catch (e) {
+			console.error("Failed to load embedding provider:", e);
+		}
+	}
+
+	async function setEmbeddingProvider(provider: string) {
+		embeddingProvider = provider;
+		try {
+			await invoke("pscm_set_embedding_provider", { provider });
+		} catch (e) {
+			console.error("Failed to set embedding provider:", e);
 		}
 	}
 
@@ -67,6 +85,7 @@
 	$effect(() => {
 		if (open && activeTab === "memory") {
 			loadContinuityMode();
+			loadEmbeddingProvider();
 		}
 		if (open && activeTab === "mcp") {
 			loadMcpConfig();
@@ -235,11 +254,34 @@
 											</button>
 										{/each}
 									</div>
-									<span class="text-[11px] text-[var(--fg-tertiary)]">
-										Previous session: inject summary + messages from your last chat. All sessions: global rolling summary. Off: rely on search_memory tool only.
-									</span>
-								</div>
+							<span class="text-[11px] text-[var(--fg-tertiary)]">
+								Previous session: inject summary + messages from your last chat. All sessions: global rolling summary. Off: rely on search_memory tool only.
+							</span>
+						</div>
+
+						<div class="flex flex-col gap-2">
+							<span class="text-[13px] font-medium text-[var(--fg)]">Embedding Provider</span>
+							<div class="flex gap-2">
+								{#each [{id: "openrouter", label: "OpenRouter (Remote, 2048D)"}, {id: "ollama", label: "Ollama (Local, 768D)"}] as opt}
+									<button
+										onclick={() => setEmbeddingProvider(opt.id)}
+										class="px-3 py-2 rounded-lg text-[12px] font-medium transition-colors border"
+										class:text-[var(--fg)]={embeddingProvider === opt.id}
+										class:bg-[var(--hover-bg)]={embeddingProvider === opt.id}
+										class:border-[var(--fg-tertiary)]={embeddingProvider === opt.id}
+										class:text-[var(--fg-secondary)]={embeddingProvider !== opt.id}
+										class:border-[rgba(255,255,255,0.06)]={embeddingProvider !== opt.id}
+										class:hover:border-[var(--fg-tertiary)]={embeddingProvider !== opt.id}
+									>
+										{opt.label}
+									</button>
+								{/each}
 							</div>
+							<span class="text-[11px] text-[var(--fg-tertiary)]">
+								OpenRouter uses nvidia/llama-nemotron-embed-vl-1b-v2 (free tier). Ollama requires nomic-embed-text running locally on port 11434.
+							</span>
+						</div>
+					</div>
 							<div class="flex-1 min-h-0">
 								<MemoryPanel />
 							</div>

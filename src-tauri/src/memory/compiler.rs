@@ -55,7 +55,7 @@ pub async fn compile(
             }),
         ],
         stream: false,
-        max_tokens: 4096,
+        max_tokens: 8192,
     };
 
     let response = client

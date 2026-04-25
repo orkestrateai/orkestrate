@@ -1564,6 +1564,7 @@ pub fn get_episodes_for_entity(entity_id: &str, limit: i64) -> Result<Vec<Episod
     Ok(episodes)
 }
 
+#[allow(dead_code)]
 /// Find entities mentioned in an episode.
 pub fn get_entities_for_episode(episode_id: &str) -> Result<Vec<Entity>, String> {
     let conn = get_db().map_err(|e| e.to_string())?;

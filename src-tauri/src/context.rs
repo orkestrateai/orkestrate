@@ -10,7 +10,7 @@ use crate::prompt;
 use crate::timer::Timer;
 use crate::HistoryMessage;
 
-const HISTORY_BUDGET: usize = 5000;
+const HISTORY_BUDGET: usize = 12000;
 
 static CL100K_BPE: OnceLock<CoreBPE> = OnceLock::new();
 
@@ -45,7 +45,7 @@ impl ContextBuilder {
         self
     }
 
-    pub fn build(self) -> Vec<serde_json::Value> {
+    pub async fn build(self) -> Vec<serde_json::Value> {
         let t = Timer::new("ContextBuilder::build");
         let mut messages: Vec<serde_json::Value> = Vec::new();
 
@@ -57,7 +57,7 @@ impl ContextBuilder {
         // 2. Load compiled user schema (user.md) — cap to prevent context bloat
         let schema_timer = Timer::new("ContextBuilder::load_schema");
         let user_md_raw = schema::read_schema();
-        let user_md = cap_profile(&user_md_raw, 2500);
+        let user_md = cap_profile(&user_md_raw, 6000);
         schema_timer.log(&format!("schema_raw_len={} schema_capped_len={}", user_md_raw.len(), user_md.len()));
 
         // 3. Load recent conversation summary based on config
@@ -99,10 +99,18 @@ Results include timestamps ('2 hr ago', '3 days ago') so you can answer chronolo
             "content": system_content
         }));
 
-        // 4. Truncate history to fit budget
+        // 4. Compress history using agent-based relevance scoring (replaces greedy truncation)
         let history_len = self.history.len();
-        let truncated = truncate_history(self.history, HISTORY_BUDGET);
+        let (truncated, dropped_summary) = compress_history(self.history, HISTORY_BUDGET).await;
         t.log(&format!("history_in={} history_out={}", history_len, truncated.len()));
+
+        // If messages were dropped, inject a summary of lost context
+        if !dropped_summary.is_empty() {
+            messages.push(json!({
+                "role": "system",
+                "content": format!("Earlier context (summarized): {}", dropped_summary)
+            }));
+        }
 
         for msg in truncated {
             if msg.role == "assistant" && msg.tool_calls.is_some() {
@@ -285,31 +293,88 @@ fn cap_profile(profile: &str, token_budget: usize) -> String {
     result
 }
 
-/// Truncate history from the oldest messages until it fits the budget.
-fn truncate_history(history: Vec<HistoryMessage>, budget: usize) -> Vec<HistoryMessage> {
-    let t = Timer::new("truncate_history");
-    let mut total_tokens = 0;
-    let mut result = Vec::new();
+/// Compress history using an agent to score relevance to the current query.
+/// Replaces the old greedy truncation that simply dropped oldest messages.
+async fn compress_history(
+    history: Vec<HistoryMessage>,
+    budget: usize,
+) -> (Vec<HistoryMessage>, String) {
+    let t = Timer::new("compress_history");
     let input_len = history.len();
 
-    // Iterate from most recent to oldest
-    for msg in history.into_iter().rev() {
-        let msg_text = format!("{}: {}", msg.role, msg.content);
-        let tokens = estimate_tokens(&msg_text);
-
-        if total_tokens + tokens > budget && !result.is_empty() {
-            // Budget exceeded and we have at least one message
-            break;
-        }
-
-        total_tokens += tokens;
-        result.push(msg);
+    // Quick path: if history already fits, no compression needed
+    let total_tokens: usize = history
+        .iter()
+        .map(|msg| estimate_tokens(&format!("{}: {}", msg.role, msg.content)))
+        .sum();
+    if total_tokens <= budget {
+        t.log(&format!("input={} no_compression_needed tokens={} budget={}", input_len, total_tokens, budget));
+        return (history, String::new());
     }
 
-    // Reverse back to chronological order (oldest first)
-    result.reverse();
-    t.log(&format!("input={} output={} total_tokens={} budget={}", input_len, result.len(), total_tokens, budget));
-    result
+    // Extract latest user query for relevance scoring
+    let latest_query = history
+        .iter()
+        .rev()
+        .find(|m| m.role == "user")
+        .map(|m| m.content.clone())
+        .unwrap_or_default();
+
+    // Convert history to tuples for the agent
+    let message_tuples: Vec<(String, String)> = history
+        .iter()
+        .map(|m| (m.role.clone(), m.content.clone()))
+        .collect();
+
+    // Estimate how many messages we can keep within budget
+    let avg_tokens_per_msg = total_tokens / input_len.max(1);
+    let target_count = (budget / avg_tokens_per_msg.max(1)).max(2);
+
+    // Call the ContextCompressor agent
+    let result = match crate::pscm::agents::context_compressor::compress_history(
+        &latest_query,
+        &message_tuples,
+        target_count,
+    )
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("[ContextBuilder] ContextCompressor failed: {}. Falling back to greedy truncation.", e);
+            // Agent failure: fall back to greedy truncation (last resort)
+            let mut total = 0;
+            let mut kept = Vec::new();
+            for msg in history.into_iter().rev() {
+                let tokens = estimate_tokens(&format!("{}: {}", msg.role, msg.content));
+                if total + tokens > budget && !kept.is_empty() {
+                    break;
+                }
+                total += tokens;
+                kept.push(msg);
+            }
+            kept.reverse();
+            t.log(&format!("input={} output={} fallback=greedy", input_len, kept.len()));
+            return (kept, String::new());
+        }
+    };
+
+    // Build the kept history using agent-selected indices
+    let mut kept: Vec<HistoryMessage> = Vec::new();
+    for idx in &result.keep_indices {
+        if let Some(msg) = history.get(*idx) {
+            kept.push(msg.clone());
+        }
+    }
+
+    t.log(&format!(
+        "input={} output={} agent_kept={} dropped_summary_len={}",
+        input_len,
+        kept.len(),
+        result.keep_indices.len(),
+        result.summary_of_dropped.len()
+    ));
+
+    (kept, result.summary_of_dropped)
 }
 
 /// Estimate total tokens for a message array (for debugging/monitoring)

@@ -16,6 +16,32 @@ use crate::{HistoryMessage, ToolCallEvent, ToolResultEvent};
 const MAX_STEPS: usize = 5;
 const API_BASE: &str = "https://opencode.ai/zen/v1/chat/completions";
 
+/// Format an ISO datetime as a human-readable relative time.
+fn relative_time(iso: &str) -> String {
+    let Ok(dt) = chrono::DateTime::parse_from_rfc3339(iso) else {
+        return iso.to_string();
+    };
+    let now = chrono::Utc::now();
+    let duration = now.signed_duration_since(dt.with_timezone(&chrono::Utc));
+    let mins = duration.num_minutes();
+    let hours = duration.num_hours();
+    let days = duration.num_days();
+
+    if mins < 1 {
+        "just now".to_string()
+    } else if mins < 60 {
+        format!("{} min ago", mins)
+    } else if hours < 24 {
+        format!("{} hr ago", hours)
+    } else if days < 7 {
+        format!("{} day{} ago", days, if days == 1 { "" } else { "s" })
+    } else if days < 30 {
+        format!("{} week{} ago", days / 7, if days / 7 == 1 { "" } else { "s" })
+    } else {
+        format!("{} month{} ago", days / 30, if days / 30 == 1 { "" } else { "s" })
+    }
+}
+
 #[derive(Serialize)]
 struct ChatRequest {
     model: String,
@@ -88,7 +114,8 @@ pub async fn run_agent(
     let mut messages = ContextBuilder::new(&session_id)
         .with_history(history.clone())
         .with_session_name(session_name.as_deref().unwrap_or("New Chat"))
-        .build();
+        .build()
+        .await;
     ctx_timer.log(&format!("messages_count={}", messages.len()));
 
     // ── Auto memory search: inject retrieved memories before every request ──
@@ -96,8 +123,53 @@ pub async fn run_agent(
         let search_timer = Timer::new("run_agent::auto_memory_search");
         let query = last_user_msg.content.clone();
         let search_handle = tauri::async_runtime::spawn(async move {
-            let episodes = crate::tools::search_memory::search_memory_raw(&[query], 5).await;
-            crate::tools::search_memory::format_retrieved_memories(&episodes)
+            // Try PSCM dual-route retrieval first
+            if let Some(pscm) = crate::pscm::state() {
+                if let Ok(state) = pscm.try_read() {
+                    let db = &state.db;
+                    let graph = &state.graph;
+                    let index = &state.index;
+                    match crate::pscm::retrieve::retrieve(&query, db, graph, index, 5).await {
+                        Ok(results) => {
+                            if results.is_empty() {
+                                return String::new();
+                            }
+                            let mut lines = vec![
+                                "## Retrieved Memories (PSCM-v3)".to_string(),
+                                "".to_string(),
+                            ];
+                            for r in results {
+                                let trace = &r.trace;
+                                let time_ago = relative_time(&trace.timestamp);
+                                let route_label = match r.route {
+                                    crate::pscm::retrieve::Route::System1 => "[semantic]",
+                                    crate::pscm::retrieve::Route::System2 => "[causal]",
+                                    crate::pscm::retrieve::Route::Both => "[hybrid]",
+                                };
+                                lines.push(format!(
+                                    "- {} {} ({}): {}",
+                                    route_label,
+                                    time_ago,
+                                    trace.role,
+                                    trace.raw_text.chars().take(200).collect::<String>()
+                                ));
+                            }
+                            lines.push("".to_string());
+                            lines.join("\n")
+                        }
+                        Err(e) => {
+                            eprintln!("[PSCM Retrieve] Error: {}", e);
+                            String::new()
+                        }
+                    }
+                } else {
+                    String::new()
+                }
+            } else {
+                // Fallback to legacy search
+                let episodes = crate::tools::search_memory::search_memory_raw(&[query], 5).await;
+                crate::tools::search_memory::format_retrieved_memories(&episodes)
+            }
         });
 
         match search_handle.await {
@@ -139,7 +211,7 @@ pub async fn run_agent(
             messages: messages.clone(),
             stream: true,
             tools: Some(tools_json.clone()),
-            max_tokens: 8192,
+            max_tokens: 24000,
         };
         let body_json = serde_json::to_string(&request).unwrap_or_default();
         req_build_timer.log(&format!("body_bytes={}", body_json.len()));
@@ -470,6 +542,77 @@ pub async fn run_agent(
 
     println!("[Memory] Spawning pipeline with {} messages", latest_exchange.len());
 
+    // ── PSCM Ingestion (new dual-route system) ────────────────────────────
+    let pscm_session_id = session_id.clone();
+    let turn_index = history.len() as i64;
+    let latest_exchange_pscm = latest_exchange.clone();
+    tokio::spawn(async move {
+        if let Some(pscm) = crate::pscm::state() {
+            for msg in &latest_exchange_pscm {
+                let role = msg.role.as_str();
+                let content = msg.content.as_str();
+
+                // 1. Agent-based semantic analysis (no lock needed during async LLM call)
+                let analysis = match crate::pscm::agents::trace_analyzer::analyze_trace(content).await {
+                    Ok(a) => Some(a),
+                    Err(e) => {
+                        eprintln!("[Agent PSCM Ingest] TraceAnalyzer failed: {}. Ingesting trace without entities.", e);
+                        None
+                    }
+                };
+
+                // 2. DB/graph ops under write lock
+                if let Ok(mut state) = pscm.try_write() {
+                    let trace_id = uuid::Uuid::new_v4().to_string();
+                    let timestamp = chrono::Utc::now().to_rfc3339();
+
+                    let (valence, topic_drift) = analysis
+                        .as_ref()
+                        .map(|a| (a.valence, a.topic_drift))
+                        .unwrap_or((0.0, false));
+
+                    let _ = state.db.store_trace(
+                        &trace_id, &pscm_session_id, turn_index,
+                        content, role, valence, topic_drift, &timestamp,
+                    );
+
+                    if let Some(ref a) = analysis {
+                        let mut concept_ids = Vec::new();
+                        for entity in &a.entities {
+                            // Deduplicate: reuse existing concept ID if name already in graph
+                            let concept_id = if let Some(&idx) = state.graph.name_to_index.get(&entity.name) {
+                                state.graph.graph[idx].id.clone()
+                            } else {
+                                let id = uuid::Uuid::new_v4().to_string();
+                                let _ = state.graph.upsert_concept(&id, &entity.name, &entity.entity_type);
+                                id
+                            };
+                            let _ = state.db.upsert_concept(&concept_id, &entity.name, &entity.entity_type, None, &timestamp);
+                            let _ = state.db.link_trace_concept(&trace_id, &concept_id, "mentioned");
+                            concept_ids.push(concept_id);
+                        }
+
+                        for i in 0..concept_ids.len() {
+                            for j in (i + 1)..concept_ids.len() {
+                                let _ = state.graph.upsert_edge(&concept_ids[i], &concept_ids[j], "CO_OCCURS", 0.5, &timestamp, None, 0.5);
+                                let _ = state.db.upsert_edge(&concept_ids[i], &concept_ids[j], "CO_OCCURS", 0.5, &timestamp, None, 0.5);
+                            }
+                        }
+                    }
+
+                    if let Ok(embedding) = crate::pscm::provider::embed::embed_vec(content).await {
+                        let _ = state.index.add_trace(&trace_id, content, &embedding);
+                    }
+                }
+            }
+            // Commit index changes
+            if let Ok(state) = pscm.try_write() {
+                let _ = state.index.commit();
+            }
+        }
+    });
+
+    // ── Legacy memory extraction (keep running in parallel during transition) ──
     let memory_session_id = session_id.clone();
     let memory_api_key = api_key.clone();
     tokio::spawn(async move {
