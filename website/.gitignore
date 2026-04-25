@@ -1,0 +1,147 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# Legacy
+**/legacy*
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+Thumbs.db
+Desktop.ini
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+bun-debug.log*
+
+# env files (NEVER commit for security)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env.local
+
+# IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# vercel
+/.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# agent-local / ephemeral files
+opencode_*.json
+.claude/
+.agent/
+.agents/
+.gemini/
+.qwen/
+.kilocode/
+inject*.ps1
+/tmp/
+*.log
+
+# Rust
+/target/
+
+# Local/Scratch files
+test.txt
+scratch.*
+*.scratch.*
+TODO.md
+notes.md
+
+# Razorpay
+rzp*.csv
+
+# Orkestrate
+.orkestrate.json
+
+# Turbo
+.turbo
+
+# Bun
+bun.lockb
+!bun.lockb
+
+# Local environment
+*.local
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# 3D Models and Materials
+*.glb
+*.gltf
+*.fbx
+*.obj
+*.mtl
+*.blend
+*.bin
+*.dae
+*.stl
+*.mat
+public/models/
+public/images/grass-generic-sm_*
+public/images/simple-waves-oce_*
+
+# Packages - never commit node_modules, dist, or build artifacts
+packages/*/node_modules/
+packages/*/dist/
+packages/cli/test-*.json
+packages/cli/err.txt
+packages/cli/out.txt
+packages/cli/opencode.json
+packages/harness/artifacts/
+packages/.harness-worktrees/
+
+# Configs with secrets
+litellm_config.yaml
+rzp*.csv
+
+# MCP
+.mcp.json
