@@ -1,15 +1,26 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useChat } from "@ai-sdk/react";
 import { Send, Menu, Plus } from "lucide-react";
 import { cn } from "./lib/utils";
 
+function generateSessionId() {
+  return `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function App() {
+  const [sessionId, setSessionId] = useState(generateSessionId);
   const { messages, input, handleInputChange, handleSubmit, status } = useChat({
     api: "http://localhost:3001/api/chat",
+    body: { sessionId },
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const startNewChat = useCallback(() => {
+    setSessionId(generateSessionId());
+    window.location.reload();
+  }, []);
 
   const isLoading = status === "streaming" || status === "submitted";
 
@@ -51,7 +62,10 @@ function App() {
           <span className="text-sm font-medium text-[#8A8F98]">
             Conversations
           </span>
-          <button className="p-1.5 rounded-md hover:bg-white/[0.06] transition-colors">
+          <button
+            onClick={startNewChat}
+            className="p-1.5 rounded-md hover:bg-white/[0.06] transition-colors"
+          >
             <Plus className="w-4 h-4 text-[#8A8F98]" />
           </button>
         </div>
