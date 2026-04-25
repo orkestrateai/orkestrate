@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useChat } from "@ai-sdk/react";
 import { Send, Menu, Plus } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "./lib/utils";
 
 function App() {
   const { messages, input, handleInputChange, handleSubmit, status } = useChat({
@@ -44,11 +44,13 @@ function App() {
         className={cn(
           "fixed inset-y-0 left-0 z-30 w-[280px] bg-[#0a0a0a] border-r border-white/[0.06] transform transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
           sidebarOpen ? "translate-x-0" : "-translate-x-full",
-          "md:relative md:translate-x-0"
+          "md:relative md:translate-x-0",
         )}
       >
         <div className="flex items-center justify-between p-4 border-b border-white/[0.06]">
-          <span className="text-sm font-medium text-[#8A8F98]">Conversations</span>
+          <span className="text-sm font-medium text-[#8A8F98]">
+            Conversations
+          </span>
           <button className="p-1.5 rounded-md hover:bg-white/[0.06] transition-colors">
             <Plus className="w-4 h-4 text-[#8A8F98]" />
           </button>
@@ -100,7 +102,7 @@ function App() {
               key={message.id}
               className={cn(
                 "flex gap-4 max-w-3xl mx-auto",
-                message.role === "user" ? "flex-row-reverse" : "flex-row"
+                message.role === "user" ? "flex-row-reverse" : "flex-row",
               )}
             >
               <div
@@ -108,7 +110,7 @@ function App() {
                   "w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-medium flex-shrink-0",
                   message.role === "user"
                     ? "bg-white text-black"
-                    : "bg-[#16181A] text-[#8A8F98] border border-white/[0.06]"
+                    : "bg-[#16181A] text-[#8A8F98] border border-white/[0.06]",
                 )}
               >
                 {message.role === "user" ? "You" : "AI"}
@@ -118,7 +120,7 @@ function App() {
                   "rounded-2xl px-5 py-3.5 text-[15px] leading-relaxed",
                   message.role === "user"
                     ? "bg-white text-black max-w-[80%]"
-                    : "bg-[#16181A] border border-white/[0.06] text-[#F2F2F2] max-w-[80%]"
+                    : "bg-[#16181A] border border-white/[0.06] text-[#F2F2F2] max-w-[80%]",
                 )}
               >
                 {message.parts?.map((part, i) =>
@@ -126,7 +128,7 @@ function App() {
                     <span key={i} className="whitespace-pre-wrap">
                       {part.text}
                     </span>
-                  ) : null
+                  ) : null,
                 ) ?? message.content}
               </div>
             </div>
@@ -152,10 +154,7 @@ function App() {
 
         {/* Input */}
         <div className="border-t border-white/[0.06] bg-[#050505] px-4 py-4">
-          <form
-            onSubmit={handleSubmit}
-            className="max-w-3xl mx-auto relative"
-          >
+          <form onSubmit={handleSubmit} className="max-w-3xl mx-auto relative">
             <textarea
               ref={textareaRef}
               value={input}
@@ -175,7 +174,8 @@ function App() {
             </button>
           </form>
           <p className="text-center text-[11px] text-[#5E626B] mt-2">
-            Orkestrate may produce inaccurate information. Verify important facts.
+            Orkestrate may produce inaccurate information. Verify important
+            facts.
           </p>
         </div>
       </div>
