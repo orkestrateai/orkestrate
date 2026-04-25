@@ -157,20 +157,50 @@ app.get("/api/memory/stats", async (_req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Memory server running on http://localhost:${PORT}`);
   console.log(`Memory storage: ./data/memories`);
   console.log(`LLM provider: OpenCode (model: opencode/minimax-m2.5-free)`);
+  console.log(`Press Ctrl+C to stop the server`);
 });
 
-// Graceful shutdown: dispose OpenCode provider
-process.on("SIGINT", async () => {
-  console.log("\nShutting down...");
-  await opencode.dispose();
-  process.exit(0);
-});
+// Graceful shutdown: close server and dispose OpenCode provider
+async function shutdown(signal: string) {
+  console.log(`\n[${signal}] Shutting down...`);
 
-process.on("SIGTERM", async () => {
-  await opencode.dispose();
+  // Close HTTP server
+  server.close(() => {
+    console.log("HTTP server closed");
+  });
+
+  // Force close after 3 seconds
+  setTimeout(() => {
+    console.log("Forcing exit...");
+    process.exit(0);
+  }, 3000);
+
+  // Dispose OpenCode provider
+  try {
+    await opencode.dispose();
+    console.log("OpenCode provider disposed");
+  } catch (err) {
+    console.error("Error disposing OpenCode:", err);
+  }
+
   process.exit(0);
-});
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+
+// Windows: handle Ctrl+C when stdin is available
+if (process.stdin.isTTY) {
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
+  process.stdin.on("data", (key: Buffer) => {
+    // Ctrl+C = \x03
+    if (key.toString() === "\u0003") {
+      shutdown("Ctrl+C");
+    }
+  });
+}
