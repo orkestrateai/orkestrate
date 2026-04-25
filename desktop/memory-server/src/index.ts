@@ -18,20 +18,43 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", memoryEnabled: true, llmProvider: "opencode" });
 });
 
-// Chat endpoint — streams AI SDK response with memory
+// Helper: encode text as AI SDK data stream chunks
+function createDataStream(text: string): ReadableStream {
+  const encoder = new TextEncoder();
+  return new ReadableStream({
+    start(controller) {
+      // Send text in chunks of ~20 chars to simulate streaming
+      const chunks = text.match(/.{1,20}/g) ?? [text];
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(`0:${JSON.stringify(chunk)}\n`));
+      }
+      // Send finish marker
+      controller.enqueue(
+        encoder.encode(`e:{"finishReason":"stop","usage":{"promptTokens":0,"completionTokens":0}}\n`),
+      );
+      controller.close();
+    },
+  });
+}
+
+// Chat endpoint — generates AI response with memory
 app.post("/api/chat", async (req, res) => {
   try {
     const { messages, sessionId = "default" } = req.body;
     const lastUserMessage = messages[messages.length - 1];
 
+    console.log("[chat] Request received, session:", sessionId, "messages:", messages.length);
+
     // 1. Store user message
     if (lastUserMessage?.role === "user") {
       await memory.storeTurn(sessionId, "user", lastUserMessage.content);
+      console.log("[chat] Stored user message:", lastUserMessage.content.slice(0, 60));
     }
 
     // 2. Search for relevant memories from the user's query
     const userQuery = lastUserMessage?.content ?? "";
     const relevantMemories = await memory.findRelevantMemories(userQuery, 5);
+    console.log("[chat] Found", relevantMemories.length, "relevant memories");
 
     // 3. Build memory context block (capped to avoid token overflow)
     let memoryContext = "";
@@ -51,27 +74,51 @@ app.post("/api/chat", async (req, res) => {
       "You remember details about the user across conversations and use that memory to provide personalized, context-aware responses." +
       memoryContext;
 
-    // 5. Stream response using OpenCode provider
+    // 5. Generate response using OpenCode provider
+    console.log("[chat] Calling streamText...");
     const result = streamText({
       model: opencode("opencode/minimax-m2.5-free") as any,
       system: systemPrompt,
       messages,
     });
 
-    // Pipe stream to response
-    result.pipeDataStreamToResponse(res);
+    // Consume the text (this works with OpenCode provider)
+    const text = await result.text;
+    console.log("[chat] Assistant text received, length:", text?.length ?? 0);
 
-    // Store assistant response after stream completes
-    result.text.then(async (text) => {
-      if (text?.trim()) {
-        await memory.storeTurn(sessionId, "assistant", text);
+    // Store assistant response
+    if (text?.trim()) {
+      await memory.storeTurn(sessionId, "assistant", text);
+      console.log("[chat] Stored assistant response");
+    }
+
+    // Stream the response back to client using AI SDK data stream format
+    const stream = createDataStream(text ?? "");
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("x-vercel-ai-data-stream", "v1");
+
+    const reader = stream.getReader();
+    const pump = async () => {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            res.end();
+            break;
+          }
+          res.write(value);
+        }
+      } catch (streamErr) {
+        console.error("[chat] Stream error:", streamErr);
+        res.end();
       }
-    }).catch((err) => {
-      console.error("Failed to store assistant memory:", err);
-    });
+    };
+    pump();
   } catch (error) {
-    console.error("Chat error:", error);
-    res.status(500).json({ error: "Failed to generate response" });
+    console.error("[chat] Error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to generate response", details: String(error) });
+    }
   }
 });
 
