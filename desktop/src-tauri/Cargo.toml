@@ -1,43 +1,16 @@
 [package]
-name = "orkestrate"
+name = "orkestrate-desktop"
 version = "0.1.0"
-description = "Orkestrate"
-authors = ["you"]
+description = "Orkestrate — A memory agent that actually remembers"
+authors = ["Orkestrate"]
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[lib]
-# The `_lib` suffix may seem redundant but it is necessary
-# to make the lib name unique and wouldn't conflict with the bin name.
-# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "orkestrate_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["image-png", "image-ico"] }
+tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-reqwest = { version = "0.12", features = ["json", "stream"] }
-tokio = { version = "1", features = ["full"] }
-futures-util = "0.3.32"
-dotenvy = "0.15.7"
-async-trait = "0.1"
-rusqlite = { version = "0.32", features = ["bundled"] }
-chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1", features = ["v4"] }
-dirs = "5.0"
-r2d2 = "0.8.10"
-r2d2_sqlite = "0.25.0"
-tiktoken-rs = "0.6"
-html2md = "0.2"
-pdf-extract = "0.7"
-tantivy = "0.26"
-hnsw_rs = "0.3"
-petgraph = "0.6"
-swarms-rs = "0.2"
-cached = { version = "0.53", features = ["async"] }
+
