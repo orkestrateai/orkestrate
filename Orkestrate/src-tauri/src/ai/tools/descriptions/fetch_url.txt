@@ -1,0 +1,6 @@
+- Fetch content from a specified URL
+- Takes a URL as input (must start with http:// or https://)
+- Returns the content in markdown format by default
+- Supports HTML pages (converted to markdown), PDF documents (text extracted), plain text files, and images
+- Use this tool when you need to retrieve and analyze web content from a specific URL
+- HTTP URLs will be automatically upgraded to HTTPS
