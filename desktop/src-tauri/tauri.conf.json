@@ -1,32 +1,26 @@
 {
-  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Orkestrate",
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "orkestrate",
   "version": "0.1.0",
-  "identifier": "dev.orkestrate.app",
+  "identifier": "com.orkestrate.app",
   "build": {
     "beforeDevCommand": "bun run dev",
-    "beforeBuildCommand": "bun run build",
     "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "bun run build",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
-        "title": "Orkestrate",
-        "width": 1200,
+        "title": "orkestrate",
+        "width": 1280,
         "height": 800,
-        "minWidth": 800,
-        "minHeight": 600,
-        "center": true,
-        "decorations": false,
-        "transparent": true,
-        "shadow": true,
-        "resizable": true
+        "theme": "Dark",
+        "backgroundColor": "#171717"
       }
     ],
     "security": {
-      "csp": null,
-      "capabilities": ["default"]
+      "csp": "default-src 'self'; connect-src 'self' https://orkestrate.space; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'"
     }
   },
   "bundle": {
@@ -38,6 +32,20 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["orkestrate"]
+      }
+    },
+    "updater": {
+      "endpoints": [
+        "https://github.com/system1970/Orkestrate/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENEMzg4RDYyNTRCNUIwRTEKUldUaHNMVlVZbzA0elZiQm03QTJZb2ZUdUZjb3E0T3B4a1FrV2V1OWQ0bkdDbEJkSk53RjIrV2kK"
+    }
   }
 }

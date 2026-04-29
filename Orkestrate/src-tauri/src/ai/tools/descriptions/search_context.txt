@@ -1,5 +1,0 @@
-- Search long-term memory for information about the user
-- Call this ONCE when the user asks about something personal, references past conversations, or mentions people/places/projects you might have stored
-- Generate 3-7 targeted search queries covering different angles
-- Include names, topics, keywords, and related concepts so the search has multiple ways to match
-- Do NOT call this tool more than once for the same question

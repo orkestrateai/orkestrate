@@ -1,15 +1,16 @@
 {
-  "name": "orkestrate",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "concurrently --names 'SERVER,UI' --prefix-colors 'cyan,green' 'bun run dev:server' 'bun run dev:ui'",
-    "dev:server": "cd desktop/memory-server && bunx tsx src/index.ts",
-    "dev:ui": "cd desktop && bun run dev",
-    "build": "cd desktop && bun run build",
-    "build:server": "cd desktop/memory-server && bunx tsc"
+  "name": "orkestrate-app",
+  "version": "1.0.0",
+  "description": "",
+  "main": "_clear_db.js",
+  "directories": {
+    "doc": "docs"
   },
-  "devDependencies": {
-    "concurrently": "^9.2.1"
-  }
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
 }

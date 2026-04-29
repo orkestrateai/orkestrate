@@ -1,6 +1,0 @@
-- Search the web for information using Exa AI
-- Takes a search query as input
-- Returns relevant results with content snippets
-- Use this tool for researching topics, finding current events, or gathering information beyond the training data
-- Useful when you need to find information (discovery); use fetch_url when you need content from a specific URL (retrieval)
-- The current year is {{year}}. Use this year when searching for recent information or current events

@@ -1,48 +1,47 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { Fraunces, Geist } from "next/font/google";
 import "./globals.css";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 
-const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
+  subsets: ["latin"],
+  display: "swap",
+});
 
 const siteUrl = "https://orkestrate.space";
 
 export const metadata: Metadata = {
   title: {
-    default: "Orkestrate — A Memory Agent That Actually Remembers",
+    default: "Orkestrate — Your AI That Remembers You",
     template: "%s | Orkestrate",
   },
   description:
-    "Orkestrate is a personal memory agent for long-term AI conversations. It remembers what matters, so you never have to repeat yourself.",
-  keywords: [
-    "AI memory",
-    "personal AI agent",
-    "long-term memory",
-    "conversation memory",
-    "AI companion",
-    "memory agent",
-  ],
+    "A personal AI assistant that lives on your desktop. Remembers every conversation, learns your preferences, and helps you think better.",
   metadataBase: new URL(siteUrl),
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
     shortcut: ["/icon.svg"],
+    apple: ["/apple-icon"],
   },
   openGraph: {
     type: "website",
     locale: "en_US",
     url: siteUrl,
     siteName: "Orkestrate",
-    title: "Orkestrate — A Memory Agent That Actually Remembers",
+    title: "Orkestrate — Your AI That Remembers You",
     description:
-      "A personal memory agent for long-term AI conversations. It remembers what matters.",
+      "A personal AI assistant that lives on your desktop. Remembers every conversation and helps you think better.",
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "Orkestrate" }],
   },
   twitter: {
     card: "summary_large_image",
-    site: "@orkestrate",
-    creator: "@orkestrate",
-    title: "Orkestrate — A Memory Agent That Actually Remembers",
-    description: "A personal memory agent for long-term AI conversations.",
+    title: "Orkestrate — Your AI That Remembers You",
+    description: "A personal AI assistant that lives on your desktop.",
+    images: ["/opengraph-image"],
   },
   robots: {
     index: true,
@@ -53,18 +52,28 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { headers } from "next/headers";
+import { cn } from "@/lib/utils";
+import { FeedbackButton } from "@/components/ui/FeedbackButton";
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
-    <html lang="en" className={`${geist.variable} dark`}>
-      <body className="antialiased font-sans bg-[#050505] text-[#F2F2F2]">
-        {children}
-        <SpeedInsights />
-        <Analytics />
+    <html lang="en" className={cn("dark", "font-sans", geist.variable)}>
+      <body
+        className={`${geist.variable} ${fraunces.variable} antialiased font-sans`}
+      >
+        <TooltipProvider delayDuration={0}>{children}</TooltipProvider>
+        <FeedbackButton />
       </body>
+      <SpeedInsights />
+      <Analytics />
     </html>
   );
 }
