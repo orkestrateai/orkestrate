@@ -68,7 +68,7 @@ export function ChatStoreProvider({ children }: { children: ReactNode }) {
     saveSessions(sessions);
   }, [sessions]);
 
-  const createSession = useCallback((title?: string) => {
+  const createSession = useCallback((_title?: string) => {
     const id = nanoid(10);
     setActiveSessionId(id);
     return id;

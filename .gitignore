@@ -1,2 +1,5 @@
 node_modules/
 .git
+desktop/byterover-cli/
+aisdk-source/
+docs/

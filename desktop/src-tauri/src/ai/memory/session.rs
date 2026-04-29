@@ -6,14 +6,6 @@ use std::fs;
 
 pub static SESSION_REGISTRY: Lazy<DashMap<String, SessionWorkingMemory>> = Lazy::new(|| DashMap::new());
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolCallRecord {
-    pub queries: Vec<String>,
-    pub memory_content: Vec<String>,
-}
-
-pub static TOOL_TRACES: Lazy<DashMap<String, Vec<ToolCallRecord>>> = Lazy::new(|| DashMap::new());
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Session Working Memory
 // ─────────────────────────────────────────────────────────────────────────────

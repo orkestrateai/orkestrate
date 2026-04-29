@@ -145,3 +145,5 @@ rzp*.csv
 
 # MCP
 .mcp.json
+.vercel
+.env*.local

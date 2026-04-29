@@ -13,9 +13,7 @@ export function useChatSession() {
     activeSessionId,
     sessions,
     createSession,
-    updateSessionTitle,
     setSessionMessages,
-    touchSession
   } = useChatStore();
 
   const activeSession = sessions.find(s => s.id === activeSessionId);

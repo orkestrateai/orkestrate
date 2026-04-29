@@ -36,12 +36,14 @@ export async function GET(request: Request) {
 
   // Strict localhost validation to prevent open redirects
   let isDesktop = false;
-  try {
-    const nextUrl = new URL(next);
-    isDesktop = nextUrl.protocol === "orkestrate:"
-      || nextUrl.hostname === "localhost"
-      || nextUrl.hostname === "127.0.0.1";
-  } catch { /* invalid URL */ }
+  if (next.startsWith("orkestrate:")) {
+    isDesktop = true;
+  } else {
+    try {
+      const nextUrl = new URL(next);
+      isDesktop = nextUrl.hostname === "localhost" || nextUrl.hostname === "127.0.0.1";
+    } catch { /* invalid URL */ }
+  }
 
   if (error) {
     if (isDesktop) {

@@ -1,4 +1,0 @@
-[submodule "packages/byterover-packages"]
-	path = packages/byterover-packages
-	url = git@github.com:campfirein/byterover-packages.git
-	branch = main

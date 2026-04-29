@@ -6,7 +6,7 @@ interface SidebarNavProps {
 }
 
 export function SidebarNav({ onOpenSearch }: SidebarNavProps) {
-  const { createSession, setActiveSession } = useChatStore();
+  const { setActiveSession } = useChatStore();
 
   const handleNewChat = () => {
     setActiveSession(null);
