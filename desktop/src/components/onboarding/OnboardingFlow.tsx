@@ -14,16 +14,22 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const completedRef = useRef(false);
+  const signInTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const complete = () => {
     if (completedRef.current) return;
     completedRef.current = true;
+    if (signInTimeoutRef.current) clearTimeout(signInTimeoutRef.current);
     onComplete();
   };
 
   const checkAuth = () => {
     invoke<string>("get_auth_state").then((state) => {
-      if (state === "authenticated") complete();
+      if (state === "authenticated") {
+        complete();
+      } else if (state === "unauthenticated" && signInTimeoutRef.current === null) {
+        // Polling caught up with no auth — nothing to do, keep polling
+      }
     }).catch(() => {});
   };
 
@@ -58,6 +64,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       cancelled = true;
       clearInterval(interval);
       clearTimeout(timeout);
+      if (signInTimeoutRef.current) clearTimeout(signInTimeoutRef.current);
       unlistenUrl.then((u) => u());
       unlistenEvent.then((u) => u());
     };
@@ -66,13 +73,31 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const handleSignIn = async () => {
     setLoading(true);
     setError(null);
+
+    // Safety timeout: if auth doesn't complete in 2 minutes, reset
+    signInTimeoutRef.current = setTimeout(() => {
+      setLoading(false);
+      setError("Sign-in timed out. Try again.");
+      signInTimeoutRef.current = null;
+    }, POLL_TIMEOUT);
+
     try {
       await invoke("start_oauth");
-      setLoading(false);
+      // Don't setLoading(false) here — loading stays until auth completes
+      // Polling or deep link event will call complete() which unmounts this component
     } catch (e) {
+      if (signInTimeoutRef.current) clearTimeout(signInTimeoutRef.current);
+      signInTimeoutRef.current = null;
       setError(String(e));
       setLoading(false);
     }
+  };
+
+  const handleCancelSignIn = () => {
+    if (signInTimeoutRef.current) clearTimeout(signInTimeoutRef.current);
+    signInTimeoutRef.current = null;
+    setLoading(false);
+    setError(null);
   };
 
   if (loading) {
@@ -87,7 +112,13 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-white/[0.02] blur-[120px] pointer-events-none" />
         <div className="relative z-10 flex-1 flex flex-col items-center justify-center gap-6">
           <div className="w-8 h-8 rounded-full border-2 border-white/15 border-t-white/70 animate-spin" />
-          <p className="text-[14px] text-white/30 font-light">Waiting for sign-in...</p>
+          <p className="text-[14px] text-white/30 font-light">Signing you in...</p>
+          <button
+            onClick={handleCancelSignIn}
+            className="text-xs text-white/20 hover:text-white/50 transition-colors"
+          >
+            Cancel
+          </button>
         </div>
       </div>
     );

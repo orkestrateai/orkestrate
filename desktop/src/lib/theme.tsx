@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 
 type Theme = 'light' | 'dark' | 'system';
@@ -39,13 +40,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } catch {}
   }, []);
 
-  // Apply to <html>
+  // Apply to <html> and sync native window theme
   useEffect(() => {
     const r = resolveTheme(theme);
     setResolved(r);
     const root = document.documentElement;
     root.classList.toggle('dark', r === 'dark');
     root.classList.toggle('light', r === 'light');
+    invoke('set_window_theme', { theme: r }).catch(() => {});
   }, [theme]);
 
   // Listen for system theme changes when in 'system' mode

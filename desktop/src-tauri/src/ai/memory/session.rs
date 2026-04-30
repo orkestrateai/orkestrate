@@ -1,14 +1,12 @@
 use serde::{Serialize, Deserialize};
 use dashmap::DashMap;
 use once_cell::sync::Lazy;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::fs;
 
 pub static SESSION_REGISTRY: Lazy<DashMap<String, SessionWorkingMemory>> = Lazy::new(|| DashMap::new());
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Session Working Memory
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Session Working Memory ───────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Turn {
@@ -23,14 +21,14 @@ pub struct SessionWorkingMemory {
     pub recent_turns: Vec<Turn>,
     pub turn_count: u64,
     pub last_updated: i64,
-    // Session summary for cross-session continuity
     pub summary: String,
-    pub last_messages: Vec<Turn>, // last 5 messages for context injection
+    pub last_messages: Vec<Turn>,
+    pub extracted_facts: Vec<String>,
 }
 
 const MAX_RECENT_TURNS: usize = 10;
 const MAX_LAST_MESSAGES: usize = 5;
-const TURN_CONTENT_MAX_LEN: usize = 300;
+const TURN_CONTENT_MAX_LEN: usize = 500;
 
 impl SessionWorkingMemory {
     pub fn new(session_id: &str) -> Self {
@@ -41,6 +39,7 @@ impl SessionWorkingMemory {
             last_updated: chrono::Utc::now().timestamp_millis(),
             summary: String::new(),
             last_messages: Vec::new(),
+            extracted_facts: Vec::new(),
         }
     }
 
@@ -67,11 +66,19 @@ impl SessionWorkingMemory {
             self.last_messages.drain(0..self.last_messages.len() - MAX_LAST_MESSAGES);
         }
 
+        self.turn_count += 1;
         self.last_updated = chrono::Utc::now().timestamp_millis();
+    }
+
+    pub fn add_extracted_fact(&mut self, fact: &str) {
+        if !fact.is_empty() && !self.extracted_facts.iter().any(|f| f == fact) {
+            self.extracted_facts.push(fact.to_string());
+        }
     }
 
     pub fn to_prompt_string(&self) -> String {
         let mut prompt = String::from("\n[SESSION WORKING MEMORY]\n");
+        prompt.push_str(&format!("Turn count: {}\n", self.turn_count));
 
         if !self.recent_turns.is_empty() {
             prompt.push_str("Recent Conversation:\n");
@@ -81,12 +88,14 @@ impl SessionWorkingMemory {
                 } else {
                     turn.content.clone()
                 };
-                prompt.push_str(&format!(
-                    "  [{}] {}: {}\n",
-                    i + 1,
-                    turn.role,
-                    preview.replace('\n', " ")
-                ));
+                prompt.push_str(&format!("  [{}] {}: {}\n", i + 1, turn.role, preview.replace('\n', " ")));
+            }
+        }
+
+        if !self.extracted_facts.is_empty() {
+            prompt.push_str("Extracted facts this session:\n");
+            for fact in &self.extracted_facts {
+                prompt.push_str(&format!("  - {}\n", fact));
             }
         }
 
@@ -95,19 +104,18 @@ impl SessionWorkingMemory {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Session Summary Persistence
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Session Summary Persistence ──────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionContextFile {
     pub session_id: String,
     pub summary: String,
     pub last_messages: Vec<Turn>,
+    pub extracted_facts: Vec<String>,
     pub timestamp: i64,
 }
 
-fn session_summaries_dir(app_data_dir: &Path) -> PathBuf {
+fn session_summaries_dir(app_data_dir: &Path) -> std::path::PathBuf {
     app_data_dir.join(".brv").join("session-summaries")
 }
 
@@ -126,6 +134,7 @@ pub fn save_session_context(app_data_dir: &Path, swm: &SessionWorkingMemory) {
         session_id: swm.session_id.clone(),
         summary: swm.summary.clone(),
         last_messages: swm.last_messages.clone(),
+        extracted_facts: swm.extracted_facts.clone(),
         timestamp: chrono::Utc::now().timestamp_millis(),
     };
 
@@ -157,9 +166,7 @@ pub fn load_previous_session_context(app_data_dir: &Path) -> String {
     if let Ok(entries) = fs::read_dir(&dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) != Some("json") {
-                continue;
-            }
+            if path.extension().and_then(|s| s.to_str()) != Some("json") { continue; }
             if let Ok(content) = fs::read_to_string(&path) {
                 if let Ok(file) = serde_json::from_str::<SessionContextFile>(&content) {
                     if file.timestamp > latest_time {
@@ -177,34 +184,43 @@ pub fn load_previous_session_context(app_data_dir: &Path) -> String {
     };
 
     let mut prompt = String::from("\n[PREVIOUS SESSION CONTEXT]\n");
-
     if !file.summary.is_empty() {
         prompt.push_str("Summary: ");
         prompt.push_str(&file.summary);
         prompt.push('\n');
     }
-
+    if !file.extracted_facts.is_empty() {
+        prompt.push_str("Previous facts discovered:\n");
+        for f in &file.extracted_facts {
+            prompt.push_str(&format!("  - {}\n", f));
+        }
+    }
     if !file.last_messages.is_empty() {
         prompt.push_str("Last messages:\n");
         for turn in &file.last_messages {
-            prompt.push_str(&format!(
-                "  {}: {}\n",
-                turn.role,
-                turn.content.replace('\n', " ")
-            ));
+            prompt.push_str(&format!("  {}: {}\n", turn.role, turn.content.replace('\n', " ")));
         }
     }
-
     prompt.push_str("[/PREVIOUS SESSION CONTEXT]\n");
     prompt
 }
 
-/// Build a summary from recent turns (no LLM needed — just concatenates last messages).
+/// Fast heuristic summary (0ms) — extracts key topics from recent turns.
+/// For LLM-curated summaries, the agent's summarize_session tool generates
+/// richer context via the website API.
 pub fn summarize_session(turns: &[Turn]) -> String {
-    if turns.is_empty() {
-        return String::new();
-    }
+    if turns.is_empty() { return String::new(); }
     let count = turns.len();
-    let previews: Vec<&str> = turns.iter().rev().take(3).map(|t| t.content.as_str()).collect();
-    format!("Last {} messages: {}", count, previews.join(" | "))
+    let user_turns: Vec<&str> = turns.iter()
+        .filter(|t| t.role == "user")
+        .map(|t| t.content.as_str())
+        .rev()
+        .take(3)
+        .collect();
+
+    if user_turns.is_empty() {
+        return format!("{} total turns in this session.", count);
+    }
+
+    format!("Session with {} turns. Recent topics: {}", count, user_turns.join("; "))
 }

@@ -1,10 +1,10 @@
 use crate::ai::memory::ChatMemoryService;
+use crate::ai::memory::types::PersonalEntry;
 use crate::ai::paths::get_app_data_dir;
-use axum::{body::{Body, Bytes}, http::StatusCode, response::Response, Json};
+use axum::{body::{Body, Bytes}, extract::Json as AxumJson, http::StatusCode, response::Response, Json};
 use futures::StreamExt;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
-use tokio::task_local;
 
 const PERSONA_PROMPT: &str = include_str!("../../orkestrate.txt");
 
@@ -31,12 +31,6 @@ pub struct ChatRequest {
 }
 
 #[derive(Debug, Serialize)]
-struct ChatPayload {
-    messages: Vec<ChatPayloadMessage>,
-    model: String,
-}
-
-#[derive(Debug, Serialize)]
 struct ChatPayloadMessage {
     role: String,
     content: Vec<ContentBlock>,
@@ -49,11 +43,7 @@ enum ContentBlock {
     Text { text: String },
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────
-
-task_local! {
-    pub static SESSION_ID: String;
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────
 
 static MEMORY_SERVICE: OnceCell<ChatMemoryService> = OnceCell::new();
 
@@ -63,7 +53,7 @@ fn get_memory_service() -> &'static ChatMemoryService {
 
 fn temporal_context() -> String {
     format!(
-        "[TEMPORAL CONTEXT]\nCurrent time: {}\nDay of week: {}\nDate: {}\n[/TEMPORAL CONTEXT]",
+        "[TEMPORAL CONTEXT]\nCurrent time: {}\nDay of week: {}\nDate: {}[/TEMPORAL CONTEXT]",
         chrono::Local::now().format("%H:%M"),
         chrono::Local::now().format("%A"),
         chrono::Local::now().format("%Y-%m-%d"),
@@ -72,13 +62,12 @@ fn temporal_context() -> String {
 
 fn environment_block() -> String {
     format!(
-        "[ENVIRONMENT]\nPlatform: {}\nWorking directory: {}\n[/ENVIRONMENT]",
+        "[ENVIRONMENT]\nPlatform: {}\n[/ENVIRONMENT]",
         std::env::consts::OS,
-        std::env::current_dir().map(|p| p.to_string_lossy().to_string()).unwrap_or_default(),
     )
 }
 
-// ─── Chat Handler ───────────────────────────────────────────────────────
+// ─── Chat Handler ─────────────────────────────────────────────────────────
 
 pub async fn chat_handler(
     Json(request): Json<ChatRequest>,
@@ -102,11 +91,35 @@ pub async fn chat_handler(
 
     let user_profile = get_memory_service().get_user_profile();
     let previous_session_context = crate::ai::memory::session::load_previous_session_context(&get_app_data_dir());
+    let recent_episodes = get_memory_service().manager().get_recent_episodes(3).unwrap_or_default();
 
-    // Build system prompt
+    // Pre-fetch relevant memories from the user's message
+    let pre_fetched_memories = {
+        let query = &user_message;
+        let queries = if query.len() > 5 {
+            vec![query.to_string()]
+        } else {
+            vec![]
+        };
+        match get_memory_service().manager().search(queries) {
+            Ok(results) if !results.is_empty() => {
+                let mut block = String::from("\n[RELEVANT MEMORIES]\n");
+                for (i, r) in results.iter().take(5).enumerate() {
+                    block.push_str(&format!("{}. [{}] {} (confidence: {:.0}%)\n",
+                        i + 1, format!("{:?}", r.memo_type).to_lowercase(), r.content, r.confidence * 100.0));
+                }
+                block.push_str("[/RELEVANT MEMORIES]\n");
+                block
+            }
+            _ => String::new(),
+        }
+    };
+
+    // Build system prompt with pre-fetched memories
     let system_prompt = format!(
-        "{}\n\n{}\n\n{}\n\n{}\n\n{}",
-        PERSONA_PROMPT, user_profile, previous_session_context, environment_block(), temporal_context(),
+        "{}\n{}\n{}\n{}\n{}{}\n{}",
+        PERSONA_PROMPT, user_profile, previous_session_context, recent_episodes,
+        pre_fetched_memories, environment_block(), temporal_context(),
     );
 
     // Convert messages for API
@@ -150,7 +163,6 @@ pub async fn chat_handler(
         return Err((StatusCode::BAD_GATEWAY, format!("Chat API error {}: {}", status, body)));
     }
 
-    // Forward raw stream bytes directly — no SSE re-wrapping
     let status = resp.status();
     let headers = resp.headers().clone();
     let stream = resp.bytes_stream().map(|result| {
@@ -163,25 +175,49 @@ pub async fn chat_handler(
         }
     });
 
-    // Background: save session
+    // Background: save session + trigger memory extraction agent
     let sid = session_id.clone();
-    let user_msg = user_message.clone();
     let app_dir = get_app_data_dir();
     tokio::spawn(async move {
         let mut swm = crate::ai::memory::session::SESSION_REGISTRY
             .entry(sid.clone())
             .or_insert_with(|| crate::ai::memory::session::SessionWorkingMemory::new(&sid));
-        swm.add_turn("assistant", &user_msg);
+
         swm.summary = crate::ai::memory::session::summarize_session(&swm.recent_turns);
         crate::ai::memory::session::save_session_context(&app_dir, &swm);
+        get_memory_service().manager().store_episode(&sid, &swm.summary, &swm.extracted_facts).ok();
+
+        // Trigger background memory extraction agent
+        let turns: Vec<serde_json::Value> = swm.recent_turns.iter().map(|t| {
+            serde_json::json!({ "role": t.role, "content": t.content })
+        }).collect();
+
+        let token = match crate::ai::auth::get_valid_access_token().await {
+            Some(t) => t,
+            None => return,
+        };
+
+        let profile_block = get_memory_service().get_user_profile();
+
+        let client = reqwest::Client::new();
+        let _ = client
+            .post("http://localhost:3000/api/memory")
+            .header("Authorization", format!("Bearer {}", token))
+            .header("Content-Type", "application/json")
+            .json(&serde_json::json!({
+                "turns": turns,
+                "profile": profile_block,
+                "session_id": sid,
+            }))
+            .send()
+            .await;
     });
 
     let mut response_builder = Response::builder().status(status);
-    // Forward important headers from the website
     for (key, value) in headers.iter() {
         if let Ok(name) = axum::http::header::HeaderName::from_bytes(key.as_ref()) {
             let name_str = name.as_str().to_lowercase();
-            if name_str == "content-type" 
+            if name_str == "content-type"
                 || name_str == "cache-control"
                 || name_str == "connection"
                 || name_str.starts_with("x-") {
@@ -195,55 +231,199 @@ pub async fn chat_handler(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Response build error: {}", e)))
 }
 
-// ─── Title Generation ───────────────────────────────────────────────────
+// ─── Memory Tool Handlers ─────────────────────────────────────────────────
 
-const BANNED_TITLE_WORDS: &[&str] = &[
-    "greeting", "hello", "hi", "hey", "chat", "discussion", "conversation",
-    "introduction", "welcome", "question", "inquiry", "query", "request",
-    "message", "new", "untitled", "general", "miscellaneous", "misc",
-    "unknown", "undefined", "none", "no title", "placeholder", "talk",
-    "dialogue", "exchange", "interaction", "session", "update",
-];
-
-fn is_title_banned(title: &str) -> bool {
-    let lower = title.to_lowercase();
-    BANNED_TITLE_WORDS.iter().any(|&w| lower.contains(w))
+#[derive(Debug, Deserialize)]
+pub struct MemorySearchRequest {
+    pub queries: Vec<String>,
 }
 
-fn heuristic_title(user_message: &str) -> String {
-    let stop_words: &[&str] = &[
-        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-        "have", "has", "had", "do", "does", "did", "will", "would", "could",
-        "should", "may", "might", "must", "shall", "can", "need", "to", "of",
-        "in", "for", "on", "with", "at", "by", "from", "as", "into", "through",
-        "during", "before", "after", "above", "below", "between", "under",
-        "and", "but", "or", "yet", "so", "if", "because", "although", "though",
-        "while", "where", "when", "that", "which", "who", "whom", "whose",
-        "what", "this", "these", "those", "i", "you", "he", "she", "it", "we",
-        "they", "me", "him", "her", "us", "them", "my", "your", "his", "its",
-        "our", "their", "am", "just", "only", "also", "even", "still",
-        "already", "yet", "too", "very", "really", "quite", "about", "how",
-    ];
+pub async fn memory_search_handler(
+    AxumJson(request): AxumJson<MemorySearchRequest>,
+) -> Result<Json<Vec<serde_json::Value>>, (StatusCode, String)> {
+    let results = get_memory_service().manager().search(request.queries)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Memory search error: {}", e)))?;
 
-    let words: Vec<&str> = user_message.split_whitespace()
-        .filter(|w| {
-            let clean = w.trim_matches(|c: char| !c.is_alphanumeric());
-            !clean.is_empty() && !stop_words.contains(&clean.to_lowercase().as_str()) && clean.len() > 2
-        })
-        .take(4)
-        .collect();
+    Ok(Json(results.into_iter().map(|r| serde_json::json!({
+        "id": r.id,
+        "title": r.title,
+        "content": r.content,
+        "score": r.score.to_string(),
+        "type": format!("{:?}", r.memo_type).to_lowercase(),
+        "confidence": r.confidence,
+        "people": r.people,
+        "topics": r.topics,
+    })).collect()))
+}
 
-    if words.is_empty() {
-        return "New Chat".to_string();
+#[derive(Debug, Deserialize)]
+pub struct MemoryStoreRequest {
+    pub content: String,
+    #[serde(default)]
+    pub category: String,
+    #[serde(default)]
+    pub entities: Vec<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub memo_type: String,
+    #[serde(default)]
+    pub source: String,
+    #[serde(default)]
+    pub people: Vec<String>,
+    #[serde(default)]
+    pub places: Vec<String>,
+    #[serde(default)]
+    pub topics: Vec<String>,
+    #[serde(default)]
+    pub session_id: String,
+}
+
+pub async fn memory_store_handler(
+    AxumJson(request): AxumJson<MemoryStoreRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+    let title = if request.title.is_empty() {
+        request.content.chars().take(80).collect::<String>()
+    } else {
+        request.title
+    };
+
+    // Check for UPSERT — if a matching entry exists by title, update instead
+    let existing = {
+        let svc = get_memory_service();
+        let facts = svc.manager().search(vec![title.clone()]).unwrap_or_default();
+        facts.into_iter().find(|f| f.title.to_lowercase() == title.to_lowercase())
+    };
+
+    let (operation, applied_id) = if let Some(prev) = existing {
+        // UPDATE existing entry (UPSERT)
+        let entry = PersonalEntry {
+            id: prev.id.clone(),
+            title: title.clone(),
+            summary: String::new(),
+            content: request.content,
+            memo_type: parse_memo_type(&request.memo_type),
+            source: parse_memo_source(&request.source),
+            confidence: 1.0,
+            session_id: request.session_id,
+            people: if !request.people.is_empty() { request.people } else { request.entities },
+            places: request.places,
+            topics: request.topics,
+            tags: request.tags,
+            importance: (prev.confidence * 100.0).min(95.0) + 5.0,
+            maturity: crate::ai::memory::types::MaturityTier::Draft,
+            access_count: 0,
+            last_accessed: chrono::Utc::now().timestamp_millis(),
+            created_at: String::new(), // will default to now in manager
+            updated_at: now,
+            expires_at: None,
+        };
+        get_memory_service().manager().store_entry(&entry)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Memory update error: {}", e)))?;
+        ("UPDATE", entry.id)
+    } else {
+        // ADD new entry
+        let entry = PersonalEntry {
+            id: format!("mem_{}", chrono::Utc::now().timestamp_millis()),
+            title,
+            summary: String::new(),
+            content: request.content,
+            memo_type: parse_memo_type(&request.memo_type),
+            source: parse_memo_source(&request.source),
+            confidence: 1.0,
+            session_id: request.session_id,
+            people: if !request.people.is_empty() { request.people } else { request.entities },
+            places: request.places,
+            topics: request.topics,
+            tags: request.tags,
+            importance: 0.0,
+            maturity: crate::ai::memory::types::MaturityTier::Draft,
+            access_count: 0,
+            last_accessed: 0,
+            created_at: now.clone(),
+            updated_at: now,
+            expires_at: None,
+        };
+        get_memory_service().manager().store_entry(&entry)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Memory store error: {}", e)))?;
+        ("ADD", entry.id)
+    };
+
+    Ok(Json(serde_json::json!({
+        "applied": [{"type": operation, "id": applied_id, "status": "success"}],
+        "summary": {"added": if operation == "ADD" { 1 } else { 0 }, "updated": if operation == "UPDATE" { 1 } else { 0 }, "deleted": 0, "failed": 0}
+    })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ProfileUpdateRequest {
+    pub field: String,
+    pub value: String,
+}
+
+pub async fn update_profile_handler(
+    AxumJson(request): AxumJson<ProfileUpdateRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    get_memory_service().manager().update_profile_field(&request.field, &request.value)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Profile update error: {}", e)))?;
+
+    Ok(Json(serde_json::json!({ "updated": true, "field": request.field })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MemoryDeleteRequest {
+    pub id: String,
+}
+
+pub async fn memory_delete_handler(
+    AxumJson(request): AxumJson<MemoryDeleteRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    get_memory_service().manager().delete_entry(&request.id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Memory delete error: {}", e)))?;
+
+    Ok(Json(serde_json::json!({ "deleted": true, "id": request.id })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EpisodeExtractRequest {
+    pub session_id: String,
+    pub summary: String,
+    pub facts_extracted: Vec<String>,
+}
+
+pub async fn store_episode_handler(
+    AxumJson(request): AxumJson<EpisodeExtractRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    get_memory_service().manager().store_episode(&request.session_id, &request.summary, &request.facts_extracted)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Episode store error: {}", e)))?;
+
+    Ok(Json(serde_json::json!({ "stored": true })))
+}
+
+// ─── Title Generation ─────────────────────────────────────────────────────
+// Fast heuristic (0ms) — the LLM can generate better titles via the agent,
+// but this serves as the instant UI fallback while the agent response streams.
+
+fn fast_title(user_message: &str) -> String {
+    let text = user_message.trim();
+    if text.is_empty() { return "New Chat".to_string(); }
+
+    // Take the first sentence or first 60 chars, whichever is shorter
+    let first_sentence = text
+        .split(|c: char| c == '.' || c == '?' || c == '!' || c == '\n')
+        .next()
+        .unwrap_or(text)
+        .trim();
+
+    let truncated: String = first_sentence.chars().take(60).collect();
+    if truncated.len() < first_sentence.len() {
+        format!("{}...", truncated.trim())
+    } else {
+        first_sentence.to_string()
     }
-
-    words.iter().map(|w| {
-        let mut chars = w.chars();
-        match chars.next() {
-            None => String::new(),
-            Some(first) => format!("{}{}", first.to_uppercase(), chars.collect::<String>().to_lowercase()),
-        }
-    }).collect::<Vec<_>>().join(" ")
 }
 
 #[tauri::command]
@@ -251,10 +431,29 @@ pub async fn generate_chat_title(
     user_message: String,
     _assistant_message: Option<String>,
 ) -> Result<String, String> {
-    let title = heuristic_title(&user_message);
-    if is_title_banned(&title) {
-        Ok("New Chat".to_string())
-    } else {
-        Ok(title)
+    Ok(fast_title(&user_message))
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────
+
+fn parse_memo_type(s: &str) -> crate::ai::memory::types::MemoType {
+    use crate::ai::memory::types::MemoType;
+    match s {
+        "preference" => MemoType::Preference,
+        "episode" => MemoType::Episode,
+        "task" => MemoType::Task,
+        "relationship" => MemoType::Relationship,
+        "context" => MemoType::Context,
+        "insight" => MemoType::Insight,
+        _ => MemoType::Fact,
+    }
+}
+
+fn parse_memo_source(s: &str) -> crate::ai::memory::types::MemoSource {
+    use crate::ai::memory::types::MemoSource;
+    match s {
+        "inferred" => MemoSource::Inferred,
+        "derived" => MemoSource::Derived,
+        _ => MemoSource::Explicit,
     }
 }

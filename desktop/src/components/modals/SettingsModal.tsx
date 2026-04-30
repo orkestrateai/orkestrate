@@ -1,7 +1,12 @@
-import { useState } from 'react';
-import { X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { check } from '@tauri-apps/plugin-updater';
+import { revealItemInDir } from '@tauri-apps/plugin-opener';
+import { X, ExternalLink, RefreshCw, FolderOpen } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
+
+const APP_VERSION = '0.1.0';
 
 interface SettingsModalProps {
   open: boolean;
@@ -14,6 +19,46 @@ type Tab = (typeof TABS)[number];
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>('Appearance');
   const { theme, setTheme } = useTheme();
+  const [userInfo, setUserInfo] = useState<{ name?: string; email?: string } | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<string | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [appDataPath, setAppDataPath] = useState<string>('');
+
+  useEffect(() => {
+    if (open) {
+      invoke<{ name?: string; email?: string }>('get_user_info')
+        .then(info => setUserInfo(info))
+        .catch(() => {});
+      invoke<string>('get_app_data_path')
+        .then(path => setAppDataPath(path))
+        .catch(() => {});
+    }
+  }, [open]);
+
+  const handleCheckUpdate = async () => {
+    setCheckingUpdate(true);
+    setUpdateStatus(null);
+    try {
+      const update = await check();
+      if (update?.available) {
+        setUpdateStatus(`Update ${update.version} available`);
+        await update.downloadAndInstall();
+      } else {
+        setUpdateStatus('You have the latest version.');
+      }
+    } catch {
+      setUpdateStatus('Failed to check for updates.');
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
+
+  const handleOpenLogs = async () => {
+    try {
+      const appDataPath = await invoke<string>('get_app_data_path');
+      await revealItemInDir(appDataPath + '/logs');
+    } catch {}
+  };
 
   if (!open) return null;
 
@@ -76,7 +121,6 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                           : 'border-white/[0.06] text-white/50 hover:border-white/[0.12] hover:text-white/70'
                       )}
                     >
-                      {/* Theme preview swatch */}
                       <div
                         className={cn(
                           'size-16 rounded-lg border',
@@ -100,7 +144,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   <label className="block text-sm font-medium text-white/90">Name</label>
                   <input
                     readOnly
-                    value="Prabhakaran K"
+                    value={userInfo?.name || ''}
                     className="mt-2 w-full rounded-lg border border-white/[0.06] bg-white/[0.04] px-3 py-2 text-sm text-white/90"
                   />
                 </div>
@@ -108,16 +152,98 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   <label className="block text-sm font-medium text-white/90">Email</label>
                   <input
                     readOnly
-                    value="prabhakaran@orkestrate.ai"
+                    value={userInfo?.email || ''}
                     className="mt-2 w-full rounded-lg border border-white/[0.06] bg-white/[0.04] px-3 py-2 text-sm text-white/90"
                   />
                 </div>
               </div>
             )}
 
-            {!['Appearance', 'General'].includes(activeTab) && (
+            {activeTab === 'System' && (
+              <div className="space-y-6">
+                <div>
+                  <h4 className="text-sm font-medium text-white/90">Version</h4>
+                  <p className="mt-1 text-sm text-white/50">Orkestrate v{APP_VERSION}</p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-white/90">Updates</h4>
+                  <p className="mt-1 mb-3 text-sm text-white/50">
+                    Check for new versions automatically.
+                  </p>
+                  <button
+                    onClick={handleCheckUpdate}
+                    disabled={checkingUpdate}
+                    className="inline-flex items-center gap-2 rounded-lg bg-white/[0.08] px-4 py-2 text-sm text-white/80 transition-colors hover:bg-white/[0.12] disabled:opacity-50"
+                  >
+                    <RefreshCw className={cn('size-4', checkingUpdate && 'animate-spin')} />
+                    {checkingUpdate ? 'Checking...' : 'Check for Updates'}
+                  </button>
+                  {updateStatus && (
+                    <p className="mt-2 text-sm text-white/50">{updateStatus}</p>
+                  )}
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-white/90">Data Directory</h4>
+                  <p className="mt-1 text-sm text-white/50">{appDataPath || 'Loading...'}</p>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'Chat' && (
+              <div className="space-y-6">
+                <div>
+                  <h4 className="text-sm font-medium text-white/90">Model</h4>
+                  <p className="mt-1 text-sm text-white/50">MiniMax M2.5 via AWS Bedrock</p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-white/90">Context</h4>
+                  <p className="mt-1 text-sm text-white/50">
+                    Session-based memory with long-term recall. Facts are stored and retrieved automatically.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'Subscription' && (
               <div className="flex h-full items-center justify-center">
                 <p className="text-sm text-white/30">Coming soon</p>
+              </div>
+            )}
+
+            {activeTab === 'Support' && (
+              <div className="space-y-6">
+                <div>
+                  <h4 className="text-sm font-medium text-white/90">Logs</h4>
+                  <p className="mt-1 mb-3 text-sm text-white/50">
+                    View application logs for troubleshooting.
+                  </p>
+                  <button
+                    onClick={handleOpenLogs}
+                    className="inline-flex items-center gap-2 rounded-lg bg-white/[0.08] px-4 py-2 text-sm text-white/80 transition-colors hover:bg-white/[0.12]"
+                  >
+                    <FolderOpen className="size-4" />
+                    Open Logs Folder
+                  </button>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-white/90">Contact</h4>
+                  <p className="mt-1 mb-3 text-sm text-white/50">
+                    Issues or feedback? Reach out on GitHub.
+                  </p>
+                  <a
+                    href="https://github.com/system1970/Orkestrate"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-lg bg-white/[0.08] px-4 py-2 text-sm text-white/80 transition-colors hover:bg-white/[0.12]"
+                  >
+                    <ExternalLink className="size-4" />
+                    GitHub Repository
+                  </a>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-white/90">Version</h4>
+                  <p className="mt-1 text-sm text-white/50">Orkestrate v{APP_VERSION}</p>
+                </div>
               </div>
             )}
           </div>

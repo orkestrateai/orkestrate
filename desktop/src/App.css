@@ -17,7 +17,7 @@
     -moz-osx-font-smoothing: grayscale;
     -webkit-text-size-adjust: 100%;
 
-    /* Littlebird Warm Light Mode — Pixel-matched */
+    /* Light Mode — opaque (acrylic blur is dark-tinted; light translucency = unreadable mud) */
     --background: oklch(0.975 0.006 70);  /* Warm parchment cream */
     --foreground: oklch(0.13 0.015 55);   /* Rich warm near-black */
     --card: oklch(0.985 0.004 65);
@@ -37,7 +37,7 @@
     --input: oklch(0 0 0 / 4%);
     --ring: oklch(0.13 0.015 55 / 12%);
     --radius: 0.75rem;
-    
+
     --sidebar: oklch(0.965 0.008 65);   /* Noticeably warmer than background */
     --sidebar-foreground: var(--foreground);
     --sidebar-primary: var(--primary);
@@ -49,31 +49,31 @@
 }
 
 .dark {
-    --background: oklch(0.13 0 0);
+    --background: rgba(18, 18, 18, 0.40);
     --foreground: oklch(0.985 0 0);
-    --card: oklch(0.17 0 0);
+    --card: rgba(30, 30, 30, 0.45);
     --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.15 0 0);
+    --popover: rgba(25, 25, 25, 0.55);
     --popover-foreground: oklch(0.985 0 0);
     --primary: oklch(0.922 0 0);
     --primary-foreground: oklch(0.13 0 0);
-    --secondary: oklch(0.22 0 0);
+    --secondary: rgba(40, 40, 40, 0.40);
     --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.22 0 0);
+    --muted: rgba(40, 40, 40, 0.35);
     --muted-foreground: oklch(0.55 0 0);
-    --accent: oklch(0.22 0 0);
+    --accent: rgba(40, 40, 40, 0.35);
     --accent-foreground: oklch(0.985 0 0);
     --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 8%);
-    --input: oklch(1 0 0 / 10%);
+    --border: oklch(1 0 0 / 12%);
+    --input: oklch(1 0 0 / 15%);
     --ring: oklch(0.556 0 0);
-    --sidebar: oklch(0.11 0 0);
+    --sidebar: rgba(15, 15, 15, 0.35);
     --sidebar-foreground: oklch(0.985 0 0);
     --sidebar-primary: oklch(0.488 0.243 264.376);
     --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.22 0 0);
+    --sidebar-accent: rgba(40, 40, 40, 0.40);
     --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 8%);
+    --sidebar-border: oklch(1 0 0 / 12%);
     --sidebar-ring: oklch(0.556 0 0);
 }
 
@@ -129,8 +129,9 @@
   * {
     @apply border-border outline-ring/50;
   }
-  html, body {
-    @apply flex h-screen w-screen overflow-hidden bg-background text-foreground transition-colors duration-300;
+  html, body, #root {
+    background: transparent !important;
+    @apply flex h-screen w-screen overflow-hidden text-foreground;
   }
 }
 

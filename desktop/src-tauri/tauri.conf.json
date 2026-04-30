@@ -16,12 +16,13 @@
         "width": 1280,
         "height": 800,
         "theme": "Dark",
-        "backgroundColor": "#171717"
+        "transparent": true
       }
     ],
     "security": {
       "csp": "default-src 'self'; connect-src 'self' https://orkestrate.space http://127.0.0.1:* ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'"
-    }
+    },
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,
@@ -33,7 +34,19 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": true,
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico"
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "12.0",
+      "dmg": {
+        "appPosition": { "x": 180, "y": 220 },
+        "applicationFolderPosition": { "x": 480, "y": 220 }
+      }
+    }
   },
   "plugins": {
     "deep-link": {
@@ -45,7 +58,7 @@
       "endpoints": [
         "https://github.com/system1970/Orkestrate/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENEMzg4RDYyNTRCNUIwRTEKUldUaHNMVlVZbzA0elZiQm03QTJZb2ZUdUZjb3E0T3B4a1FrV2V1OWQ0bkdDbEJkSk53RjIrV2kK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMyRTkzNUQyQzE2NEFDQzkKUldUSnJHVEIwalhwTW5GN0M2S1diQURJSzg4SjNlc1lqU1QvUnZQS0g4NlFRQXdiVUl2c3lzRncK"
     }
   }
 }

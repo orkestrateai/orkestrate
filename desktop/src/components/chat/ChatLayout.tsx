@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTheme } from '@/lib/theme';
 import { Sidebar } from '@/components/sidebar/Sidebar';
 import { EmptyState } from './EmptyState';
 import { ChatView } from './ChatView';
@@ -7,7 +8,16 @@ import { SearchModal } from '@/components/modals/SearchModal';
 import { useChatSession } from '@/hooks/use-chat-session';
 import { useChatStore } from '@/stores/chat-store';
 
-export function ChatLayout({ onSignOut }: { onSignOut: () => void }) {
+export function ChatLayout({
+  onSignOut,
+  pendingMessage,
+  onClearPendingMessage,
+}: {
+  onSignOut: () => void;
+  pendingMessage?: string | null;
+  onClearPendingMessage?: () => void;
+}) {
+  const { resolved } = useTheme();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -19,7 +29,7 @@ export function ChatLayout({ onSignOut }: { onSignOut: () => void }) {
         setIsSidebarCollapsed(true);
       }
     };
-    
+
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -31,8 +41,16 @@ export function ChatLayout({ onSignOut }: { onSignOut: () => void }) {
   const activeSession = sessions.find(s => s.id === activeSessionId);
   const hasMessages = messages.length > 0;
 
+  // Handle spotlight messages — sendMessage will auto-create a session
+  useEffect(() => {
+    if (pendingMessage) {
+      sendMessage(pendingMessage);
+      onClearPendingMessage?.();
+    }
+  }, [pendingMessage]);
+
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground transition-colors duration-300">
+    <div className="flex h-screen w-screen overflow-hidden text-foreground transition-colors duration-300">
       {/* Sidebar */}
       <Sidebar
         isCollapsed={isSidebarCollapsed}
@@ -41,8 +59,8 @@ export function ChatLayout({ onSignOut }: { onSignOut: () => void }) {
         onSignOut={onSignOut}
       />
 
-      {/* Main content */}
-      <main className="flex flex-1 flex-col min-h-0 overflow-hidden">
+      {/* Main content — opaque backdrop in light mode so dark acrylic doesn't bleed through */}
+      <main className={`flex flex-1 flex-col min-h-0 overflow-hidden ${resolved === 'light' ? 'bg-background' : ''}`}>
         {hasMessages && activeSession ? (
           <ChatView
             title={activeSession.title}
@@ -53,8 +71,8 @@ export function ChatLayout({ onSignOut }: { onSignOut: () => void }) {
             isSidebarCollapsed={isSidebarCollapsed}
           />
         ) : (
-          <EmptyState 
-            onSend={sendMessage} 
+          <EmptyState
+            onSend={sendMessage}
             onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
             isSidebarCollapsed={isSidebarCollapsed}
           />

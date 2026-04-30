@@ -1,4 +1,3 @@
 {
-  "rootDirectory": "website",
-  "ignoreCommand": "git log -1 --pretty=%B | grep -qF \"[vercel skip]\""
+  "rootDirectory": "website"
 }

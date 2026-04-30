@@ -4,14 +4,28 @@ on:
   push:
     tags: ["v*"]
 
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  release:
+  build:
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
+            arch: windows-x86_64
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            arch: darwin-aarch64
+          - platform: macos-13
+            target: x86_64-apple-darwin
+            arch: darwin-x86_64
     runs-on: ${{ matrix.platform }}
 
     steps:
@@ -24,29 +38,66 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install Rust Target
+        run: rustup target add ${{ matrix.target }}
+
       - name: Install Frontend Deps
         working-directory: desktop
         run: bun install
 
       - name: Build Desktop
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          NPM_CLIENT: bun
         with:
-          tagName: v__VERSION__
-          releaseName: "Orkestrate v__VERSION__"
+          tagName: ${{ github.ref_name }}
+          releaseName: "Orkestrate ${{ github.ref_name }}"
           releaseBody: "See the assets to download and install this version."
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           projectPath: desktop
           args: --target ${{ matrix.target }}
+          uploadUpdaterJson: true
+          releaseAssetNamePattern: "[name]_[version]_[platform]_[arch]_[bundle][ext]"
+          updaterJsonPreferNsis: true
 
-      - name: Upload updater artifacts
+      - name: Upload updater json
         uses: actions/upload-artifact@v4
         with:
-          name: updater-artifacts-${{ matrix.target }}
-          path: desktop/src-tauri/target/${{ matrix.target }}/release/bundle/
-          if-no-files-found: ignore
+          name: updater-json-${{ matrix.arch }}
+          path: desktop/src-tauri/target/${{ matrix.target }}/release/bundle/latest.json
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download platform manifests
+        uses: actions/download-artifact@v4
+        with:
+          pattern: updater-json-*
+          merge-multiple: false
+
+      - name: Merge latest.json manifests
+        run: |
+          python3 .github/scripts/merge-updater-json.py latest.json
+          echo "=== Merged manifest ==="
+          cat latest.json
+
+      - name: Upload merged latest.json
+        run: |
+          gh release upload "${{ github.ref_name }}" latest.json --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish release
+        run: |
+          gh release edit "${{ github.ref_name }}" --draft=false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
-use serde_json::json;
-use crate::ai::memory::MemoryManager;
+use crate::ai::memory::manager::MemoryManager;
+use crate::ai::memory::types::SearchResult;
 
 pub struct ChatMemoryService {
     manager: MemoryManager,
@@ -18,26 +18,14 @@ impl ChatMemoryService {
     }
 
     pub fn get_user_profile(&self) -> String {
-        self.manager.get_user_profile()
+        self.manager.get_profile_block()
     }
 
     pub async fn search_context_with_session(&self, queries: Vec<String>) -> String {
-        match self.manager.search(queries) {
-            Ok(memories) => {
-                if memories.is_empty() {
-                    return "No relevant information found in memory.".to_string();
-                }
-                json!({
-                    "results": memories.iter().map(|m| {
-                        json!({
-                            "content": m.content,
-                            "id": m.id,
-                            "relevance": m.score,
-                        })
-                    }).collect::<Vec<_>>()
-                }).to_string()
-            }
-            Err(e) => format!("Error searching memory: {}", e),
-        }
+        self.manager.search_context_with_session(queries).await
+    }
+
+    pub fn search_memories(&self, queries: Vec<String>) -> std::io::Result<Vec<SearchResult>> {
+        self.manager.search(queries)
     }
 }

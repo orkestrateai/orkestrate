@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { ThemeProvider } from '@/lib/theme';
 import { ChatStoreProvider } from '@/stores/chat-store';
 import { ChatLayout } from '@/components/chat/ChatLayout';
@@ -7,6 +8,7 @@ import { OnboardingFlow } from '@/components/onboarding/OnboardingFlow';
 
 function AppContent() {
   const [appState, setAppState] = useState<'loading' | 'onboarding' | 'ready'>('loading');
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
 
   useEffect(() => {
     invoke<string>('get_auth_state')
@@ -19,6 +21,18 @@ function AppContent() {
       })
       .catch(() => setAppState('onboarding'));
   }, []);
+
+  useEffect(() => {
+    const unlisten = listen<{ text: string }>('spotlight-message', (event) => {
+      if (appState === 'ready') {
+        setPendingMessage(event.payload.text);
+      }
+      // If on onboarding, ignore — user needs to auth first
+    });
+    return () => {
+      unlisten.then(u => u());
+    };
+  }, [appState]);
 
   const handleSignOut = () => {
     invoke('sign_out').catch(() => {});
@@ -42,7 +56,13 @@ function AppContent() {
     );
   }
 
-  return <ChatLayout onSignOut={handleSignOut} />;
+  return (
+    <ChatLayout
+      onSignOut={handleSignOut}
+      pendingMessage={pendingMessage}
+      onClearPendingMessage={() => setPendingMessage(null)}
+    />
+  );
 }
 
 function App() {
