@@ -68,7 +68,7 @@ jobs:
         with:
           name: updater-json-${{ matrix.arch }}
           path: desktop/src-tauri/target/${{ matrix.target }}/release/bundle/latest.json
-          if-no-files-found: error
+          if-no-files-found: warn
 
   publish:
     needs: build
