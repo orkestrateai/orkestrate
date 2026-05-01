@@ -64,6 +64,13 @@ jobs:
           updaterJsonPreferNsis: true
           assetNamePattern: "[name]_[version]_[arch]_[bundle][ext]"
 
+      - name: Upload updater json artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: updater-json-${{ matrix.arch }}
+          path: desktop/src-tauri/target/${{ matrix.target }}/release/bundle/latest.json
+          if-no-files-found: warn
+
   publish:
     needs: build
     runs-on: ubuntu-latest
@@ -79,35 +86,7 @@ jobs:
           merge-multiple: false
 
       - name: Merge latest.json manifests
-        run: |
-          set -e
-          MERGED="latest.json"
-          echo '{ "version": "", "notes": "", "pub_date": "", "platforms": {} }' > "$MERGED"
-
-          for dir in updater-json-*; do
-            if [ -f "$dir/latest.json" ]; then
-              echo "Merging $dir/latest.json"
-              python3 - <<PY
-import json
-
-with open("$MERGED") as f: merged = json.load(f)
-with open("$dir/latest.json") as f: plat = json.load(f)
-
-merged["version"] = plat.get("version", merged["version"])
-merged["notes"] = plat.get("notes", merged["notes"])
-merged["pub_date"] = plat.get("pub_date", merged["pub_date"])
-
-for key, val in plat.get("platforms", {}).items():
-    merged["platforms"][key] = val
-
-with open("$MERGED", "w") as f: json.dump(merged, f, indent=2)
-print("Merged platforms:", list(merged["platforms"].keys()))
-PY
-            fi
-          done
-
-          echo "=== Merged manifest ==="
-          cat "$MERGED"
+        run: python3 .github/scripts/merge-updater-json.py latest.json
 
       - name: Upload merged latest.json
         run: |
