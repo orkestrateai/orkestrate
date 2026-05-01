@@ -7,10 +7,6 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   build:
     strategy:
@@ -23,7 +19,7 @@ jobs:
           - platform: macos-latest
             target: aarch64-apple-darwin
             arch: darwin-aarch64
-          - platform: macos-13
+          - platform: macos-15
             target: x86_64-apple-darwin
             arch: darwin-x86_64
     runs-on: ${{ matrix.platform }}
@@ -41,6 +37,11 @@ jobs:
       - name: Install Rust Target
         run: rustup target add ${{ matrix.target }}
 
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri -> target
+
       - name: Install Frontend Deps
         working-directory: desktop
         run: bun install
@@ -55,20 +56,13 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "Orkestrate ${{ github.ref_name }}"
           releaseBody: "See the assets to download and install this version."
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           projectPath: desktop
           args: --target ${{ matrix.target }}
-          uploadUpdaterJson: true
-          releaseAssetNamePattern: "[name]_[version]_[platform]_[arch]_[bundle][ext]"
+          includeUpdaterJson: true
           updaterJsonPreferNsis: true
-
-      - name: Upload updater json
-        uses: actions/upload-artifact@v4
-        with:
-          name: updater-json-${{ matrix.arch }}
-          path: desktop/src-tauri/target/${{ matrix.target }}/release/bundle/latest.json
-          if-no-files-found: warn
+          assetNamePattern: "[name]_[version]_[arch]_[bundle][ext]"
 
   publish:
     needs: build
@@ -86,18 +80,37 @@ jobs:
 
       - name: Merge latest.json manifests
         run: |
-          python3 .github/scripts/merge-updater-json.py latest.json
+          set -e
+          MERGED="latest.json"
+          echo '{ "version": "", "notes": "", "pub_date": "", "platforms": {} }' > "$MERGED"
+
+          for dir in updater-json-*; do
+            if [ -f "$dir/latest.json" ]; then
+              echo "Merging $dir/latest.json"
+              python3 - <<PY
+import json
+
+with open("$MERGED") as f: merged = json.load(f)
+with open("$dir/latest.json") as f: plat = json.load(f)
+
+merged["version"] = plat.get("version", merged["version"])
+merged["notes"] = plat.get("notes", merged["notes"])
+merged["pub_date"] = plat.get("pub_date", merged["pub_date"])
+
+for key, val in plat.get("platforms", {}).items():
+    merged["platforms"][key] = val
+
+with open("$MERGED", "w") as f: json.dump(merged, f, indent=2)
+print("Merged platforms:", list(merged["platforms"].keys()))
+PY
+            fi
+          done
+
           echo "=== Merged manifest ==="
-          cat latest.json
+          cat "$MERGED"
 
       - name: Upload merged latest.json
         run: |
           gh release upload "${{ github.ref_name }}" latest.json --clobber
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Publish release
-        run: |
-          gh release edit "${{ github.ref_name }}" --draft=false
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
