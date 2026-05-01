@@ -1,0 +1,19 @@
+{
+  "version": "0.2.6",
+  "notes": "See the assets to download and install this version.",
+  "pub_date": "2026-05-01T02:25:14.283Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUSnJHVEIwalhwTXI3dnBMNDFkS0lHWDA0ekF4K0NmUDdXRHFFTDRFMVNUTXlzY0JEcExJWGZycm93Y1ZDYjk4TjFYY0ZpNlRERGsya0Q2QXVPYzVBZ1owazNUMzFkaVEwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzc3NjAyMzA4CWZpbGU6b3JrZXN0cmF0ZV8wLjIuNl94NjQtc2V0dXAuZXhlCmhSZ2wvejNHWDRZZEttTHJSeGVrTWQ2UmR0ejZYVmV2N2RtTWFvdk5HU0xnbVJqcjI1YnMxcGE2NEQwTzIyckNHakNDbWhrL1hMNzMvUlJmbGUxMUJRPT0K",
+      "url": "https://github.com/system1970/Orkestrate/releases/download/v0.2.6/orkestrate_0.2.6_x64-setup.exe"
+    },
+    "windows-x86_64-nsis": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUSnJHVEIwalhwTXI3dnBMNDFkS0lHWDA0ekF4K0NmUDdXRHFFTDRFMVNUTXlzY0JEcExJWGZycm93Y1ZDYjk4TjFYY0ZpNlRERGsya0Q2QXVPYzVBZ1owazNUMzFkaVEwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzc3NjAyMzA4CWZpbGU6b3JrZXN0cmF0ZV8wLjIuNl94NjQtc2V0dXAuZXhlCmhSZ2wvejNHWDRZZEttTHJSeGVrTWQ2UmR0ejZYVmV2N2RtTWFvdk5HU0xnbVJqcjI1YnMxcGE2NEQwTzIyckNHakNDbWhrL1hMNzMvUlJmbGUxMUJRPT0K",
+      "url": "https://github.com/system1970/Orkestrate/releases/download/v0.2.6/orkestrate_0.2.6_x64-setup.exe"
+    },
+    "windows-x86_64-msi": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUSnJHVEIwalhwTXZFandXaXhLMXhNYWdoSEovVzFOZys3aE1LK0ttb293VUtHWEo3NHVJTWJ6a09nWTlyRFpYeUJmY3pEbDNGMll5K3dab0pJVSsycUppVllGUEFqSXdzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzc3NjAyMzA4CWZpbGU6b3JrZXN0cmF0ZV8wLjIuNl94NjRfZW4tVVMubXNpCkd3ZU91K0tRdG9xQUNYRTd1eWRZUFVvdkZzdk9NZGJBNi9OcjRUakd3T1lra1FNNVpJeGJjdTJRajlTaVRwNE94a1JSR0lpTmJ0MWlsQVowZHJIREF3PT0K",
+      "url": "https://github.com/system1970/Orkestrate/releases/download/v0.2.6/orkestrate_0.2.6_x64_en-US.msi"
+    }
+  }
+}

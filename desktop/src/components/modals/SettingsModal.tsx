@@ -49,8 +49,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       } else {
         setUpdateStatus('You have the latest version.');
       }
-    } catch {
-      setUpdateStatus('Failed to check for updates.');
+    } catch (e) {
+      console.error('[updater]', e);
+      setUpdateStatus(`Failed to check for updates: ${e}`);
     } finally {
       setCheckingUpdate(false);
     }

@@ -20,7 +20,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' https://orkestrate.space https://github.com https://*.github.com https://githubusercontent.com http://127.0.0.1:* ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'"
+      "csp": "default-src 'self'; connect-src 'self' https://orkestrate.space https://github.com https://*.github.com https://githubusercontent.com https://objects.githubusercontent.com http://127.0.0.1:* http://localhost:* ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'"
     },
     "macOSPrivateApi": true
   },
@@ -56,6 +56,7 @@
     },
     "updater": {
       "endpoints": [
+        "http://127.0.0.1:8000/latest.json",
         "https://github.com/system1970/Orkestrate/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMyRTkzNUQyQzE2NEFDQzkKUldUSnJHVEIwalhwTW5GN0M2S1diQURJSzg4SjNlc1lqU1QvUnZQS0g4NlFRQXdiVUl2c3lzRncK"
