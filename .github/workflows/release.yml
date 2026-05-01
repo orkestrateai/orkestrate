@@ -16,12 +16,6 @@ jobs:
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             arch: windows-x86_64
-          - platform: macos-latest
-            target: aarch64-apple-darwin
-            arch: darwin-aarch64
-          - platform: macos-15
-            target: x86_64-apple-darwin
-            arch: darwin-x86_64
     runs-on: ${{ matrix.platform }}
 
     steps:
@@ -46,7 +40,7 @@ jobs:
         working-directory: desktop
         run: bun install
 
-      - name: Build Desktop
+      - name: Build and Release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -56,40 +50,7 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "Orkestrate ${{ github.ref_name }}"
           releaseBody: "See the assets to download and install this version."
-          releaseDraft: false
-          prerelease: false
           projectPath: desktop
           args: --target ${{ matrix.target }}
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
-          assetNamePattern: "[name]_[version]_[arch]_[bundle][ext]"
-
-      - name: Upload updater json artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: updater-json-${{ matrix.arch }}
-          path: desktop/src-tauri/target/${{ matrix.target }}/release/bundle/latest.json
-          if-no-files-found: warn
-
-  publish:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download platform manifests
-        uses: actions/download-artifact@v4
-        with:
-          pattern: updater-json-*
-          merge-multiple: false
-
-      - name: Merge latest.json manifests
-        run: python3 .github/scripts/merge-updater-json.py latest.json
-
-      - name: Upload merged latest.json
-        run: |
-          gh release upload "${{ github.ref_name }}" latest.json --clobber
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
