@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { getVersion } from '@tauri-apps/api/app';
 import { check } from '@tauri-apps/plugin-updater';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { X, ExternalLink, RefreshCw, FolderOpen } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
-
-const APP_VERSION = '0.1.0';
 
 interface SettingsModalProps {
   open: boolean;
@@ -23,6 +22,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [updateStatus, setUpdateStatus] = useState<string | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [appDataPath, setAppDataPath] = useState<string>('');
+  const [appVersion, setAppVersion] = useState<string>('');
 
   useEffect(() => {
     if (open) {
@@ -31,6 +31,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         .catch(() => {});
       invoke<string>('get_app_data_path')
         .then(path => setAppDataPath(path))
+        .catch(() => {});
+      getVersion()
+        .then(v => setAppVersion(v))
         .catch(() => {});
     }
   }, [open]);
@@ -163,7 +166,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               <div className="space-y-6">
                 <div>
                   <h4 className="text-sm font-medium text-white/90">Version</h4>
-                  <p className="mt-1 text-sm text-white/50">Orkestrate v{APP_VERSION}</p>
+                  <p className="mt-1 text-sm text-white/50">Orkestrate v{appVersion}</p>
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-white/90">Updates</h4>
@@ -242,7 +245,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-white/90">Version</h4>
-                  <p className="mt-1 text-sm text-white/50">Orkestrate v{APP_VERSION}</p>
+                  <p className="mt-1 text-sm text-white/50">Orkestrate v{appVersion}</p>
                 </div>
               </div>
             )}

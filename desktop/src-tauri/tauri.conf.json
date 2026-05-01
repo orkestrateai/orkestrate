@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "orkestrate",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "identifier": "com.orkestrate.app",
   "build": {
     "beforeDevCommand": "bun run dev",
@@ -20,7 +20,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' https://orkestrate.space http://127.0.0.1:* ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'"
+      "csp": "default-src 'self'; connect-src 'self' https://orkestrate.space https://github.com https://*.github.com https://githubusercontent.com http://127.0.0.1:* ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'"
     },
     "macOSPrivateApi": true
   },
