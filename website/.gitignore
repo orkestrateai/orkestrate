@@ -147,3 +147,9 @@ rzp*.csv
 .mcp.json
 .vercel
 .env*.local
+
+# MCP dependencies
+mcp/node_modules/
+
+# Test environment
+test-env/

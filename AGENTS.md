@@ -1,157 +1,171 @@
-# Orkestrate — Agent Guide
+# Orky Agent Guide
 
-## Project Overview
+## Product Vision
 
-A desktop AI companion app (Tauri 2 + React) with cloud inference via AWS Bedrock. Auth via Supabase/Google OAuth. Landing/login website hosted on Next.js/Vercel.
+Orky is the layer that keeps agents honest.
 
-Two active directories:
+The product exists because long-running AI agents drift: they lose the original
+goal, obey poisoned context, summarize bad instructions into memory, and take
+actions that no longer match what the user wanted. Orky watches the declared
+goal, the current subtask, the agent's proposed next action, and outside input.
+It should make clear whether the agent is still on task.
 
-- **`desktop/`** — Tauri 2 desktop app (Rust backend + React/Vite frontend)
-- **`website/`** — Next.js 16 app (landing page, login, auth callback, Bedrock chat API)
+The current production site is intentionally small. That is a product decision,
+not an unfinished accident. Every file, dependency, public asset, route, and API
+surface should justify its existence.
+
+## Active Surface
+
+The production website lives in `website/` and deploys to:
+
+- `https://orkestrate.space`
+
+Current public surface:
+
+- one minimal landing page
+- one waitlist form
+- one waitlist API route
+- static Open Graph and Apple icon assets
+- Supabase insert into `public.waitlist`
+
+Do not reintroduce auth, chat, billing, MCP connectors, dashboards, assistant UI,
+or marketing sections unless explicitly requested.
+
+## Engineering Principles
+
+- Keep dependencies minimal.
+- Prefer deleting unused code over hiding it.
+- Keep routes, public assets, and API surfaces small.
+- Be security-conscious by default.
+- Do not add compatibility layers, legacy shims, or dual old/new flows unless
+  explicitly requested.
+- Avoid clever abstractions. This is a tiny production site; direct code is
+  usually better.
+- Validate all external input on the server.
+- Never expose service-role secrets or private env vars to client code.
+- Keep `.env` files out of Vercel uploads and git.
+- Keep the visual design quiet, intentional, and minimal.
 
 ## Package Manager
 
-Always use **`bun`**. Never npm or yarn.
+Use Bun only.
 
-| Command | Location | Action |
-|---------|----------|--------|
-| `bun install` | anywhere | Install deps |
-| `bun add <pkg>` | anywhere | Add dependency |
-| `bun run dev` | `website/` | Start Next.js dev server |
-| `bun run tauri dev` | `desktop/` | Start desktop in dev mode |
-| `bun run build` | `website/` | Build website |
-| `bun run tauri build` | `desktop/` | Build desktop installer |
-| `bunx tauri signer generate` | `desktop/src-tauri/` | Generate updater signing keys |
-| `bunx vercel deploy --prod` | `website/` | Deploy website to Vercel |
+- Install dependencies: `bun install`
+- Add dependency: `bun add <package>`
+- Add dev dependency: `bun add -d <package>`
+- Run scripts: `bun run <script>`
+- One-off CLIs: `bunx <command>`
 
-## Key Architecture
+Do not use `npm`, `npx`, `yarn`, or `pnpm` unless the user explicitly asks for
+an exception.
 
-### Desktop (`desktop/`)
+## Website Commands
 
-```
-src-tauri/
-  src/
-    lib.rs          → Tauri entry point, plugins, Axum server, deep link handler
-    main.rs         → Crash handler, panics → dump to AppData/crashes/
-    ai/
-      auth.rs        → Token storage (session.json), Supabase refresh
-      handler.rs     → Axum /api/chat handler, proxies to orkestrate.space
-      paths.rs       → APP_DATA_DIR OnceCell
-      memory/        → ByteRover-derived context tree memory system
-        manager.rs   → MemoryManager (search, profile, storage)
-        storage.rs   → ContextTreeStorage (file-based)
-        session.rs   → SessionWorkingMemory, SESSION_REGISTRY
-        service.rs   → ChatMemoryService
-src/
-  App.tsx              → Auth gate (loading → onboarding → ready)
-  components/
-    onboarding/OnboardingFlow.tsx → Google sign-in + deep link polling
-    chat/ChatLayout.tsx           → Main chat UI + sidebar
-    sidebar/UserMenu.tsx          → Profile popover + logout
-    sidebar/Sidebar.tsx           → Nav + recent chats + user menu
-    ui/                           → Base UI components (dropdown-menu, dialog, button, etc.)
-  hooks/use-chat-session.ts → useChat + DefaultChatTransport + auth
-  stores/chat-store.tsx     → Session CRUD (zustand-like)
-```
+Run these from `website/`.
 
-### Website (`website/`)
+- Lint: `bun run lint`
+- Build: `bun run build`
+- Audit: `bun audit`
+- Dev server: `bun run dev`
+- Production deploy: `vercel deploy --prod -y`
 
-```
-src/app/
-  page.tsx              → Landing page (shaders, marketing)
-  login/page.tsx        → Google OAuth (handles ?desktop=1 flow)
-  auth/callback/route.ts → OAuth code → session → redirect (localhost or orkestrate://)
-  api/
-    chat/route.ts       → POST /api/chat: JWT → Bedrock (via @ai-sdk/openai + mantle)
-    auth/me/route.ts    → GET /api/auth/me: JWT → user info
-    health/route.ts     → GET /api/health: { ok: true }
-  sitemap.ts            → SEO sitemap
-```
+Before production deploy, run:
 
-## Auth Flow (Desktop Deep Link)
+1. `bun run lint`
+2. `bun run build`
+3. `bun audit`
 
-1. Desktop opens browser to `https://orkestrate.space/login?desktop=1`
-2. User signs in with Google on website
-3. Website shows profile + "Open Orkestrate App" button
-4. Button triggers `window.location.href = "orkestrate://auth/callback?access_token=xxx&refresh_token=yyy"`
-5. Windows delivers URL to the Tauri app (may split at `&` — `process_cli_args` handles this)
-6. Rust `process_auth_url()` stores tokens to `session.json` in AppData
-7. Frontend polling (`getCurrent()` + `onOpenUrl()` + 500ms interval) detects auth → renders ChatLayout
+## Vercel Deployment
 
-## Inference Flow
+The website is linked to the Vercel project `orkestrate`.
 
-1. Desktop sends POST to `http://127.0.0.1:3001/api/chat`
-2. Axum handler attaches `Authorization: Bearer <jwt>` and forwards to `https://orkestrate.space/api/chat`
-3. Website validates JWT via Supabase, calls `streamText()` with Bedrock via mantle endpoint
-4. Website returns `toUIMessageStreamResponse()` (AI SDK v6 stream protocol)
-5. Desktop forwards raw bytes to frontend (no SSE re-wrapping)
-6. Frontend `useChat()` via `DefaultChatTransport` parses the stream
+Required production environment variables:
 
-## Env Vars
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `WAITLIST_FORM_SECRET`
 
-Website `.env`:
+Deployment hygiene:
 
-```
-NEXT_PUBLIC_SUPABASE_URL=https://zydapvkiwfnxppzeydct.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-AWS_BEARER_TOKEN_BEDROCK=ABSK...
-AWS_REGION=us-east-1
-BEDROCK_MODEL_ID=minimax.minimax-m2.5
-```
+- `.vercelignore` must exclude `.env`, `.env.*`, local caches, and local tooling.
+- Prefer Vercel environment variables over local env files.
+- Do not deploy with local secrets bundled into the upload.
+- If Vercel warns that a local `.env` file was detected, fix `.vercelignore` and
+  redeploy.
 
-Desktop `src-tauri/.env` — not needed for cloud mode. Leftover keys (OpenCode, Exa, OpenRouter) are unused.
+## Waitlist System
 
-## Key Gotchas
+The waitlist route is `website/src/app/api/waitlist/route.ts`.
 
-### Windows CLI arg splitting
-`orkestrate://auth/callback?access_token=xxx&refresh_token=yyy` — Windows splits at `&`. The `process_cli_args()` func joins all args with space and finds the URL before whitespace.
+Expected protections:
 
-### URL parsing for custom schemes
-`orkestrate://auth/callback` — `url::Url::parse()` parses `auth` as **hostname**, path is `/callback`. Check `parsed.host_str() == Some("auth") && parsed.path() == "/callback"` — NOT `/auth/callback`.
+- server-side email validation
+- email normalization to lowercase
+- max email length of 254
+- duplicate handling through Supabase `upsert`
+- HMAC-signed form token
+- token expiry
+- Origin/Referer validation
+- hidden honeypot field
+- small request body cap
+- per-instance rate limiting
+- friendly redirect-based UX for success and error states
 
-### CSP must allow IPC
-Tauri v2 IPC uses localhost. CSP must include `connect-src 'self' https://orkestrate.space http://127.0.0.1:* ipc: http://ipc.localhost`. Without `http://127.0.0.1:*`, `invoke()` calls hang silently.
+The Supabase client uses the service-role key only on the server. Never import
+server Supabase helpers into client components.
 
-### Vercel root directory
-Project is at GitHub root but Next.js app is in `website/`. Set Vercel project Settings → Root Directory → `website`. `vercel.json` at root has `{"rootDirectory":"website"}`.
+## Metadata And Assets
 
-### AI SDK v6 uses `@ai-sdk/openai` with `baseURL` set to Bedrock mantle
-```ts
-const bedrock = createOpenAI({
-  apiKey: process.env.AWS_BEARER_TOKEN_BEDROCK,
-  baseURL: `https://bedrock-mantle.${region}.api.aws/v1`,
-});
-// Use bedrock.chat(MODEL_ID) — .chat() forces Chat Completions API, not Responses
-```
+The share image should be static, not dynamically generated, unless there is a
+strong reason to change that.
 
-`@ai-sdk/amazon-bedrock` caused `Headers.set` TypeError due to multi-line SigV4 signatures leaking on Vercel. The `@ai-sdk/openai` + mantle approach avoids SigV4 entirely.
+Current public assets should stay small and intentional:
 
-### `toUIMessageStreamResponse()` for streaming
-AI SDK v6 uses `toUIMessageStreamResponse()`, not `toDataStreamResponse()`. `toTextStreamResponse()` exists in types but won't work with `DefaultChatTransport`.
+- `public/orky.svg`
+- `public/og-image.png`
+- `public/apple-icon.png`
+- `public/robots.txt`
 
-### Build requires signing keys
-```powershell
-set TAURI_SIGNING_PRIVATE_KEY=<key>
-set TAURI_SIGNING_PRIVATE_KEY_PASSWORD=orkestrate-key-2026
-bun run tauri build
-```
+Metadata lives in `website/src/app/layout.tsx`.
+Sitemap lives in `website/src/app/sitemap.ts`.
 
-## Deployment
+If the production domain changes, update:
 
-- **Website**: Auto-deploys to Vercel on push to `main`. Add `[vercel skip]` to HEAD commit message to skip.
-- **Desktop**: Build + upload to GitHub Releases. Auto-updater reads `latest.json` from release assets.
+- metadata canonical URL
+- Open Graph URL
+- sitemap URL
+- `robots.txt` sitemap URL
 
-## Style
+## Security Baseline
 
-- **Frontend**: Tailwind v4, Base UI, geist fonts, dark theme
-- **No monospaced fonts** anywhere in UI (per AGENTS.md rule)
-- **Rust**: `cargo check` before commit. Dead code warnings in memory/ are suppressed with `#![allow(dead_code)]`
+Maintain security headers in `next.config.ts`:
 
-## Useful URLs
+- `Referrer-Policy`
+- `X-Content-Type-Options`
+- `X-Frame-Options`
+- `Permissions-Policy`
+- `Strict-Transport-Security`
 
-- **Website**: https://orkestrate.space
-- **GitHub**: https://github.com/system1970/Orkestrate
-- **Releases**: https://github.com/system1970/Orkestrate/releases
-- **Vercel dashboard**: https://vercel.com/mirai-kites-projects/orkestrate
-- **Supabase**: https://supabase.com/dashboard/project/zydapvkiwfnxppzeydct
-- **AI SDK Bedrock docs**: https://ai-sdk.dev/providers/ai-sdk-providers/amazon-bedrock
+Run `bun audit` before deploy and address production dependency advisories.
+Dev-only advisories should still be handled when practical, especially when a
+small override or patch clears them safely.
+
+## Git Rules
+
+- Check `git status --porcelain` before editing and before final response.
+- Do not revert or overwrite unrelated user changes.
+- Keep commits focused and explain what changed.
+- Stage only files relevant to the task.
+- Do not commit `.env`, `.vercel/`, local caches, screenshots, or scratch files.
+- Do not use destructive git commands such as `git reset --hard` or
+  `git checkout --` unless the user explicitly requests them.
+- Prefer non-interactive git commands.
+- If asked to commit, run lint/build/audit first unless the user explicitly asks
+  to skip verification.
+
+## Current Standard
+
+The current site has had deliberate cleanup: old app surfaces were removed,
+dependencies were reduced, static share assets were generated, security headers
+were added, and the production deploy was verified through Vercel. Preserve that
+level of intent. Do not let the repo drift back into generic AI-app bloat.
