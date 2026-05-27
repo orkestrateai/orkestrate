@@ -1,131 +1,36 @@
 body {
   margin: 0;
   min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: #F5F0E8;
   font-family: var(--font-sans, sans-serif);
-  color: #242424;
-}
-
-.orky-shell {
-  min-height: 100vh;
-  display: grid;
-  grid-template-columns: minmax(280px, 0.92fr) minmax(360px, 520px) minmax(300px, 0.96fr);
-  align-items: center;
-  gap: 56px;
-  padding: 56px;
-  box-sizing: border-box;
+  color: #404040;
 }
 
 .orky-page {
-  width: 100%;
-  position: relative;
-  z-index: 2;
+  width: min(100% - 40px, 420px);
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
 }
 
-.orky-config {
-  position: absolute;
-  top: -68px;
-  right: 0;
-  text-align: left;
-}
-
-.orky-config summary {
-  list-style: none;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
-  border: 1px solid rgba(0,61,165,0.16);
-  border-radius: 9999px;
-  padding: 7px 12px;
-  background: rgba(255,253,247,0.50);
-  color: rgba(0,61,165,0.78);
-  cursor: pointer;
-}
-
-.orky-config summary::-webkit-details-marker {
-  display: none;
-}
-
-.orky-config summary span {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.orky-config summary strong {
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.orky-config-panel {
-  position: absolute;
-  top: 42px;
-  right: 0;
-  width: 360px;
-  padding: 18px;
-  border: 1px solid rgba(0,61,165,0.13);
-  border-radius: 10px;
-  background: rgba(255,253,247,0.96);
-  box-shadow: 0 22px 70px rgba(44, 37, 26, 0.12);
-}
-
-.orky-config-kicker {
-  margin: 0 0 12px;
-  color: rgba(36,36,36,0.48);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.orky-config-panel h2 {
-  margin: 0 0 18px;
-  color: #003DA5;
-  font-family: var(--font-serif, serif);
-  font-size: 28px;
-  font-weight: 400;
-  line-height: 1.12;
-}
-
-.orky-config-panel dl,
-.orky-config-panel dd {
-  margin: 0;
-}
-
-.orky-config-panel div + div {
-  margin-top: 13px;
-}
-
-.orky-config-panel dt {
-  color: #1b1b1b;
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.orky-config-panel dd {
-  margin-top: 4px;
-  color: rgba(36,36,36,0.66);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
 .orky-heading {
-  margin: 14px 0 0;
-  color: #003DA5;
   font-family: var(--font-serif, serif);
   font-size: 60px;
-  font-weight: 400;
   letter-spacing: 0;
+  color: #003DA5;
+  font-weight: 400;
+  margin: 14px 0 0;
   line-height: 1.1;
 }
 
 .orky-copy {
-  max-width: 320px;
-  margin: 32px 0 0;
   line-height: 1.7;
+  margin: 32px 0 0;
+  max-width: 320px;
 }
 
 .orky-form {
@@ -136,15 +41,15 @@ body {
 }
 
 .orky-input {
-  width: 180px;
   border: 1px solid rgba(0,61,165,0.15);
   border-radius: 9999px;
   background: transparent;
   padding: 10px 16px;
-  color: #171717;
-  font-family: inherit;
   font-size: 14px;
+  font-family: inherit;
+  color: #171717;
   outline: none;
+  width: 180px;
   transition: border-color 0.2s;
 }
 
@@ -159,15 +64,15 @@ body {
 }
 
 .orky-btn {
-  border: none;
   border-radius: 9999px;
   background: #003DA5;
   padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 500;
   color: white;
+  border: none;
   cursor: pointer;
   font-family: inherit;
-  font-size: 14px;
-  font-weight: 650;
   transition: background 0.2s;
 }
 
@@ -180,197 +85,6 @@ body {
   font-size: 14px;
 }
 
-.orky-steer {
-  width: min(100%, 460px);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 34px;
-}
-
-.orky-steer input {
-  flex: 1;
-  min-width: 0;
-  border: 1px solid rgba(0,61,165,0.11);
-  border-radius: 9999px;
-  background: rgba(255,253,247,0.44);
-  padding: 11px 16px;
-  color: #333;
-  font: inherit;
-  font-size: 13px;
-}
-
-.orky-steer button {
-  border: 1px solid rgba(0,61,165,0.14);
-  border-radius: 9999px;
-  background: rgba(255,253,247,0.25);
-  padding: 11px 16px;
-  color: #003DA5;
-  font: inherit;
-  font-size: 13px;
-}
-
-.orky-steer input:disabled,
-.orky-steer button:disabled {
-  cursor: not-allowed;
-}
-
-.orky-run {
-  width: min(100%, 440px);
-  justify-self: end;
-  display: grid;
-  gap: 18px;
-}
-
-.orky-turn {
-  position: relative;
-  padding-left: 24px;
-}
-
-.orky-turn::before {
-  content: "";
-  position: absolute;
-  left: 1px;
-  top: 5px;
-  width: 7px;
-  height: 7px;
-  border-radius: 9999px;
-  background: rgba(0,61,165,0.38);
-  box-shadow: 0 0 0 6px rgba(0,61,165,0.055);
-}
-
-.orky-turn + .orky-turn::after {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: -17px;
-  width: 1px;
-  height: 16px;
-  background: rgba(0,61,165,0.12);
-}
-
-.orky-turn-visitor::before {
-  background: rgba(36,36,36,0.34);
-  box-shadow: 0 0 0 6px rgba(36,36,36,0.05);
-}
-
-.orky-turn-meta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: rgba(36,36,36,0.42);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.orky-turn p {
-  margin: 8px 0 0;
-  max-width: 34em;
-  color: rgba(24,24,24,0.84);
-  font-size: 15px;
-  line-height: 1.55;
-}
-
-.orky-turn small {
-  display: inline-flex;
-  margin-top: 9px;
-  border-radius: 9999px;
-  background: rgba(0,61,165,0.06);
-  padding: 5px 8px;
-  color: rgba(0,61,165,0.78);
-  font-size: 12px;
-  line-height: 1;
-}
-
-.orky-turn-visitor small {
-  background: rgba(138,47,36,0.07);
-  color: rgba(138,47,36,0.82);
-}
-
-.orky-work {
-  width: min(100%, 430px);
-  justify-self: start;
-  display: grid;
-  gap: 14px;
-}
-
-.orky-artifact {
-  border: 1px solid rgba(36,36,36,0.10);
-  border-radius: 12px;
-  background: rgba(255,253,247,0.46);
-  padding: 17px;
-  box-shadow: 0 18px 60px rgba(44,37,26,0.035);
-}
-
-.orky-artifact-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 13px;
-}
-
-.orky-artifact-top span {
-  color: rgba(36,36,36,0.48);
-  font-size: 11px;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-}
-
-.orky-artifact-top small {
-  border-radius: 9999px;
-  background: rgba(0,61,165,0.07);
-  padding: 5px 8px;
-  color: rgba(0,61,165,0.72);
-  font-size: 11px;
-}
-
-.orky-artifact p {
-  margin: 0;
-  color: rgba(24,24,24,0.82);
-  font-size: 14px;
-  line-height: 1.55;
-}
-
-.orky-post p {
-  font-size: 17px;
-  line-height: 1.48;
-}
-
-.orky-post-bar {
-  display: flex;
-  gap: 18px;
-  margin-top: 17px;
-  color: rgba(36,36,36,0.42);
-  font-size: 12px;
-}
-
-.orky-mail {
-  background: rgba(245,240,232,0.62);
-}
-
-.orky-mail-subject {
-  margin-bottom: 10px !important;
-  color: #003DA5 !important;
-  font-weight: 650;
-}
-
-.orky-bars {
-  height: 82px;
-  display: flex;
-  align-items: end;
-  gap: 9px;
-  margin: 8px 0 14px;
-  padding: 0 4px;
-}
-
-.orky-bars i {
-  flex: 1;
-  border-radius: 9999px 9999px 0 0;
-  background: linear-gradient(180deg, rgba(0,61,165,0.72), rgba(0,61,165,0.16));
-}
-
 .orky-honeypot {
   position: absolute;
   left: -10000px;
@@ -379,59 +93,19 @@ body {
   overflow: hidden;
 }
 
-@media (max-width: 1180px) {
-  .orky-shell {
-    grid-template-columns: minmax(340px, 560px);
-    justify-content: center;
-    align-items: start;
-    gap: 34px;
-    padding: 64px 24px 32px;
-  }
-
-  .orky-page {
-    order: 1;
-  }
-
-  .orky-run {
-    order: 2;
-    width: min(100%, 560px);
-    justify-self: center;
-  }
-
-  .orky-work {
-    order: 3;
-    width: min(100%, 560px);
-    justify-self: center;
-  }
-}
-
-@media (max-width: 640px) {
-  .orky-shell {
-    grid-template-columns: minmax(0, 1fr);
-    padding: 74px 20px 28px;
-  }
-
-  .orky-config {
-    top: -54px;
-    right: 0;
-  }
-
-  .orky-config-panel {
-    width: min(82vw, 360px);
-  }
-}
-
 @media (max-width: 480px) {
-  .orky-form,
-  .orky-steer {
+  body {
+    align-items: flex-start;
+    padding-top: 22vh;
+  }
+
+  .orky-form {
     width: 100%;
     flex-direction: column;
   }
 
   .orky-input,
-  .orky-btn,
-  .orky-steer input,
-  .orky-steer button {
+  .orky-btn {
     width: 100%;
     box-sizing: border-box;
   }
