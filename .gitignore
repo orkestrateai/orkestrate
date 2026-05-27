@@ -1,5 +1,41 @@
+# dependencies
 node_modules/
-.git
-desktop/byterover-cli/
-aisdk-source/
-docs/
+website/node_modules/
+
+# builds
+.next/
+website/.next/
+out/
+build/
+
+# env and secrets
+.env
+.env.*
+!.env.example
+website/.env
+website/.env.*
+!website/.env.example
+
+# Vercel/local tooling
+.vercel/
+website/.vercel/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+.vscode/
+.idea/
+
+# logs/cache/scratch
+*.log
+tmp/
+scratch/
+.playwright-mcp/
+
+# archived local agent/tool state
+.agents/
+.claude/
+.kilocode/
+.qwen/
+.zed/
