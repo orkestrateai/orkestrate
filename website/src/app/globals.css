@@ -1,20 +1,182 @@
 body {
   margin: 0;
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   background: #F5F0E8;
   font-family: var(--font-sans, sans-serif);
   color: #404040;
 }
 
+.orky-shell {
+  min-height: 100vh;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(320px, 480px) minmax(220px, 1fr);
+  align-items: center;
+  gap: 48px;
+  padding: 56px;
+  box-sizing: border-box;
+}
+
 .orky-page {
-  width: min(100% - 40px, 420px);
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
+  position: relative;
+  z-index: 2;
+}
+
+.orky-config {
+  position: absolute;
+  top: -56px;
+  right: 0;
+  text-align: left;
+}
+
+.orky-config summary {
+  list-style: none;
+  border: 1px solid rgba(0,61,165,0.16);
+  border-radius: 9999px;
+  padding: 8px 14px;
+  color: #003DA5;
+  font-size: 13px;
+  cursor: pointer;
+  background: rgba(245,240,232,0.72);
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.orky-config summary::-webkit-details-marker {
+  display: none;
+}
+
+.orky-config summary:hover,
+.orky-config[open] summary {
+  border-color: rgba(0,61,165,0.34);
+  background: rgba(255,253,247,0.82);
+}
+
+.orky-config-panel {
+  position: absolute;
+  right: 0;
+  top: 42px;
+  width: 340px;
+  padding: 18px;
+  border: 1px solid rgba(0,61,165,0.14);
+  border-radius: 8px;
+  background: rgba(255,253,247,0.96);
+  box-shadow: 0 18px 60px rgba(38, 33, 24, 0.10);
+}
+
+.orky-config-kicker,
+.orky-stream-label {
+  margin: 0 0 14px;
+  color: rgba(64,64,64,0.48);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.orky-config-panel h2 {
+  margin: 0 0 18px;
+  color: #003DA5;
+  font-family: var(--font-serif, serif);
+  font-size: 27px;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.orky-config-panel dl,
+.orky-config-panel dd {
+  margin: 0;
+}
+
+.orky-config-panel div + div {
+  margin-top: 14px;
+}
+
+.orky-config-panel dt {
+  color: #111;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.orky-config-panel dd {
+  margin-top: 4px;
+  color: rgba(35,35,35,0.72);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.orky-stream {
+  width: min(100%, 340px);
+  opacity: 0.86;
+}
+
+.orky-stream-left {
+  justify-self: end;
+}
+
+.orky-stream-right {
+  justify-self: start;
+}
+
+.orky-stream-list {
+  display: grid;
+  gap: 12px;
+}
+
+.orky-log,
+.orky-check {
+  border: 1px solid rgba(64,64,64,0.09);
+  border-radius: 8px;
+  background: rgba(255,253,247,0.42);
+  padding: 13px 14px;
+}
+
+.orky-log {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 12px;
+}
+
+.orky-log time {
+  color: rgba(0,61,165,0.70);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.orky-log h2,
+.orky-check h2 {
+  margin: 0;
+  color: #202020;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.orky-log p,
+.orky-check p {
+  margin: 5px 0 0;
+  color: rgba(32,32,32,0.62);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.orky-check span {
+  display: inline-flex;
+  margin-bottom: 8px;
+  color: rgba(0,61,165,0.74);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.orky-check-blocked span {
+  color: #8A2F24;
+}
+
+.orky-check-approval span {
+  color: #7A5A00;
 }
 
 .orky-heading {
@@ -85,6 +247,42 @@ body {
   font-size: 14px;
 }
 
+.orky-steer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(100%, 420px);
+  margin-top: 34px;
+  opacity: 0.76;
+}
+
+.orky-steer input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(64,64,64,0.12);
+  border-radius: 9999px;
+  background: rgba(255,253,247,0.34);
+  padding: 10px 15px;
+  color: #333;
+  font: inherit;
+  font-size: 13px;
+}
+
+.orky-steer button {
+  border: 1px solid rgba(0,61,165,0.14);
+  border-radius: 9999px;
+  background: transparent;
+  padding: 10px 16px;
+  color: #003DA5;
+  font: inherit;
+  font-size: 13px;
+}
+
+.orky-steer input:disabled,
+.orky-steer button:disabled {
+  cursor: not-allowed;
+}
+
 .orky-honeypot {
   position: absolute;
   left: -10000px;
@@ -93,12 +291,58 @@ body {
   overflow: hidden;
 }
 
-@media (max-width: 480px) {
-  body {
-    align-items: flex-start;
-    padding-top: 22vh;
+@media (max-width: 1120px) {
+  .orky-shell {
+    grid-template-columns: minmax(320px, 480px);
+    justify-content: center;
+    gap: 28px;
+    padding: 48px 24px;
   }
 
+  .orky-page {
+    order: 1;
+  }
+
+  .orky-stream {
+    width: min(100%, 480px);
+    justify-self: center;
+  }
+
+  .orky-stream-left {
+    order: 2;
+  }
+
+  .orky-stream-right {
+    order: 3;
+  }
+
+  .orky-stream-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .orky-shell {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    padding: 72px 20px 28px;
+  }
+
+  .orky-config {
+    top: -52px;
+    right: 0;
+  }
+
+  .orky-config-panel {
+    width: min(82vw, 340px);
+  }
+
+  .orky-stream-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
   .orky-form {
     width: 100%;
     flex-direction: column;
@@ -106,6 +350,16 @@ body {
 
   .orky-input,
   .orky-btn {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .orky-steer {
+    flex-direction: column;
+  }
+
+  .orky-steer input,
+  .orky-steer button {
     width: 100%;
     box-sizing: border-box;
   }
