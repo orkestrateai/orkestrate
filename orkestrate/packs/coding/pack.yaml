@@ -1,0 +1,5 @@
+id: coding
+name: coding
+description: General-purpose coding agent for day-to-day software work.
+version: "0.1.0"
+harness: opencode

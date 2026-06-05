@@ -1,41 +1,63 @@
-# dependencies
+# Dependencies
 node_modules/
-website/node_modules/
+**/node_modules/
 
-# builds
+# Builds
 .next/
-website/.next/
+**/.next/
 out/
 build/
+dist/
 
-# env and secrets
+# Environment & secrets (never commit)
 .env
 .env.*
 !.env.example
-website/.env
-website/.env.*
-!website/.env.example
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+root_keys.txt
+**/root_keys.txt
 
-# Vercel/local tooling
+# Vercel / Supabase local
 .vercel/
-website/.vercel/
+**/.vercel/
+website/supabase/.temp/
 
-# OS/editor noise
+# Orkestrate runtime state
+.orkestrate/
+**/.orkestrate/
+
+# Logs & scratch
+*.log
+tmp/
+scratch/
+stdout.txt
+stderr.txt
+terminals/
+plan.md
+
+# Tooling / editor
 .DS_Store
 Thumbs.db
 Desktop.ini
 .vscode/
 .idea/
-
-# logs/cache/scratch
-*.log
-tmp/
-scratch/
 .playwright-mcp/
+mcps/
 
-# archived local agent/tool state
+# Local agent harness sandboxes
+.commandcode/
+.opencode/
 .agents/
 .claude/
 .kilocode/
 .qwen/
 .zed/
+Microsoft/
+skills-lock.json
+
+# Package temp
+orkestrate/tmp/

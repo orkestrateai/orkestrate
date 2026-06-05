@@ -1,0 +1,17 @@
+{
+  "id": "orkestrate.adapter.opencode",
+  "name": "OpenCode Adapter",
+  "version": "0.1.0",
+  "description": "Built-in adapter contribution that launches Orkestrate profiles through OpenCode.",
+  "contributes": {
+    "adapters": [
+      {
+        "id": "opencode",
+        "entry": "index.ts"
+      }
+    ],
+    "profiles": [],
+    "skills": [],
+    "mcpServers": []
+  }
+}

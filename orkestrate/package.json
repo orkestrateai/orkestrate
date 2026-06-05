@@ -1,0 +1,58 @@
+{
+  "name": "orkestrate",
+  "version": "0.2.0",
+  "description": "Browse, use, and share specialized harnesses for agent packs.",
+  "homepage": "https://orkestrate.space",
+  "bugs": {
+    "url": "https://github.com/system1970/Orkestrate/issues"
+  },
+  "license": "MIT",
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/system1970/Orkestrate.git",
+    "directory": "orkestrate"
+  },
+  "type": "module",
+  "bin": {
+    "orkestrate": "./bin/orkestrate.ts"
+  },
+  "files": [
+    "bin",
+    "src",
+    "packs",
+    "extensions",
+    "docs",
+    "README.md",
+    "LICENSE",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "AGENTS.md"
+  ],
+  "engines": {
+    "bun": ">=1.3.0"
+  },
+  "keywords": [
+    "agents",
+    "ai-agents",
+    "agent-packs",
+    "harness",
+    "opencode",
+    "tui",
+    "registry"
+  ],
+  "scripts": {
+    "dev": "bun run src/cli/index.ts",
+    "prepublishOnly": "bun run check",
+    "typecheck": "tsc --noEmit",
+    "check": "bun run typecheck",
+    "demo:pack-builder": "bun run scripts/demo-pack-builder.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.1",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@opentui/core": "^0.3.0"
+  }
+}

@@ -1,0 +1,6 @@
+scripts/
+.orkestrate/
+node_modules/
+*.log
+.env
+.env.*

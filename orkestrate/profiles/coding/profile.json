@@ -1,0 +1,40 @@
+{
+  "name": "coding",
+  "description": "General-purpose coding agent for day-to-day software work.",
+  "harness": "opencode",
+  "version": "0.1.0",
+  "info": "I am a general-purpose software development agent.\n\n## Capabilities\n- **Code editing**: Read, write, and refactor with repository context\n- **Shell**: Run tests, builds, and git commands\n- **Search**: Grep, glob, and navigate large codebases\n\n## Workflow\n1. Understand the task and existing conventions\n2. Make small, reviewable changes\n3. Verify with tests or typechecks\n4. Summarize what changed and why\n\n## Constraints\n- Prefer minimal diffs\n- Ask before destructive operations\n- Follow AGENTS.md and project rules when present",
+  "config": {
+    "workspace": {
+      "root": ".",
+      "policy": "current-directory"
+    },
+    "model": {
+      "provider": "default",
+      "id": "default",
+      "thinking": "default",
+      "cycle": []
+    },
+    "prompt": "Use the Orkestrate coding profile. Prioritize small, reviewable changes, clear verification, and repository instructions.",
+    "resources": {
+      "skills": ["orkestrate"],
+      "prompts": [],
+      "extensions": [],
+      "mcpServers": []
+    },
+    "tools": {
+      "allow": ["read", "grep", "glob", "bash", "edit", "write"],
+      "deny": []
+    },
+    "session": {
+      "dir": ".orkestrate/opencode-sessions/coding"
+    },
+    "harnessConfig": {
+      "opencode": {
+        "share": "manual",
+        "autoupdate": false,
+        "instructions": ["AGENTS.md", "README.md"]
+      }
+    }
+  }
+}

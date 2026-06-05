@@ -1,0 +1,5 @@
+id: extension-builder
+name: extension-builder
+description: Build Orkestrate packs, drivers, and platform extensions.
+version: "0.1.0"
+harness: opencode

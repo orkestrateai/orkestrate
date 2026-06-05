@@ -1,0 +1,9 @@
+node_modules/
+.orkestrate/
+.env
+.env.*
+*.log
+dist/
+tmp/
+root_keys.txt
+Microsoft/

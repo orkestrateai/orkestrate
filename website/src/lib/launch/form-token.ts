@@ -3,10 +3,10 @@ import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 const TOKEN_MAX_AGE = 300_000;
 
 function getFormSecret() {
-  const secret = process.env.WAITLIST_FORM_SECRET ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const secret = process.env.WAITLIST_FORM_SECRET;
 
   if (!secret) {
-    throw new Error("WAITLIST_FORM_SECRET or SUPABASE_SERVICE_ROLE_KEY is required.");
+    throw new Error("WAITLIST_FORM_SECRET is required.");
   }
 
   return secret;

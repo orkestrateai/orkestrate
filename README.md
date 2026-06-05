@@ -1,81 +1,73 @@
-# Orky
+# Orkestrate
 
-Orky keeps agents honest.
+Browse, use, and share **specialized harnesses** for **agent packs** — task-tuned execution for specialized agents.
 
-The production website is intentionally minimal: logo, two-line positioning,
-and a waitlist form. The current focus is proving the product direction with a
-small, secure, fast surface before adding more agent functionality.
+- **CLI + workbench:** [`orkestrate/`](orkestrate/) (Bun, OpenTUI)
+- **Website + registry:** [`website/`](website/) → [orkestrate.space](https://orkestrate.space)
+- **Product notes:** [`orkestrate-design.md`](orkestrate-design.md)
 
-Production:
+## Install
 
-- https://orkestrate.space
+**macOS / Linux**
 
-## Active Code
-
-- `website/` - Next.js App Router website deployed to Vercel.
-
-Everything outside the active website has been archived outside this repo at:
-
-- `C:\Users\pracu\OneDrive\Desktop\2026\Orkestrate Archive\20260528-011334`
-
-## Website
-
-The website contains:
-
-- `/` - minimal Orky waitlist page
-- `/api/waitlist` - server-side waitlist submission route
-- `/sitemap.xml` - sitemap
-- static public assets for logo, Open Graph, Apple icon, and robots.txt
-
-The waitlist route uses:
-
-- server-side email validation
-- lowercase normalization
-- duplicate-safe Supabase upsert
-- HMAC form token
-- Origin/Referer validation
-- honeypot field
-- body-size cap
-- per-instance rate limiting
-- redirect-based success and error UX
-
-## Commands
-
-Run from `website/`.
-
-```bash
-bun install
-bun run lint
-bun run build
-bun audit
+```sh
+curl -fsSL https://orkestrate.space/cli/install.sh | bash
 ```
 
-Development:
+**Windows (PowerShell)**
 
-```bash
+```powershell
+irm https://orkestrate.space/cli/install.ps1 | iex
+```
+
+Requires [Bun](https://bun.sh) 1.3+. Then:
+
+```sh
+orkestrate doctor
+orkestrate registry install coding
+orkestrate
+```
+
+Manual install: `npm install -g orkestrate` or `bun install -g orkestrate`.
+
+## Development
+
+```sh
+cd orkestrate
+bun install
+bun run check
 bun run dev
 ```
 
-Production deploy:
+Website:
 
-```bash
-vercel deploy --prod -y
+```sh
+cd website
+bun install
+bun run dev
 ```
 
-## Environment
+Copy `website/.env.example` → `website/.env.local` and add Supabase keys for registry/submit locally. **Never commit env files.**
 
-Required Vercel environment variables:
+## Repository layout
 
-```txt
-NEXT_PUBLIC_SUPABASE_URL
-SUPABASE_SERVICE_ROLE_KEY
-WAITLIST_FORM_SECRET
-```
+| Path | Description |
+|------|-------------|
+| `orkestrate/` | Shippable npm package (`orkestrate` on npm) |
+| `orkestrate/packs/` | Bundled agent packs (`coding`, `extension-builder`) |
+| `orkestrate/extensions/` | Harness drivers (OpenCode adapter) |
+| `website/` | Next.js marketing site, docs, registry API |
+| `website/supabase/migrations/` | Postgres schema for registry |
 
-Do not commit `.env` files. Do not upload local `.env` files to Vercel.
+## Docs
 
-## Git
+- [orkestrate.space/docs](https://orkestrate.space/docs)
+- [llms.txt](https://orkestrate.space/llms.txt) · [agents.md](https://orkestrate.space/agents.md)
 
-Keep this repo focused on the active website. Do not reintroduce archived
-desktop experiments, scratch files, screenshots, or old product plans unless
-there is a specific reason.
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Security: [SECURITY.md](SECURITY.md).
+
+## License
+
+MIT — see [LICENSE](LICENSE).

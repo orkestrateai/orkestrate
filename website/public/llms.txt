@@ -1,0 +1,74 @@
+# Orkestrate
+
+> Browse, use, and share specialized harnesses. Task-tuned execution for agent packs — built by you or by the agent. v0: OpenCode harness slices.
+
+CLI + registry for **agent packs** and **task harness slices**. Launches OpenCode in a new terminal with an isolated pack home; does not modify the user's normal OpenCode install.
+
+## Install
+
+```bash
+# Recommended — installs Bun if missing, then orkestrate
+curl -fsSL https://orkestrate.space/cli/install.sh | bash
+# Windows: irm https://orkestrate.space/cli/install.ps1 | iex
+
+# Manual (Bun already on PATH)
+npm install -g orkestrate
+
+orkestrate doctor
+orkestrate registry install coding
+orkestrate    # OpenTUI workbench — not embedded agent chat
+```
+
+## Workbench (orkestrate with no args)
+
+OpenTUI: installed pack list + browse catalog. Launch opens **new terminal** with OpenCode; workbench stays open. Welcome flow installs `coding` if no packs. Keys: installed — ↑↓ Enter/l launch, s stop, b browse; browse — Enter install, i/Esc back. Full: https://orkestrate.space/docs/workbench
+
+## Concepts
+
+- **Pack**: `pack.yaml` + `harnesses/opencode/` — agent identity and expertise.
+- **Harness slice**: task-specific runtime under the pack (tools, prompts, skills).
+- **Pack home**: `.orkestrate/pack-homes/<packId>/home/` — sessions persist per pack per repo.
+- **Registry**: `orkestrate registry install <slug>` from orkestrate.space.
+
+## CLI (only these exist)
+
+```text
+orkestrate
+orkestrate doctor
+orkestrate pack list | install <slug> | create <id> --from coding | validate <id>
+orkestrate run launch <id> | list | status | stop
+orkestrate registry list | search <q> | install <slug>
+orkestrate extension validate <path>
+```
+
+## Full instructions for coding agents
+
+https://orkestrate.space/agents.md
+
+## Docs
+
+- https://orkestrate.space/docs
+- https://orkestrate.space/docs/getting-started/quickstart
+- https://orkestrate.space/docs/workbench
+- https://orkestrate.space/docs/concepts
+- https://orkestrate.space/docs/harnesses/introduction
+- https://orkestrate.space/docs/agents/packs
+- https://orkestrate.space/docs/agents/launch
+- https://orkestrate.space/docs/registry
+- https://orkestrate.space/docs/reference/cli
+- https://orkestrate.space/docs/help/troubleshooting
+- https://orkestrate.space/registry
+- https://orkestrate.space/submit
+
+## Environment
+
+- `ORKESTRATE_REGISTRY_URL` — registry API (default `https://orkestrate.space/api/registry`)
+- `ORKESTRATE_BUNDLED_REPO_URL` — bundled catalog source repo
+
+## Do not assume (v0)
+
+- Pi, Claude Code, or Codex harnesses
+- CLI `pack submit` (use https://orkestrate.space/submit)
+- Embedded agent chat inside the Orkestrate TUI
+- Agent auto-generating harness slices at runtime
+- Legacy **profile** terminology in user-facing copy — use **pack**

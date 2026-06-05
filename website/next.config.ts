@@ -1,13 +1,29 @@
 import type { NextConfig } from "next";
-import path from "path";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   turbopack: {
-    root: path.resolve("."),
+    root: __dirname,
+  },
+  async redirects() {
+    return [
+      { source: "/docs/extensions/introduction", destination: "/docs/harnesses/introduction", permanent: false },
+      { source: "/docs/extensions/architecture", destination: "/docs/concepts", permanent: false },
+      { source: "/docs/extensions/adapters", destination: "/docs/harnesses/authoring", permanent: false },
+      { source: "/docs/extensions/registry", destination: "/docs/registry", permanent: false },
+      { source: "/docs/publisher", destination: "/submit", permanent: false },
+    ];
   },
   async headers() {
     return [
+      {
+        source: "/api/registry",
+        headers: [
+          { key: "Access-Control-Allow-Origin", value: "*" },
+          { key: "Access-Control-Allow-Methods", value: "GET, OPTIONS" },
+          { key: "Access-Control-Allow-Headers", value: "Accept, Content-Type" },
+        ],
+      },
       {
         source: "/:path*",
         headers: [

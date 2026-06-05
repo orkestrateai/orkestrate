@@ -1,112 +1,159 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --logo-layer: #0d0d0d;
+  --logo-accent: #5b5cff;
+  --background: #ffffff;
+  --foreground: #0d0d0d;
+  --muted: #6e6e80;
+  --muted-foreground: #6e6e80;
+  --border: #e5e5e5;
+  --card: #f7f7f8;
+  --card-hover: #ececf1;
+  --accent: #5b5cff;
+  --accent-foreground: #ffffff;
+  --sidebar: #fafafa;
+  --code-bg: #f4f4f4;
+  --install-bg: #f0f0f2;
+  --header-bg: rgba(255, 255, 255, 0.85);
+  --ring: rgba(13, 13, 13, 0.08);
+}
+
+.dark {
+  --logo-layer: #f4f2ed;
+  --logo-accent: #7b7dff;
+  --background: #0d0d0d;
+  --foreground: #ececec;
+  --muted: #8e8ea0;
+  --muted-foreground: #8e8ea0;
+  --border: #2a2a2a;
+  --card: #171717;
+  --card-hover: #1f1f1f;
+  --accent: #7b7dff;
+  --accent-foreground: #0d0d0d;
+  --sidebar: #0d0d0d;
+  --code-bg: #141414;
+  --install-bg: #111113;
+  --header-bg: rgba(13, 13, 13, 0.85);
+  --ring: rgba(255, 255, 255, 0.06);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
+  color: var(--foreground);
+  scroll-behavior: smooth;
+}
+
 body {
-  margin: 0;
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #F5F0E8;
-  font-family: var(--font-sans, sans-serif);
-  color: #404040;
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-.orky-page {
-  width: min(100% - 40px, 420px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
+::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
-.orky-heading {
-  font-family: var(--font-serif, serif);
-  font-size: 60px;
-  letter-spacing: 0;
-  color: #003DA5;
-  font-weight: 400;
-  margin: 14px 0 0;
-  line-height: 1.1;
+/* Brand mark (inline SVG) */
+.logo-mark {
+  display: block;
+  flex-shrink: 0;
+}
+.logo-mark .logo-mark__layer {
+  fill: none;
+  stroke: var(--logo-layer);
+  stroke-width: 5.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.logo-mark .logo-mark__accent {
+  fill: none;
+  stroke: var(--logo-accent);
+  stroke-width: 5.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.orky-copy {
+@layer base {
+  a {
+    color: inherit;
+  }
+}
+
+@layer utilities {
+  .text-muted {
+    color: var(--muted);
+  }
+  .bg-surface {
+    background: var(--background);
+  }
+  .bg-card {
+    background: var(--card);
+  }
+  .border-default {
+    border-color: var(--border);
+  }
+}
+
+/* Docs prose */
+.doc-prose h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-top: 2.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.doc-prose h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-top: 1.75rem;
+  margin-bottom: 0.5rem;
+}
+.doc-prose p {
+  margin: 0.75rem 0;
   line-height: 1.7;
-  margin: 32px 0 0;
-  max-width: 320px;
+  color: var(--muted-foreground);
 }
-
-.orky-form {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 40px;
+.doc-prose p strong,
+.doc-prose li strong {
+  color: var(--foreground);
+  font-weight: 600;
 }
-
-.orky-input {
-  border: 1px solid rgba(0,61,165,0.15);
-  border-radius: 9999px;
-  background: transparent;
-  padding: 10px 16px;
-  font-size: 14px;
-  font-family: inherit;
-  color: #171717;
-  outline: none;
-  width: 180px;
-  transition: border-color 0.2s;
+.doc-prose ul,
+.doc-prose ol {
+  margin: 0.75rem 0;
+  padding-left: 1.25rem;
+  color: var(--muted-foreground);
+  line-height: 1.65;
 }
-
-.orky-input:focus {
-  border-color: rgba(0,61,165,0.5);
+.doc-prose li {
+  margin: 0.35rem 0;
 }
-
-.orky-input:focus-visible,
-.orky-btn:focus-visible {
-  outline: 2px solid rgba(0,61,165,0.55);
-  outline-offset: 3px;
+.doc-prose code:not(pre code) {
+  font-size: 0.875em;
+  background: var(--code-bg);
+  padding: 0.15em 0.4em;
+  border-radius: 0.25rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  color: var(--foreground);
 }
-
-.orky-btn {
-  border-radius: 9999px;
-  background: #003DA5;
-  padding: 10px 24px;
-  font-size: 14px;
-  font-weight: 500;
-  color: white;
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background 0.2s;
+.doc-prose a {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: color-mix(in srgb, var(--muted) 55%, transparent);
 }
-
-.orky-btn:hover {
-  background: #002d7a;
-}
-
-.orky-link {
-  color: #003DA5;
-  font-size: 14px;
-}
-
-.orky-honeypot {
-  position: absolute;
-  left: -10000px;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-}
-
-@media (max-width: 480px) {
-  body {
-    align-items: flex-start;
-    padding-top: 22vh;
-  }
-
-  .orky-form {
-    width: 100%;
-    flex-direction: column;
-  }
-
-  .orky-input,
-  .orky-btn {
-    width: 100%;
-    box-sizing: border-box;
-  }
+.doc-prose a:hover {
+  text-decoration-color: var(--foreground);
 }

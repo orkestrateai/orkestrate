@@ -5,17 +5,20 @@ type SupabaseAdminClient = ReturnType<typeof createClient<Database>>;
 
 let adminClient: SupabaseAdminClient | null = null;
 
-export function createSupabaseAdminClient() {
-  if (adminClient) return adminClient;
-
+function adminCredentials() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceRoleKey) return null;
+  return { url, serviceRoleKey };
+}
 
-  if (!url || !serviceRoleKey) {
-    throw new Error("Supabase admin credentials are missing.");
-  }
+export function tryCreateSupabaseAdminClient() {
+  if (adminClient) return adminClient;
 
-  adminClient = createClient<Database>(url, serviceRoleKey, {
+  const creds = adminCredentials();
+  if (!creds) return null;
+
+  adminClient = createClient<Database>(creds.url, creds.serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
@@ -23,4 +26,12 @@ export function createSupabaseAdminClient() {
   });
 
   return adminClient;
+}
+
+export function createSupabaseAdminClient() {
+  const client = tryCreateSupabaseAdminClient();
+  if (!client) {
+    throw new Error("Supabase admin credentials are missing.");
+  }
+  return client;
 }
