@@ -64,6 +64,10 @@ Copy `website/.env.example` → `website/.env.local` and add Supabase keys for r
 - [orkestrate.space/docs](https://orkestrate.space/docs)
 - [llms.txt](https://orkestrate.space/llms.txt) · [agents.md](https://orkestrate.space/agents.md)
 
+## Source
+
+[github.com/orkestrateai/orkestrate](https://github.com/orkestrateai/orkestrate)
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Security: [SECURITY.md](SECURITY.md).

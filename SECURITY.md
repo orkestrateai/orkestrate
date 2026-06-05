@@ -13,7 +13,7 @@ definitions, paths, and extension code into those harnesses.
 
 ## Reporting
 
-Open a [GitHub security advisory](https://github.com/system1970/Orkestrate/security/advisories/new) with:
+Open a [GitHub security advisory](https://github.com/orkestrateai/orkestrate/security/advisories/new) with:
 
 - affected version or commit
 - reproduction steps

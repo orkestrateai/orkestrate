@@ -4,13 +4,13 @@
   "description": "Browse, use, and share specialized harnesses for agent packs.",
   "homepage": "https://orkestrate.space",
   "bugs": {
-    "url": "https://github.com/system1970/Orkestrate/issues"
+    "url": "https://github.com/orkestrateai/orkestrate/issues"
   },
   "license": "MIT",
   "private": false,
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/system1970/Orkestrate.git",
+    "url": "git+https://github.com/orkestrateai/orkestrate.git",
     "directory": "orkestrate"
   },
   "type": "module",

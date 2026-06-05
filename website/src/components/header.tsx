@@ -48,7 +48,7 @@ export default function Header() {
             );
           })}
           <a
-            href="https://github.com/system1970/Orkestrate"
+            href="https://github.com/orkestrateai/orkestrate"
             target="_blank"
             rel="noopener noreferrer"
             className="text-[14px] font-medium text-muted transition-colors hover:text-[var(--foreground)]"

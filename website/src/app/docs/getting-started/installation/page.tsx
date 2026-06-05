@@ -68,7 +68,7 @@ orkestrate doctor`}
         <h2 id="from-source">From source (contributors)</h2>
         <CodeBlock
           lang="bash"
-          code={`git clone https://github.com/system1970/Orkestrate.git
+          code={`git clone https://github.com/orkestrateai/orkestrate.git
 cd Orkestrate/orkestrate
 bun install
 bun run dev`}

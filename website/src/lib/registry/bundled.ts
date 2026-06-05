@@ -4,7 +4,7 @@ import type { RegistryApiItem, RegistryItemDetail } from "./types";
 export const BUNDLED_REPO_URL =
   process.env.ORKESTRATE_BUNDLED_REPO_URL?.trim() ||
   process.env.NEXT_PUBLIC_ORKESTRATE_REPO_URL?.trim() ||
-  "https://github.com/system1970/Orkestrate";
+  "https://github.com/orkestrateai/orkestrate";
 
 const BUNDLED_REF = process.env.ORKESTRATE_BUNDLED_REPO_REF?.trim() || "main";
 

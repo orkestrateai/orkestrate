@@ -46,7 +46,7 @@ export default function ResourcesPage() {
               <Link href="/registry">Registry</Link>
             </li>
             <li>
-              <a href="https://github.com/system1970/Orkestrate" target="_blank" rel="noopener noreferrer">
+              <a href="https://github.com/orkestrateai/orkestrate" target="_blank" rel="noopener noreferrer">
                 GitHub
               </a>
             </li>
