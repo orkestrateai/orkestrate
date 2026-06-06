@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import AuthMenu from "@/components/auth-menu";
 import Mark from "@/components/mark";
 import ThemeToggle from "@/components/theme-toggle";
 
@@ -59,6 +60,7 @@ export default function Header() {
 
         <div className="flex items-center gap-2">
           <ThemeToggle />
+          <AuthMenu />
           <Link
             href="/docs/getting-started/quickstart"
             className="hidden sm:inline-flex h-8 items-center rounded-full bg-[var(--foreground)] px-4 text-[13px] font-medium text-[var(--background)] transition-opacity hover:opacity-90"

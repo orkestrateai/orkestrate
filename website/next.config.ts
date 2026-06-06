@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
       { source: "/docs/extensions/architecture", destination: "/docs/concepts", permanent: false },
       { source: "/docs/extensions/adapters", destination: "/docs/harnesses/authoring", permanent: false },
       { source: "/docs/extensions/registry", destination: "/docs/registry", permanent: false },
-      { source: "/docs/publisher", destination: "/submit", permanent: false },
+      { source: "/docs/publisher/submit", destination: "/submit", permanent: false },
     ];
   },
   async headers() {

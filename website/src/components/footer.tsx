@@ -16,6 +16,7 @@ const COLUMNS = [
       { label: "Overview", href: "/docs" },
       { label: "Quickstart", href: "/docs/getting-started/quickstart" },
       { label: "CLI reference", href: "/docs/reference/cli" },
+      { label: "Contribute", href: "/docs#contribute" },
     ],
   },
   {

@@ -140,6 +140,28 @@ body {
 .doc-prose li {
   margin: 0.35rem 0;
 }
+.doc-prose table {
+  width: 100%;
+  margin: 1rem 0;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.doc-prose th,
+.doc-prose td {
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+.doc-prose th {
+  color: var(--foreground);
+  font-weight: 600;
+  background: var(--card);
+}
+.doc-prose td {
+  color: var(--muted-foreground);
+}
 .doc-prose code:not(pre code) {
   font-size: 0.875em;
   background: var(--code-bg);

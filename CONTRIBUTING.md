@@ -26,6 +26,27 @@ bun run check
 bun run dev
 ```
 
+## Documentation
+
+**Canonical site docs** (orkestrate.space) live in [`website/src/app/docs/`](website/src/app/docs/) — one `page.tsx` per route. They are a work in progress; clearer tutorials, examples, and CLI parity checks are needed. Contributions are welcome.
+
+| What | Path |
+|------|------|
+| Website docs (public) | [`website/src/app/docs/`](website/src/app/docs/) |
+| CLI / pack authoring notes | [`orkestrate/docs/`](orkestrate/docs/) |
+
+When the two disagree, update the **website** page and mention CLI doc drift in the PR if needed.
+
+**Quick edit:** open any doc on the site and use **Edit this page** (links to GitHub). Locally:
+
+```sh
+cd website
+bun install
+bun run build
+```
+
+Label docs issues `documentation` on [GitHub](https://github.com/orkestrateai/orkestrate/issues).
+
 ## Pull requests
 
 - Focused PRs with a clear description

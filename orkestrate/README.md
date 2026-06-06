@@ -68,6 +68,6 @@ bun run dev
 bun run check
 ```
 
-Docs: [pack-authoring](docs/pack-authoring.md), [getting-started](docs/getting-started.md).
+Docs: [orkestrate.space/docs](https://orkestrate.space/docs) (canonical; edit on GitHub). Repo notes: [pack-authoring](docs/pack-authoring.md), [getting-started](docs/getting-started.md).
 
 MIT — see [LICENSE](LICENSE).

@@ -1,129 +1,175 @@
-import Link from "next/link";
+import DocHeader from "@/components/docs/doc-header";
 import CodeBlock from "@/components/CodeBlock";
+import Callout from "@/components/docs/callout";
+import DocPrevNext from "@/components/docs/prev-next";
+import Link from "next/link";
 
 export default function PublisherDocsPage() {
-  const manifestCode = `{
-  "id": "math-research-pack",
-  "name": "Math Research Pack",
-  "version": "0.1.0",
-  "description": "Skills and prompts for solving advanced calculus and linear algebra problems.",
-  "kind": "profile-pack",
-  "author": "john-doe",
-  "repository": "https://github.com/john-doe/math-research-pack",
-  "contributes": {
-    "profiles": ["math-researcher.json"],
-    "skills": ["math-solver", "sympy-evaluator"],
-    "adapters": [],
-    "mcpServers": []
-  }
-}`;
-
   return (
-    <div className="space-y-20">
-      
-      {/* ─── Centered Header ─── */}
-      <section className="text-left pt-4 pb-2">
-        <span className="text-[12px] font-bold uppercase tracking-[0.2em] text-neutral-400">
-          Developer Guide
-        </span>
-        <h1 className="mt-3 text-[2.5rem] md:text-[3rem] font-bold tracking-tight text-white leading-[1.1]">
-          Publisher Guide
-        </h1>
-        <p className="mt-4 text-[16px] leading-[1.65] text-[#A1A1AA] max-w-2xl">
-          Learn how to package your domain expertise, system prompts, and custom harnesses into versioned extensions, write explicit manifests, and submit them to the Orkestrate registry for global distribution.
-        </p>
-      </section>
-
-      {/* ─── Guide Sections ─── */}
-      <div className="prose prose-invert max-w-none text-[15px] leading-[1.75] text-[#A1A1AA]">
-        
-        <h2 className="text-[20px] font-bold tracking-tight text-white border-b border-white/5 pb-2 pt-4">
-          The Packaging Model
-        </h2>
-        <p className="mt-4">
-          Orkestrate does not host your code. The registry acts purely as a decentralized pointer system mapping unique <code className="text-white bg-[#1c1c1e] px-1.5 py-0.5 rounded text-[13px] font-mono">id</code>s to raw GitHub repository URLs. When a user runs <code className="text-white bg-[#1c1c1e] px-1.5 py-0.5 rounded text-[13px] font-mono">orkestrate registry install &lt;package&gt;</code>, the CLI clones the source directly from the referenced URL.
-        </p>
+    <>
+      <DocHeader
+        eyebrow="Registry"
+        title="Publisher guide"
+        description="Package agent packs for the public registry — GitHub layout, manifest JSON, validation, and the manual review flow."
+      />
+      <div className="doc-prose">
+        <h2 id="model">Distribution model</h2>
         <p>
-          You can create three distinct categories of packages:
+          Orkestrate does not host pack source code. The registry stores approved metadata plus a GitHub{" "}
+          <code>source_url</code>. When a user runs{" "}
+          <code>orkestrate registry install &lt;slug&gt;</code>, the CLI clones that repository (or
+          tarball) and copies the pack path declared in the manifest.
         </p>
-        
-        <ul className="mt-6 space-y-6 list-none pl-0">
-          <li className="flex gap-4 items-start">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#18181b] border border-white/10 text-[10px] font-mono text-[#71717a] mt-0.5">A</span>
-            <div>
-              <strong className="text-white block mb-1">Profile Packs</strong>
-              <p className="text-[#A1A1AA] leading-relaxed">
-                The most common extension. A collection of JSON agent profiles, markdown skills, and system prompts. Does not contain any executable TypeScript logic. Excellent for sharing specialized workflows (e.g., "Senior iOS Developer", "Database Optimizer").
-              </p>
-            </div>
+
+        <h2 id="pack-layout">Required pack layout</h2>
+        <CodeBlock
+          lang="text"
+          code={`my-pack/
+  pack.yaml
+  harnesses/opencode/
+    opencode.json
+    agents/
+    skills/`}
+        />
+        <CodeBlock
+          lang="yaml"
+          filename="pack.yaml"
+          code={`id: my-pack
+name: my-pack
+description: What this agent does.
+version: "0.1.0"
+harness: opencode`}
+        />
+
+        <h2 id="monorepo">Monorepo packs</h2>
+        <p>
+          Official packs in <code>orkestrateai/orkestrate</code> live under{" "}
+          <code>orkestrate/packs/&lt;slug&gt;/</code>. Registry manifest JSON must include:
+        </p>
+        <CodeBlock
+          lang="json"
+          code={`{
+  "id": "my-pack",
+  "name": "my-pack",
+  "description": "...",
+  "harness": "opencode",
+  "version": "0.1.0",
+  "orkestrate": {
+    "ref": "main",
+    "packPath": "path/to/my-pack"
+  }
+}`}
+        />
+        <p>
+          <code>source_url</code> on submit is the <strong>repository root</strong>;{" "}
+          <code>packPath</code> is relative to that root.
+        </p>
+
+        <h2 id="kinds">Registry kinds (v0)</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Kind</th>
+              <th>Ships today</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <code>pack</code>
+              </td>
+              <td>Yes</td>
+              <td>Primary — <code>pack.yaml</code> + OpenCode harness slice.</td>
+            </tr>
+            <tr>
+              <td>
+                <code>adapter</code>
+              </td>
+              <td>Review case-by-case</td>
+              <td>
+                Harness drivers under <code>extensions/</code>; validate with{" "}
+                <code>extension validate</code>.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>profile-pack</code>
+              </td>
+              <td>Legacy label</td>
+              <td>Prefer <code>pack</code> for new submissions.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2 id="validate">Validate locally</h2>
+        <CodeBlock
+          lang="bash"
+          code={`orkestrate pack validate .
+# or from repo root with path:
+orkestrate pack validate my-pack`}
+        />
+        <p>
+          For extension drivers: <code>orkestrate extension validate ./extensions/my-adapter</code>
+        </p>
+
+        <h2 id="github">GitHub requirements</h2>
+        <ul>
+          <li>Public repository (or accessible to reviewers for private beta).</li>
+          <li>
+            <code>pack.yaml</code> at the submitted pack path.
           </li>
-          <li className="flex gap-4 items-start">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#18181b] border border-white/10 text-[10px] font-mono text-[#71717a] mt-0.5">B</span>
-            <div>
-              <strong className="text-white block mb-1">Harness Adapters</strong>
-              <p className="text-[#A1A1AA] leading-relaxed">
-                Executable TypeScript modules that bridge Orkestrate to a new external execution engine (e.g., connecting a new LangChain CLI). Must export an <code className="text-white bg-[#1c1c1e] px-1 py-0.5 rounded text-[12px] font-mono">OrkExtension</code> object containing a valid <code className="text-white bg-[#1c1c1e] px-1 py-0.5 rounded text-[12px] font-mono">HarnessAdapter</code>.
-              </p>
-            </div>
-          </li>
-          <li className="flex gap-4 items-start">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#18181b] border border-white/10 text-[10px] font-mono text-[#71717a] mt-0.5">C</span>
-            <div>
-              <strong className="text-white block mb-1">MCP Servers (Coming Soon)</strong>
-              <p className="text-[#A1A1AA] leading-relaxed">
-                Bundled Model Context Protocol servers that expose local tools, SQL databases, or internal APIs securely to the sandboxed agent runtimes.
-              </p>
-            </div>
-          </li>
+          <li>Default branch contains the version you want listed.</li>
         </ul>
 
-        <h2 className="text-[20px] font-bold tracking-tight text-white border-b border-white/5 pb-2 pt-4 mt-12">
-          Writing the Manifest
-        </h2>
-        <p className="mt-4">
-          At the root of your GitHub repository, you must include an <code className="text-white bg-[#1c1c1e] px-1.5 py-0.5 rounded text-[13px] font-mono">orkestrate.extension.json</code> file. This is the source of truth that dictates exactly what your package contributes to the global Orkestrate registry.
-        </p>
-
-        <CodeBlock code={manifestCode} lang="json" theme="vitesse-dark" />
-
-        <ul className="space-y-4 text-[14px] mt-6 list-none pl-0">
-          <li className="flex gap-4 items-start">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#18181b] border border-white/10 text-[10px] font-mono text-[#71717a] mt-0.5">!</span>
-            <div>
-              <strong className="text-white block mb-1">Strict Validation Rules</strong>
-              <p className="text-[#A1A1AA] leading-relaxed">
-                The <code className="text-white bg-[#1c1c1e] px-1 py-0.5 rounded text-[12px] font-mono">id</code> field must be unique globally and conventionally uses a kebab-case format. The <code className="text-white bg-[#1c1c1e] px-1 py-0.5 rounded text-[12px] font-mono">version</code> must strictly adhere to Semantic Versioning (SemVer) (e.g. <code className="text-white bg-[#1c1c1e] px-1 py-0.5 rounded text-[12px] font-mono">1.0.0</code>).
-              </p>
-            </div>
+        <h2 id="submit">Submit for review</h2>
+        <ol>
+          <li>
+            Sign in at <Link href="/submit">/submit</Link> with GitHub.
           </li>
+          <li>
+            Paste your public GitHub repo URL (or pack folder URL). Orkestrate fetches{" "}
+            <code>pack.yaml</code> automatically.
+          </li>
+          <li>Confirm slug, version, and description — one click to submit.</li>
+          <li>Submission stays <code>pending</code> until manual approval.</li>
+          <li>Approved rows appear on <Link href="/registry">/registry</Link> and in the API.</li>
+        </ol>
+        <p>
+          Monorepo packs: expand <strong>Monorepo options</strong> on the submit form and set pack path (e.g.{" "}
+          <code>orkestrate/packs/coding</code>) and branch.
+        </p>
+        <Callout kind="note" title="No CLI submit in v0">
+          <code>orkestrate pack submit</code> is not wired. Web submit is the supported path.
+        </Callout>
+
+        <h2 id="review">What reviewers check</h2>
+        <ul>
+          <li>Manifest matches repo layout and slug is unique.</li>
+          <li>
+            <code>pack validate</code> passes on the tagged path.
+          </li>
+          <li>Description and permissions are appropriate for a public catalog.</li>
+          <li>No misleading or broken <code>source_url</code>.</li>
         </ul>
 
-        <h2 className="text-[20px] font-bold tracking-tight text-white border-b border-white/5 pb-2 pt-4 mt-12">
-          CLI Verification & Linting
-        </h2>
-        <p className="mt-4">
-          Before submitting your package, you must verify the structural integrity of your manifest using the local Orkestrate CLI. The CLI will execute a Zod schema validation against your JSON file and flag any missing properties.
+        <h2 id="after">After approval</h2>
+        <p>Users install with:</p>
+        <CodeBlock lang="bash" code="orkestrate registry install <your-slug>" />
+        <p>
+          Document install commands in your repo README. Link back to your registry detail page when live.
         </p>
-        
-        <CodeBlock code="orkestrate extension validate ./" lang="bash" theme="vitesse-dark" />
 
-        <h2 className="text-[20px] font-bold tracking-tight text-white border-b border-white/5 pb-2 pt-4 mt-12">
-          Submission & Review Process
-        </h2>
-        <p className="mt-4">
-          Once your repository is public and your manifest is validated, you can submit the package to the official registry. Provide the raw GitHub URL to your manifest. Our automated pipeline will pull the manifest, verify the syntax, and enqueue it for manual review.
-        </p>
-        
-        <div className="pt-8">
+        <div className="mt-8">
           <Link
             href="/submit"
-            className="inline-flex h-9 items-center rounded-full bg-white px-5 text-[12px] font-semibold text-black hover:bg-neutral-200 transition-all"
+            className="inline-flex h-9 items-center rounded-full border border-default bg-card px-5 text-[13px] font-semibold text-[var(--foreground)] transition-colors hover:bg-[var(--card-hover)]"
           >
-            Submit to Registry →
+            Submit to registry →
           </Link>
         </div>
-        
       </div>
-    </div>
+      <DocPrevNext href="/docs/publisher" />
+    </>
   );
 }

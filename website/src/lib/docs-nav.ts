@@ -31,7 +31,7 @@ export const DOC_NAV: DocGroup[] = [
     title: "Registry",
     items: [
       { title: "Browse & install", href: "/docs/registry" },
-      { title: "Publish", href: "/submit" },
+      { title: "Publisher guide", href: "/docs/publisher" },
     ],
   },
   {
@@ -49,6 +49,7 @@ export const DOC_NAV: DocGroup[] = [
   {
     title: "Project",
     items: [
+      { title: "Contribute to docs", href: "/docs#contribute" },
       { title: "Changelog", href: "/changelog" },
       { title: "Security", href: "/security" },
       { title: "Privacy", href: "/privacy" },

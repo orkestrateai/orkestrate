@@ -120,12 +120,34 @@ Esc               Back to installed packs
 q / Ctrl+C        Quit`}
         />
 
+        <h2 id="status-refresh">Status and refresh</h2>
+        <p>
+          The installed list reconciles runs on a ~1.5s timer while the workbench is open. If you close an
+          OpenCode window outside Orkestrate, the row may show <code>running</code> briefly until the next
+          reconcile — press <code>s</code> or run <code>orkestrate run list</code> to confirm.
+        </p>
+
+        <h2 id="errors">Errors in the footer</h2>
+        <p>
+          Failed install or launch surfaces the CLI error string in the footer for a few seconds (same text
+          you would see in a non-interactive terminal). Common cases: OpenCode not on PATH, missing{" "}
+          <code>wt</code> on Windows, unknown pack id, registry unreachable during browse install.
+        </p>
+
+        <h2 id="global-packs">Workspace vs global packs in the list</h2>
+        <p>
+          The workbench resolves packs from the current working directory&apos;s{" "}
+          <code>.orkestrate/packs/</code> plus global <code>~/.orkestrate/packs/</code>. Welcome flow
+          installs <code>coding</code> globally so first-time users see a pack even in an empty repo.
+        </p>
+
         <h2 id="not-in-tui">Not in the workbench (v0)</h2>
         <ul>
           <li>Chatting with the agent inside Orkestrate.</li>
           <li>Editing harness files (use your editor + <code>pack validate</code>).</li>
           <li>Registry publish / submit (use the website).</li>
           <li>Multi-pack orchestration or handoff between agents.</li>
+          <li>Changing OpenCode permissions mid-session (edit pack home or slice, then relaunch).</li>
         </ul>
 
         <h2 id="cli-alt">CLI without the workbench</h2>

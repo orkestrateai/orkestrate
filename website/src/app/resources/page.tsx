@@ -1,6 +1,7 @@
 import Header from "@/components/header";
 import Footer from "@/components/footer";
 import DocHeader from "@/components/docs/doc-header";
+import { contributingUrl, docsIssuesUrl, docsTreeUrl } from "@/lib/docs-github";
 import Link from "next/link";
 
 export default function ResourcesPage() {
@@ -35,6 +36,23 @@ export default function ResourcesPage() {
             The npm package includes the same content as <code>AGENTS.md</code> at the package root.
             Add to your repo: <code>curl -s https://orkestrate.space/agents.md</code> or link{" "}
             <code>https://orkestrate.space/llms.txt</code> in tool docs.
+          </p>
+
+          <h2 id="contribute">Contribute to docs</h2>
+          <p>
+            Site docs are open source and still being expanded. Source lives in{" "}
+            <a href={docsTreeUrl} target="_blank" rel="noopener noreferrer">
+              <code>website/src/app/docs/</code>
+            </a>{" "}
+            on GitHub — use <strong>Edit this page</strong> on any doc, or read{" "}
+            <a href={contributingUrl} target="_blank" rel="noopener noreferrer">
+              CONTRIBUTING.md
+            </a>
+            .{" "}
+            <a href={docsIssuesUrl} target="_blank" rel="noopener noreferrer">
+              Report gaps
+            </a>{" "}
+            if you are not ready to open a PR.
           </p>
 
           <h2 id="links">Links</h2>

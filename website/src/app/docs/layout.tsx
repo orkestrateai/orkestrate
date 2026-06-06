@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import Header from "@/components/header";
 import Footer from "@/components/footer";
 import TableOfContents from "@/components/TableOfContents";
+import DocGithubBar from "@/components/docs/doc-github-bar";
 import { DOC_NAV } from "@/lib/docs-nav";
 
 export default function DocsLayout({ children }: { children: React.ReactNode }) {
@@ -23,7 +24,9 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
                 </h3>
                 <ul className="space-y-0.5">
                   {group.items.map((item) => {
-                    const active = pathname === item.href;
+                    const active =
+                      pathname === item.href ||
+                      (item.href !== "/docs" && pathname.startsWith(`${item.href}/`));
                     return (
                       <li key={item.href}>
                         <Link
@@ -45,7 +48,10 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
           </nav>
         </aside>
 
-        <main className="min-w-0 flex-1 max-w-[720px]">{children}</main>
+        <main className="min-w-0 flex-1 max-w-[720px]">
+          <DocGithubBar />
+          {children}
+        </main>
 
         <aside className="hidden w-48 shrink-0 xl:block">
           <div className="sticky top-20">
