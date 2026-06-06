@@ -26,8 +26,8 @@ export default function InstallationPage() {
           code="irm https://orkestrate.space/cli/install.ps1 | iex"
         />
         <p>
-          Pin a version: <code>ORKESTRATE_VERSION=0.2.0 curl -fsSL … | bash</code> (Unix) or set{" "}
-          <code>$env:ORKESTRATE_VERSION=&quot;0.2.0&quot;</code> before the PowerShell one-liner.
+          Pin a version: <code>ORKESTRATE_VERSION=0.2.1 curl -fsSL … | bash</code> (Unix) or set{" "}
+          <code>$env:ORKESTRATE_VERSION=&quot;0.2.1&quot;</code> before the PowerShell one-liner.
         </p>
 
         <h2 id="requirements">Requirements</h2>

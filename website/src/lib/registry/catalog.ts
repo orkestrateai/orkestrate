@@ -66,15 +66,19 @@ async function fetchApprovedFromSupabase(): Promise<RegistryApiItem[]> {
   return (items ?? []).map((raw) => rowToApiItem(raw as SupabaseRegistryRow));
 }
 
-/** Bundled official packs plus approved remote rows (remote wins on slug collision). */
+const OFFICIAL_BUNDLED_SLUGS = new Set(BUNDLED_REGISTRY_PACKS.map((item) => item.slug));
+
+/** Bundled official packs plus approved community rows (official slugs always use bundled source). */
 export async function listRegistryApiItems(): Promise<RegistryApiItem[]> {
   const remote = await fetchApprovedFromSupabase();
   const bySlug = new Map<string, RegistryApiItem>();
 
-  for (const item of BUNDLED_REGISTRY_PACKS) {
-    bySlug.set(item.slug, item);
-  }
   for (const item of remote) {
+    if (!OFFICIAL_BUNDLED_SLUGS.has(item.slug)) {
+      bySlug.set(item.slug, item);
+    }
+  }
+  for (const item of BUNDLED_REGISTRY_PACKS) {
     bySlug.set(item.slug, item);
   }
 

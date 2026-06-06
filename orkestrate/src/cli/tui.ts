@@ -12,10 +12,9 @@ import {
 import { launchPack, stopRun } from "../sdk/launch/broker";
 import { activeRunsForPack, listRuns, reconcileRuns } from "../sdk/runs/registry";
 import type { RunRecord } from "../sdk/runs/types";
+import { VERSION } from "../version";
 
 type PackView = "installed" | "browse";
-
-const VERSION = "0.2.0";
 const ROOT_LAYOUT_ID = "root-layout";
 const REFRESH_MS = 1500;
 

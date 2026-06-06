@@ -1,6 +1,6 @@
 {
   "name": "orkestrate",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Browse, use, and share specialized harnesses for agent packs.",
   "homepage": "https://orkestrate.space",
   "bugs": {
@@ -15,7 +15,7 @@
   },
   "type": "module",
   "bin": {
-    "orkestrate": "./bin/orkestrate.ts"
+    "orkestrate": "./bin/orkestrate.js"
   },
   "files": [
     "bin",

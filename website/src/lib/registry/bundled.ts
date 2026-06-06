@@ -80,7 +80,7 @@ export function getBundledRegistryDetail(slug: string): RegistryItemDetail | nul
     created_at: new Date(0).toISOString(),
     publisher: {
       display_name: "Orkestrate",
-      github_handle: "orkestrate",
+      github_handle: "orkestrateai",
       website_url: "https://orkestrate.space",
     },
     latest_version: {

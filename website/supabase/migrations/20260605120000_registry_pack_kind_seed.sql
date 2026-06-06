@@ -15,7 +15,7 @@ values
     'pack',
     'Coding',
     'General-purpose coding agent for day-to-day software work. OpenCode harness with Orkestrate launch wiring.',
-    'https://github.com/system1970/Orkestrate',
+    'https://github.com/orkestrateai/orkestrate',
     'approved'
   ),
   (
@@ -23,7 +23,7 @@ values
     'pack',
     'Extension builder',
     'Meta pack for authoring Orkestrate packs, drivers, and platform extensions with guided skills.',
-    'https://github.com/system1970/Orkestrate',
+    'https://github.com/orkestrateai/orkestrate',
     'approved'
   )
 on conflict (slug) do update
